@@ -1,6 +1,6 @@
 # Engine / Lab
 
-Interaktywna aplikacja edukacyjna po polsku: przekrój silnika benzynowego R4, sprzęgło, skrzynia biegów oraz turbosprężarka. JavaScript + Three.js + Vite, bez backendu.
+Interaktywna aplikacja edukacyjna po polsku: przekroje silników benzynowych R4, V6 i V12, sprzęgło, skrzynia biegów oraz turbosprężarka. JavaScript + Three.js + Vite, bez backendu.
 
 ## Uruchomienie
 
@@ -42,7 +42,11 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 
 - Przeciągnięcie myszy / jednego palca: obrót kamery.
 - Kółko myszy / gest dwoma palcami / przyciski + i −: przybliżanie.
-- Widoki: cały silnik, wybrany cylinder, cały napęd i osobny przekrój turbosprężarki.
+- Wybór silnika w nagłówku: R4, V6 lub V12.
+- Widoki: cały silnik, wybrany cylinder, cały napęd, sprzęgło, skrzynia biegów i turbosprężarka.
+- Widok **Sprzęgło**: suwak **Rozsuń części** oddziela tarczę, docisk, sprężynę talerzową i łożysko, aby można było prześledzić ich działanie.
+- Panel cyklu czterosuwowego pozostaje widoczny w każdym widoku, także na pełnym ekranie. Kliknij numer cylindra, aby śledzić jego suw.
+- Na dużym ekranie scena wypełnia dostępną szerokość, a boczny panel sterowania przewija się niezależnie.
 - Kliknięcie części: opis zasady działania.
 - Suwak gazu: otwarcie przepustnicy w uproszczonym modelu.
 - Suwak sprzęgła: 0% oznacza zwolniony pedał, 100% oznacza rozłączenie napędu.
@@ -64,12 +68,17 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 
 ## Zakres modelu
 
-- R4, cykl 720°, kolejność zapłonu 1–3–4–2, poprawna kinematyka mechanizmu korbowego.
+- R4 2,0 l, V6 3,0 l i V12 6,0 l. Wszystkie pracują w cyklu 720°, z zapłonem odpowiednio co 180°, 120° i 60°.
+- R4: kolejność zapłonu 1–3–4–2. V6: przykładowa kolejność 1–2–3–4–5–6. V12: 1–2–5–6–9–10–11–12–7–8–3–4. Numeracja silników V jest edukacyjna: cylindry nieparzyste w banku A, parzyste w banku B; nie odpowiada konkretnemu producentowi.
+- V6 i V12 mają rozwarcie 60°. Model V6 pokazuje dzielone czopy, a V12 pary cylindrów ze wspólnym kątem czopa. Korbowody zachowują stałą długość w obu bankach.
 - Idealizowane otwarcie zaworów; wałek rozrządu obraca się z połową prędkości wału korbowego.
 - Wtrysk MPI przed zaworem dolotowym i GDI w cylindrze. Pokazany GDI podczas sprężania jest jednym wariantem; rzeczywiste układy stosują także wtrysk podczas ssania i wielokrotny.
 - Uproszczona krzywa momentu, regulator biegu jałowego, bezwładność, tarcie, sprzęgło cierne z poślizgiem, opory ruchu, hamowanie i zgaśnięcie silnika.
 - Przełożenia skrzyni: 3,50 / 2,10 / 1,40 / 1,05 / 0,82. Przekładnia główna: 3,9; masa: 1250 kg; promień koła: 0,31 m.
-- Schemat skrzyni z dwiema osiami i parami stale zazębionych kół. Złoty pierścień oznacza połączenie wybranej pary z wałem wyjściowym. Pominięto synchronizatory i szczegóły konstrukcyjne. Zęby i odstępy sprzęgła są ilustracyjne, nie wymiarowe.
+- Sprzęgło: koło zamachowe, okładziny tarczy, piasta z wielowypustem, sprężyny tłumiące, docisk, sprężyna talerzowa, łożysko i widełki. Wciśnięcie pedału odsuwa docisk; obroty tarczy zależą od wału wejściowego, a koła zamachowego od silnika. Rozsunięcie części jest wyłącznie zabiegiem ilustracyjnym.
+- Skrzynia z dwiema osiami i pięcioma parami stale zazębionych kół. Liczby zębów odpowiadają zadanym przełożeniom; koła współpracujące obracają się przeciwnie. Wybrana para jest podświetlana, a przesuwka łączy koło z wałem wyjściowym. Na luzie koła na wale wyjściowym obracają się swobodnie.
+- Każda para ma osobną przesuwkę dla czytelności. Pominięto tarcie stożków synchronizatora oraz rzeczywistą sekwencję wyrównywania obrotów. Profile zębów, rozmiary i odstępy są ilustracyjne, nie wymiarowe.
+- W widokach napędu widać obroty silnika, wejścia i wyjścia skrzyni, poślizg sprzęgła oraz kierunek przekazywania momentu. Żółte znaczniki przepływu nie przedstawiają paliwa.
 - Przekładnia główna wpływa na obroty koła, ale nie jest osobno narysowana.
 - Turbo: bezwładne narastanie doładowania zależne od obrotów i gazu. Widok turbo jest osobną ilustracją, nie pełnym układem dolotowo-wydechowym silnika.
 - Wtrysk zmienia położenie wtryskiwacza i animację przepływu. Nie przypisujemy samej zmianie MPI/GDI arbitralnego wzrostu mocy.
@@ -80,10 +89,12 @@ To pomoc do nauki zasad działania, a nie narzędzie obliczeniowe lub instrukcja
 ## Pliki
 
 - `src/simulation.js` — niezależna symulacja mechaniki.
-- `src/scene.js` — geometria 3D, kinematyka, kamera, animacje i wybór części.
+- `src/scene.js` — scena 3D, kamera, etykiety i wybór części.
+- `src/engines.js` — konfiguracje i geometria układów cylindrów.
+- `src/models/` — proceduralne modele silnika, sprzęgła, skrzyni oraz turbo.
 - `src/main.js` — polski interfejs, interakcje i pętla animacji.
-- `src/style.css` — układ responsywny i wygląd.
-- `tests/simulation.test.js` — testy kinematyki, fizyki i interakcji modelu.
+- `src/style.css` i `src/layout.css` — wygląd oraz układ dla desktopu, telefonu i pełnego ekranu.
+- `tests/simulation.test.js` i `tests/engines.test.js` — testy faz, geometrii obu banków, przełożeń oraz zachowania symulacji.
 - `PROMPT.md` — oryginalny prompt użytkownika, zachowany bez korekt.
 
 Dokumentacja grafiki: [Three.js](https://threejs.org/docs/).

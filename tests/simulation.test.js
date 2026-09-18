@@ -114,3 +114,10 @@ test('pause freezes mechanics and changing animation speed leaves physics unchan
   assert.ok(Math.abs(a.rpm - b.rpm) < 3);
   assert.notEqual(a.angle, b.angle);
 });
+
+test('nonpositive frame deltas do not reverse time or corrupt the state', () => {
+  const sim = new Simulation();
+  const before = JSON.stringify(sim);
+  for (const dt of [-0.002, 0, NaN, Infinity]) sim.update(dt);
+  assert.equal(JSON.stringify(sim), before);
+});
