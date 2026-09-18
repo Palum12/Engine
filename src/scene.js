@@ -152,6 +152,8 @@ export class EngineScene {
     this.crankshaft.userData.part = 'crank';
     this.engine.add(this.crankshaft);
     this.cylinder(0.18, 8.2, 'steel', this.crankshaft, [-0.4, 0, 0], 'x');
+    this.mounts = new THREE.Group();
+    this.engine.add(this.mounts);
     this.cylinders = [];
     [-3.3, -1.6, 0.1, 1.8].forEach((x, i) => {
       const group = new THREE.Group();
@@ -178,7 +180,7 @@ export class EngineScene {
         this.cylinder(0.36, 0.18, 'dark', crank, [side, -0.25, 0], 'x');
       });
       this.cylinder(0.16, 0.68, 'steel', crank, [0, 0.65, 0], 'x');
-      this.cylinder(0.27, 0.16, 'dark', this.engine, [x - 0.7, 0.8, 0], 'x');
+      this.cylinder(0.27, 0.16, 'dark', this.mounts, [x - 0.7, 0.8, 0], 'x');
       const head = this.box(1.38, 0.15, 1.25, 'dark', group, [0, 4.32, 0]);
       head.userData.part = 'valves';
       const valves = [];
@@ -231,8 +233,8 @@ export class EngineScene {
     this.camPulley = this.gear(0.96, 0.12, this.engine, 'dark', 48);
     this.camPulley.position.set(-4.1, 4.98, -0.12);
     this.camPulley.userData.part = 'valves';
-    this.tube([[-4.1, 0.8, 0.5], [-4.1, 3.5, 0.86], [-4.1, 4.98, 0.86]], 0.035, 'black', this.engine);
-    this.tube([[-4.1, 0.8, -0.5], [-4.1, 3.5, -1.08], [-4.1, 4.98, -1.08]], 0.035, 'black', this.engine);
+    this.tube([[-4.1, 0.8, 0.5], [-4.1, 3.5, 0.86], [-4.1, 4.98, 0.86]], 0.035, 'black', this.mounts);
+    this.tube([[-4.1, 0.8, -0.5], [-4.1, 3.5, -1.08], [-4.1, 4.98, -1.08]], 0.035, 'black', this.mounts);
   }
 
   buildDrivetrain() {
@@ -331,6 +333,7 @@ export class EngineScene {
     this.drive.visible = mode === 'drive';
     this.turbo.visible = mode === 'turbo';
     this.block.visible = mode !== 'cylinder';
+    this.mounts.visible = mode !== 'cylinder';
     this.cylinders.forEach((c, i) => { c.group.visible = mode !== 'cylinder' || i === this.selectedCylinder; });
     this.crankshaft.visible = mode !== 'cylinder';
     this.camshaft.visible = mode !== 'cylinder';
@@ -339,8 +342,8 @@ export class EngineScene {
     this.camPulley.visible = mode !== 'cylinder';
     const x = this.cylinders[this.selectedCylinder].x;
     const views = {
-      engine: { target: [-0.65, 2.65, 0], position: [7.3, 6.8, 13.5] },
-      cylinder: { target: [x, 3.1, 0], position: [x + 3.5, 4.6, 6.5] },
+      engine: { target: [-0.65, 2.65, 0], position: [5.95, 6.1, 11.4] },
+      cylinder: { target: [x, 2.8, 0], position: [x + 4.1, 4.9, 8.2] },
       drive: { target: [3.3, 1.7, 0], position: [13, 9.5, 21] },
       turbo: { target: [0, 2.4, 0], position: [4.8, 5.3, 9.7] }
     };
@@ -443,7 +446,7 @@ export class EngineScene {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     this.labelElements.forEach(label => {
-      const show = this.labels && (label.mode === this.mode || this.mode === 'cylinder' && label.cylinder === this.selectedCylinder);
+      const show = this.labels && label.mode === this.mode;
       label.element.hidden = !show;
       if (!show) return;
       const position = label.position.clone();

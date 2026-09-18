@@ -75,6 +75,7 @@ app.innerHTML = `
           <div class="orbit-hint">${icon('rotate')}<span>Przeciągnij, by obrócić · przybliż dwoma palcami lub kółkiem myszy</span></div>
           <div id="toast" role="status" aria-live="polite"></div>
         </div>
+        <div class="quick-controls" aria-label="Sterowanie przy modelu"><label for="quick-throttle">Gaz <output id="quick-throttle-value">0%</output><input id="quick-throttle" type="range" min="0" max="100" value="0"></label><label for="quick-clutch">Sprzęgło <output id="quick-clutch-value">0%</output><input id="quick-clutch" class="blue-range" type="range" min="0" max="100" value="0"></label><label for="quick-gear">Bieg<select id="quick-gear"><option value="0">N</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label></div>
         <div class="playback"><div class="playback-left"><button id="pause" class="play-button" aria-label="Wstrzymaj symulację">${icon('pause')}</button><button id="next-stroke" class="quiet-button" title="Zatrzymaj i przejdź o jeden suw">Następny suw ${icon('chevron')}</button></div><label class="speed-select">Tempo animacji<select id="animation-speed"><option value="0.01">1%</option><option value="0.02" selected>2%</option><option value="0.05">5%</option><option value="0.1">10%</option><option value="1">100%</option></select></label></div>
         <div class="cycle-panel" id="cycle-panel">
           <div class="section-heading"><span>CYKL CZTEROSUWOWY</span><label class="cylinder-select">Cylinder <select id="cylinder-number" aria-label="Numer cylindra"><option value="0">01</option><option value="1">02</option><option value="2">03</option><option value="3">04</option></select></label></div>
@@ -142,6 +143,9 @@ function setPedal(name, value) {
   $(`#${name}`).value = Math.round(sim[name] * 100);
   $(`#${name}-value`).innerHTML = `${Math.round(sim[name] * 100)}<span>%</span>`;
   $(`#${name}`).style.setProperty('--fill', `${sim[name] * 100}%`);
+  $(`#quick-${name}`).value = Math.round(sim[name] * 100);
+  $(`#quick-${name}-value`).textContent = `${Math.round(sim[name] * 100)}%`;
+  $(`#quick-${name}`).style.setProperty('--fill', `${sim[name] * 100}%`);
   if (name === 'clutch') {
     $('#clutch-toggle').setAttribute('aria-pressed', sim.clutch >= 0.85);
     $('#clutch-toggle').innerHTML = `${sim.clutch >= 0.85 ? 'Zwolnij sprzęgło' : 'Wciśnij sprzęgło'} <kbd>Shift</kbd>`;
@@ -155,6 +159,7 @@ function pause(value = !sim.paused) {
   sim.paused = value;
   $('#pause').innerHTML = icon(sim.paused ? 'play' : 'pause');
   $('#pause').setAttribute('aria-label', sim.paused ? 'Wznów symulację' : 'Wstrzymaj symulację');
+  updateUI();
 }
 function setCycle(angle) {
   pause(true);
@@ -186,6 +191,8 @@ $('#pause').addEventListener('click', () => pause());
 $('#next-stroke').addEventListener('click', () => setCycle(((strokeIndex(sim.angle, selectedCylinder) + 1) % 4) * 180 + 90));
 $('#animation-speed').addEventListener('change', event => { sim.animationScale = Number(event.target.value); });
 ['throttle', 'clutch'].forEach(name => $(`#${name}`).addEventListener('input', event => setPedal(name, Number(event.target.value) / 100)));
+['throttle', 'clutch'].forEach(name => $(`#quick-${name}`).addEventListener('input', event => setPedal(name, Number(event.target.value) / 100)));
+$('#quick-gear').addEventListener('change', event => shift(Number(event.target.value)));
 $('#clutch-toggle').addEventListener('click', () => setPedal('clutch', sim.clutch >= 0.85 ? 0 : 1));
 $$('[data-gear]').forEach(button => button.addEventListener('click', () => shift(Number(button.dataset.gear))));
 $$('[data-injection]').forEach(button => button.addEventListener('click', () => {
@@ -193,6 +200,7 @@ $$('[data-injection]').forEach(button => button.addEventListener('click', () => 
   updateConfiguration();
 }));
 function updateConfiguration() {
+  lastStroke = -1;
   $$('[data-injection]').forEach(button => {
     const active = button.dataset.injection === sim.injection;
     button.classList.toggle('active', active);
@@ -274,6 +282,7 @@ function updateUI() {
   $('#engine-status').textContent = status;
   $('#engine-status').classList.toggle('inactive', !sim.running || sim.paused);
   $('#ignition span').textContent = sim.running ? 'Wyłącz silnik' : 'Uruchom silnik';
+  $('#quick-gear').value = sim.gear;
   $('#ratio-label').textContent = sim.gear ? `${GEAR_RATIOS[sim.gear].toFixed(2).replace('.', ',')} : 1` : 'Luz';
   $$('[data-gear]').forEach(button => {
     const active = Number(button.dataset.gear) === sim.gear;
@@ -289,7 +298,7 @@ function updateUI() {
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active);
     });
-    $('#stroke-description').textContent = STROKES[phase].description;
+    $('#stroke-description').textContent = phase === 1 && sim.injection === 'mpi' ? 'Tłok idzie w górę, a oba zawory są zamknięte. Mieszanka powietrza z paliwem zostaje sprężona. Pod koniec tego suwu świeca inicjuje spalanie.' : STROKES[phase].description;
     $('#stroke-badge').textContent = `0${phase + 1}`;
     $('#stroke-badge').style.color = STROKES[phase].color;
   }
