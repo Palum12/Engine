@@ -48,10 +48,11 @@ export class EngineModel extends ModelGeometry {
       this.camshafts.push(shaft);
     }
     this.pulley = this.gear(36, 0.48, 0.12, 'dark', this.structure, [-this.shaftEnd, 0.8, 0], 'crank');
-    this.anchor('Wał korbowy', this.structure, [0, 0.0, 0.9], 'crank', ['engine']);
+    this.anchor('1 · Silnik', this.structure, [0, 5.65, 0], 'block', ['drive-detail']);
+    this.anchor('Wał korbowy', this.structure, [0, 0.0, 0.9], 'crank', ['engine', 'drive-detail']);
     if (this.config.bankAngle) {
-      this.anchor('Bank A · nieparzyste', this.structure, [-this.length / 2 - 0.15, 4.2, -2.1], 'banks', ['engine']);
-      this.anchor('Bank B · parzyste', this.structure, [-this.length / 2 - 0.15, 4.2, 2.1], 'banks', ['engine']);
+      this.anchor('Bank A · nieparzyste', this.structure, [-this.length / 2 - 0.15, 4.2, -2.1], 'banks', ['engine', 'drive-detail']);
+      this.anchor('Bank B · parzyste', this.structure, [-this.length / 2 - 0.15, 4.2, 2.1], 'banks', ['engine', 'drive-detail']);
     }
     this.group.updateMatrixWorld(true);
   }
@@ -115,7 +116,7 @@ export class EngineModel extends ModelGeometry {
     const gas = this.particles(14, 0xff8a70, 0.027, unit);
     const injectorAnchor = this.anchor('Wtrysk MPI · przed zaworem', unit, [-0.66, 5.45, 0], 'injection', ['cylinder'], index);
     this.anchor('Świeca', unit, [0.2, 4.74, 0.5], 'spark', ['cylinder'], index);
-    this.anchor(String(index + 1), unit, [0, 5.34, 0], 'piston', ['engine'], index);
+    this.anchor(String(index + 1), unit, [0, 5.34, 0], 'piston', ['engine', 'drive-detail'], index);
     this.cylinders.push({ layout, pivot, unit, sleeve, front, piston, rod, cap, valves, spark, chamber, intake, exhaust, mpi, gdi, mpiTip, gdiTip, air, fuel, gas, injectorAnchor });
   }
 
@@ -131,7 +132,7 @@ export class EngineModel extends ModelGeometry {
   }
 
   setView(mode, selected) {
-    this.group.visible = ['engine', 'cylinder', 'drive'].includes(mode);
+    this.group.visible = ['engine', 'cylinder', 'drive', 'drive-detail'].includes(mode);
     this.structure.visible = mode !== 'cylinder';
     this.cylinders.forEach((c, i) => { c.pivot.visible = mode !== 'cylinder' || i === selected; });
   }
@@ -142,6 +143,7 @@ export class EngineModel extends ModelGeometry {
   }
 
   update(sim, cutaway) {
+    if (!this.group.visible) return;
     const radians = sim.angle * Math.PI / 180;
     this.crankshaft.rotation.x = radians;
     this.pulley.rotation.x = radians;

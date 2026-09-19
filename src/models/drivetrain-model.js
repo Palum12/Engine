@@ -13,7 +13,8 @@ export class DrivetrainModel extends ModelGeometry {
     this.gearbox = this.subgroup(this.group, [3.8, 0, 0], 'gearbox');
     this.buildClutch();
     this.buildGearbox();
-    this.flow = this.particles(32, 0xffc35a, 0.075, this.group);
+    this.showFlow = true;
+    this.flow = this.arrows(20, 0xffc35a, this.group, 0.2);
   }
 
   buildClutch() {
@@ -52,7 +53,7 @@ export class DrivetrainModel extends ModelGeometry {
     this.fingers = [];
     for (let i = 0; i < 20; i++) {
       const a = i / 20 * Math.PI * 2;
-      const finger = this.cylinder(0.025, 1, 'brass', this.diaphragm, [0, 0, 0], 'y', 'diaphragm', 6);
+      const finger = this.box(0.035, 1, 0.075, 'brass', this.diaphragm, [0, 0, 0], 'diaphragm');
       this.fingers.push({ finger, a });
     }
     this.bearing = this.subgroup(this.clutch, [1.13, 0, 0], 'releaseBearing');
@@ -64,15 +65,15 @@ export class DrivetrainModel extends ModelGeometry {
     this.stub = this.cylinder(0.145, 3.2, 'brass', this.clutch, [1.65, 0, 0], 'x', 'inputShaft');
     for (let i = 0; i < 12; i++) {
       const a = i / 12 * Math.PI * 2;
-      this.box(0.4, 0.027, 0.027, 'steel', this.stub, [Math.cos(a) * 0.147, 0, Math.sin(a) * 0.147]);
+      this.box(0.027, 0.4, 0.027, 'steel', this.stub, [Math.cos(a) * 0.147, 0, Math.sin(a) * 0.147]);
     }
-    this.anchor('1 · Koło zamachowe', this.clutch, [0, 1.45, 0], 'flywheel', ['clutch']);
+    this.anchor('1 · Koło zamachowe', this.clutch, [0, 1.45, 0], 'flywheel', ['clutch', 'drive-detail']);
     this.anchor('2 · Tarcza cierna', this.clutch, [0, -1.42, 0], 'friction', ['clutch']).userData.followX = this.disc;
     this.anchor('Sprężyny tłumiące', this.clutch, [0, 0.48, 1.25], 'torsionSprings', ['clutch']).userData.followX = this.disc;
     this.anchor('3 · Docisk', this.clutch, [0, 1.45, 0], 'pressurePlate', ['clutch']).userData.followX = this.pressure;
     this.anchor('4 · Sprężyna talerzowa', this.clutch, [0, -1.42, 0], 'diaphragm', ['clutch']).userData.followX = this.diaphragm;
     this.anchor('5 · Łożysko i widełki', this.clutch, [0, 1.4, 0.5], 'releaseBearing', ['clutch']).userData.followX = this.bearing;
-    this.anchor('Sprzęgło', this.clutch, [0.7, 1.7, 0], 'clutch', ['drive']);
+    this.anchor('Sprzęgło', this.clutch, [0.7, 1.7, 0], 'clutch', ['drive', 'drive-detail']);
   }
 
   buildGearbox() {
@@ -105,7 +106,7 @@ export class DrivetrainModel extends ModelGeometry {
       this.box(0.08, 1.0, 0.08, 'exhaust', shiftFork, [0, 0.8, 0], 'shiftFork');
       const rail = this.cylinder(0.04, 0.95, 'steel', this.gearbox, [x + 0.45, -0.5, 0], 'x', 'shiftFork');
       this.gears.push({ top, bottom, sleeve, dog, shiftFork, rail, x, ratio, topRadius, bottomRadius });
-      this.anchor(`${i + 1} · ${ratio.toFixed(2).replace('.', ',')}:1`, this.gearbox, [x, 1.12, 0], 'gearPair', ['gearbox']);
+      this.anchor(`${i + 1} · ${ratio.toFixed(2).replace('.', ',')}:1`, this.gearbox, [x, 1.12, 0], 'gearPair', ['gearbox', 'drive-detail']);
     }
     this.wheel = this.subgroup(this.group, [12.4, -1.8, 0], 'wheel');
     this.ring(0.82, 0.2, 'black', this.wheel, [0, 0, 0]);
@@ -116,18 +117,18 @@ export class DrivetrainModel extends ModelGeometry {
       const spoke = this.box(0.18, 0.54, 0.08, 'steel', this.wheel, [0, Math.cos(a) * 0.3, Math.sin(a) * 0.3]);
       spoke.rotation.x = a;
     }
-    this.anchor('Wał wejściowy · od sprzęgła', this.gearbox, [-0.2, 0.36, 0.75], 'inputShaft', ['gearbox']);
-    this.anchor('Wał wyjściowy · do kół', this.gearbox, [6.2, -2.35, 0.8], 'outputShaft', ['gearbox']);
-    this.anchor('Przesuwka i widełki', this.gears[0].shiftFork, [0.4, 0.6, 0.9], 'synchronizer', ['gearbox']);
-    this.anchor('Skrzynia biegów', this.gearbox, [3, 1.5, 0], 'gearbox', ['drive']);
-    this.anchor('Koło · za przekładnią 3,9:1', this.group, [12.4, -0.4, 0], 'wheel', ['drive']);
+    this.anchor('Wał wejściowy · od sprzęgła', this.gearbox, [-0.2, 0.36, 0.75], 'inputShaft', ['gearbox', 'drive-detail']);
+    this.anchor('Wał wyjściowy · do kół', this.gearbox, [6.2, -2.35, 0.8], 'outputShaft', ['gearbox', 'drive-detail']);
+    this.anchor('Przesuwka i widełki', this.gears[0].shiftFork, [0.4, 0.6, 0.9], 'synchronizer', ['gearbox', 'drive-detail']);
+    this.anchor('Skrzynia biegów', this.gearbox, [3, 1.5, 0], 'gearbox', ['drive', 'drive-detail']);
+    this.anchor('Koło · za przekładnią 3,9:1', this.group, [12.4, -0.4, 0], 'wheel', ['drive', 'drive-detail']);
   }
 
   setView(mode) {
     this.mode = mode;
-    this.group.visible = ['engine', 'drive', 'clutch', 'gearbox'].includes(mode);
+    this.group.visible = ['engine', 'drive', 'drive-detail', 'clutch', 'gearbox'].includes(mode);
     this.clutch.visible = mode !== 'gearbox';
-    this.gearbox.visible = ['drive', 'gearbox'].includes(mode);
+    this.gearbox.visible = ['drive', 'drive-detail', 'gearbox'].includes(mode);
     this.wheel.visible = mode === 'drive';
     this.clutch.children.forEach(child => { child.visible = mode !== 'engine' || child === this.flywheel; });
   }
@@ -135,16 +136,19 @@ export class DrivetrainModel extends ModelGeometry {
   bounds(mode) {
     this.group.updateMatrixWorld(true);
     const local = mode === 'clutch'
-      ? new THREE.Box3(vec(-0.3, -1.45, -1.3), vec(5.0, 1.55, 1.3))
+      ? new THREE.Box3(vec(-0.3, -1.45, -1.3), vec(6.8, 1.55, 1.3))
       : mode === 'gearbox'
-        ? new THREE.Box3(vec(3.1, -3.4, -1.5), vec(11, 1.4, 1.5))
+        ? new THREE.Box3(vec(3.1, -3.4, -1.5), vec(12.2, 1.4, 1.5))
         : new THREE.Box3(vec(-0.3, -3.4, -1.5), vec(13.4, 1.6, 1.5));
+    if (mode === 'gearbox' && this.mode === 'drive-detail') local.translate(vec(this.exploded * 3.25, 0, 0));
     return local.applyMatrix4(this.group.matrixWorld);
   }
 
   update(sim, cutaway) {
+    if (!this.group.visible) return;
     const a = sim.angle * Math.PI / 180;
-    const e = this.mode === 'clutch' ? this.exploded : 0;
+    const e = ['clutch', 'drive-detail'].includes(this.mode) ? this.exploded : 0;
+    this.gearbox.position.x = this.mode === 'drive-detail' ? 3.8 + e * 3.25 : 3.8;
     this.flywheel.rotation.x = a;
     this.disc.position.x = 0.29 + e * 0.85;
     this.disc.rotation.x = sim.inputAngle;
@@ -159,7 +163,7 @@ export class DrivetrainModel extends ModelGeometry {
     this.fingers.forEach(({ finger, a }) => {
       this.between(finger, vec(0, Math.cos(a) * 0.78, Math.sin(a) * 0.78), vec(0.16 - sim.clutch * 0.23, Math.cos(a) * 0.22, Math.sin(a) * 0.22));
     });
-    this.cover.visible = this.mode !== 'engine' && (!cutaway || this.mode === 'clutch');
+    this.cover.visible = this.mode !== 'engine' && (!cutaway || ['clutch', 'drive-detail'].includes(this.mode));
     this.stub.scale.y = (3.2 + e * 3.25) / 3.2;
     this.stub.position.x = (3.2 + e * 3.25) / 2 + 0.1;
     this.caseFront.visible = !cutaway;
@@ -176,20 +180,24 @@ export class DrivetrainModel extends ModelGeometry {
       gear.sleeve.userData.face.material = active ? this.materials.fuel : this.materials.dark;
     });
     this.wheel.rotation.x = -sim.outputAngle / 3.9;
-    this.flow.visible = ['drive', 'clutch', 'gearbox'].includes(this.mode) && Math.abs(sim.transmittedTorque) > 0.2 && sim.clutch < 0.98 && (this.mode !== 'gearbox' || sim.gear !== 0);
+    this.flow.visible = this.showFlow && ['drive', 'drive-detail', 'clutch', 'gearbox'].includes(this.mode) && Math.abs(sim.transmittedTorque) > 0.2 && sim.clutch < 0.98 && (this.mode !== 'gearbox' || sim.gear !== 0);
     if (this.flow.visible) {
       const selected = sim.gear ? this.gears[sim.gear - 1] : null;
-      const end = this.mode === 'clutch' ? this.bearing.position.x + 0.5 : selected ? 3.8 + selected.x : 2.8;
+      const end = this.mode === 'clutch' ? this.bearing.position.x + 0.5 : selected ? this.gearbox.position.x + selected.x : 2.8;
       const points = this.mode === 'clutch' || !selected
         ? [[0.1, 0, 1.26], [end, 0, 1.26]]
-        : [[this.mode === 'gearbox' ? 3.3 : 0.1, 0, 1.26], [end, 0, 1.26], [end, -1.8, 1.26], [this.mode === 'gearbox' ? 11.8 : 12, -1.8, 1.26]];
+        : [[this.mode === 'gearbox' ? 3.3 : 0.1, 0, 1.26], [end, 0, 1.26], [end, -1.8, 1.26], [this.gearbox.position.x + 8.1, -1.8, 1.26]];
       const lengths = points.slice(1).map((p, i) => vec(...p).distanceTo(vec(...points[i])));
       const total = lengths.reduce((a, b) => a + b, 0);
+      this.flow.count = Math.min(20, Math.max(2, Math.floor(total / 0.8)));
       for (let n = 0; n < this.flow.count; n++) {
-        let distance = ((sim.inputAngle / 3 + n / this.flow.count) % 1) * total;
+        const direction = Math.sign(sim.transmittedTorque);
+        let distance = (((direction * sim.inputAngle / 3 + n / this.flow.count) % 1 + 1) % 1) * total;
         let segment = 0;
         while (segment < lengths.length - 1 && distance > lengths[segment]) { distance -= lengths[segment]; segment++; }
-        this.particle(this.flow, n, vec(...points[segment]).lerp(vec(...points[segment + 1]), distance / lengths[segment]));
+        const from = vec(...points[segment]);
+        const to = vec(...points[segment + 1]);
+        this.arrow(this.flow, n, from.clone().lerp(to, distance / lengths[segment]), to.sub(from).multiplyScalar(direction));
       }
       this.flow.instanceMatrix.needsUpdate = true;
     }

@@ -43,7 +43,12 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Przeciągnięcie myszy / jednego palca: obrót kamery.
 - Kółko myszy / gest dwoma palcami / przyciski + i −: przybliżanie.
 - Wybór silnika w nagłówku: R4, V6 lub V12.
-- Widoki: cały silnik, wybrany cylinder, cały napęd, sprzęgło, skrzynia biegów i turbosprężarka.
+- Widoki: cały silnik, wybrany cylinder, napęd, **Napęd szczegółowy**, sprzęgło, skrzynia biegów i turbosprężarka.
+- **Napęd szczegółowy**: wybierz podzespół z listy, aby ustawić kamerę. **Odizoluj** ukrywa pozostałe zespoły, a **Opis podzespołu** wyjaśnia jego działanie. Dostępne są silnik, rozbieralne sprzęgło, skrzynia, przekładnia główna z półosiami oraz turbo.
+- **Turbo**: lista przybliżeń prowadzi przez turbinę, wałek z łożyskami, sprężarkę, wastegate i intercooler. Każdą grupę można odizolować. Włącz turbo przyciskiem przy modelu, wznów animację i zwiększ gaz.
+- Przycisk **×** zamyka panel parametrów. **Pokaż parametry** przywraca go; wyłączenie **Opisów** ukrywa również panel. Na telefonie parametry są domyślnie zwinięte.
+- **Przepływ** włącza i wyłącza strzałki: momentu w napędzie oraz gazów w turbo. Strzałki są symbolami, nie częściami mechanizmu.
+- Na pełnym ekranie pozostają dostępne suwaki gazu i sprzęgła oraz wybór biegu.
 - Widok **Sprzęgło**: suwak **Rozsuń części** oddziela tarczę, docisk, sprężynę talerzową i łożysko, aby można było prześledzić ich działanie.
 - Panel cyklu czterosuwowego pozostaje widoczny w każdym widoku, także na pełnym ekranie. Kliknij numer cylindra, aby śledzić jego suw.
 - Na dużym ekranie scena wypełnia dostępną szerokość, a boczny panel sterowania przewija się niezależnie.
@@ -78,9 +83,10 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Sprzęgło: koło zamachowe, okładziny tarczy, piasta z wielowypustem, sprężyny tłumiące, docisk, sprężyna talerzowa, łożysko i widełki. Wciśnięcie pedału odsuwa docisk; obroty tarczy zależą od wału wejściowego, a koła zamachowego od silnika. Rozsunięcie części jest wyłącznie zabiegiem ilustracyjnym.
 - Skrzynia z dwiema osiami i pięcioma parami stale zazębionych kół. Liczby zębów odpowiadają zadanym przełożeniom; koła współpracujące obracają się przeciwnie. Wybrana para jest podświetlana, a przesuwka łączy koło z wałem wyjściowym. Na luzie koła na wale wyjściowym obracają się swobodnie.
 - Każda para ma osobną przesuwkę dla czytelności. Pominięto tarcie stożków synchronizatora oraz rzeczywistą sekwencję wyrównywania obrotów. Profile zębów, rozmiary i odstępy są ilustracyjne, nie wymiarowe.
-- W widokach napędu widać obroty silnika, wejścia i wyjścia skrzyni, poślizg sprzęgła oraz kierunek przekazywania momentu. Żółte znaczniki przepływu nie przedstawiają paliwa.
-- Przekładnia główna wpływa na obroty koła, ale nie jest osobno narysowana.
-- Turbo: bezwładne narastanie doładowania zależne od obrotów i gazu. Widok turbo jest osobną ilustracją, nie pełnym układem dolotowo-wydechowym silnika.
+- W widokach napędu widać obroty silnika, wejścia i wyjścia skrzyni, poślizg sprzęgła oraz kierunek przekazywania momentu. Oddalone od siebie złote strzałki zastępują nakładające się drobiny; przy ujemnym momencie kierunek jest odwracany.
+- W widoku szczegółowym przekładnia główna, kosz mechanizmu różnicowego, półosie, przeguby, piasty i tarcze hamulcowe są narysowane osobno. Przekładnia redukuje obroty 3,9 razy. Obie półosie obracają się jednakowo, ponieważ symulacja dotyczy jazdy na wprost; skręt i praca satelitów na zakręcie nie są modelowane. Zęby przekładni kątowej są schematyczne, bez dokładnego zazębienia stożkowego lub hipoidalnego.
+- Turbo: bezwładne narastanie doładowania zależne od obrotów i gazu. Przekrój pokazuje obudowy spiralne, zakrzywione łopatki wirników na wspólnym wałku, łożyska ślizgowe i element oporowy, przewody oleju, obejście wastegate, intercooler oraz przepustnicę. W widoku szczegółowym kolektory łączą silnik z turbo; ich przebieg i wielkość są dydaktyczne.
+- Wirniki turbo mają wspólny kąt obrotu, a ich animacja jest umownie spowolniona. Otwarcie wastegate ilustruje zależność od doładowania; nie stanowi osobnego regulatora ciśnienia w modelu fizycznym. Kolory powietrza przed i za intercoolerem ilustrują chłodzenie, bez wyliczania temperatury. Nie obliczamy przepływu oleju ani map sprężarki.
 - Wtrysk zmienia położenie wtryskiwacza i animację przepływu. Nie przypisujemy samej zmianie MPI/GDI arbitralnego wzrostu mocy.
 - Brak szczegółowej termodynamiki, emisji, chłodzenia, smarowania, spalania stukowego, biegu wstecznego, dźwięku oraz parametrów konkretnego samochodu.
 
@@ -91,10 +97,13 @@ To pomoc do nauki zasad działania, a nie narzędzie obliczeniowe lub instrukcja
 - `src/simulation.js` — niezależna symulacja mechaniki.
 - `src/scene.js` — scena 3D, kamera, etykiety i wybór części.
 - `src/engines.js` — konfiguracje i geometria układów cylindrów.
-- `src/models/` — proceduralne modele silnika, sprzęgła, skrzyni oraz turbo.
+- `src/models/` — proceduralne modele silnika, sprzęgła, skrzyni, przekładni głównej oraz turbo.
 - `src/main.js` — polski interfejs, interakcje i pętla animacji.
-- `src/style.css` i `src/layout.css` — wygląd oraz układ dla desktopu, telefonu i pełnego ekranu.
-- `tests/simulation.test.js` i `tests/engines.test.js` — testy faz, geometrii obu banków, przełożeń oraz zachowania symulacji.
+- `src/style.css`, `src/layout.css`, `src/inspection.css` — wygląd i układ responsywny.
+- `src/inspection.js` — nawigacja po podzespołach i opisy przeglądu.
+- `tests/` — testy faz, geometrii obu banków, przełożeń, kierunku obrotu modeli, oddzielenia strzałek przepływu i zachowania symulacji.
 - `PROMPT.md` — oryginalny prompt użytkownika, zachowany bez korekt.
 
 Dokumentacja grafiki: [Three.js](https://threejs.org/docs/).
+
+Podstawy działania turbo: [Garrett — turbina, wspólny wałek, sprężarka i chłodzenie powietrza](https://www.garrettmotion.com/knowledge-center-category/oem/what-is-a-turbo-and-how-does-it-work/), [Garrett — rodzaje turbo i wastegate](https://www.garrettmotion.com/knowledge-center-category/turbo-replacement/diving-into-the-distinctions-between-turbo-types/).

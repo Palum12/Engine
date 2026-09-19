@@ -138,9 +138,25 @@ export class ModelGeometry {
     mesh.setMatrixAt(i, this.matrix);
   }
 
+  arrows(count, color, parent, size = 0.16) {
+    const geometry = this.geometry(`arrow:${size}`, () => new THREE.ConeGeometry(size * 0.36, size, 8));
+    const mesh = new THREE.InstancedMesh(geometry, this.material({ color, toneMapped: false }, true), count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.userData.ignorePick = true;
+    parent.add(mesh);
+    return mesh;
+  }
+
+  arrow(mesh, index, point, direction) {
+    this.matrix.compose(point, new THREE.Quaternion().setFromUnitVectors(UP, direction.clone().normalize()), vec(1, 1, 1));
+    mesh.setMatrixAt(index, this.matrix);
+  }
+
   anchor(text, parent, position, part, views, cylinder) {
     const anchor = new THREE.Object3D();
     anchor.position.set(...position);
+    anchor.userData.part = part;
     parent.add(anchor);
     this.anchors.push({ text, anchor, part, views, cylinder });
     return anchor;
