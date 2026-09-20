@@ -5,6 +5,7 @@ import { EngineModel } from './models/engine-model.js';
 import { DrivetrainModel } from './models/drivetrain-model.js';
 import { TurboModel } from './models/turbo-model.js';
 import { ModelGeometry, vec } from './models/geometry.js';
+import { SystemsModel } from './models/systems-model.js';
 import { FinalDriveModel } from './models/final-drive-model.js';
 
 export class EngineScene {
@@ -65,7 +66,8 @@ export class EngineScene {
     this.drive = new DrivetrainModel(this.materials);
     this.turbo = new TurboModel(this.materials);
     this.finalDrive = new FinalDriveModel(this.materials);
-    this.root.add(this.engine.group, this.drive.group, this.turbo.group, this.finalDrive.group);
+    this.systems = new SystemsModel(this.materials, this.engine);
+    this.root.add(this.engine.group, this.drive.group, this.turbo.group, this.finalDrive.group, this.systems.group);
     this.buildConnections();
     this.leaders = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.leaders.classList.add('model-leaders');
@@ -103,8 +105,10 @@ export class EngineScene {
   setEngine(id) {
     if (this.engine.id === id) return;
     this.engine.dispose();
+    this.systems.dispose();
     this.engine = new EngineModel(this.materials, id);
-    this.root.add(this.engine.group);
+    this.systems = new SystemsModel(this.materials, this.engine);
+    this.root.add(this.engine.group, this.systems.group);
     this.selectedCylinder = 0;
     this.buildConnections();
     this.refreshLabels();
@@ -117,6 +121,7 @@ export class EngineScene {
       ...this.engine.anchors.map(data => Object.assign(data, { assembly: 'engine' })),
       ...this.drive.anchors.map(data => Object.assign(data, { assembly: data.views.includes('clutch') || data.part === 'clutch' ? 'clutch' : 'gearbox' })),
       ...this.turbo.anchors.map(data => Object.assign(data, { assembly: 'turbo' })),
+      ...this.systems.anchors.map(data => Object.assign(data, { assembly: data.views.includes('timing') ? 'timing' : data.views.includes('oil') ? 'oil' : 'fuel' })),
       ...this.finalDrive.anchors.map(data => Object.assign(data, { assembly: 'finalDrive' }))
     ];
     this.labelElements = labels.map(data => {
@@ -165,24 +170,35 @@ export class EngineScene {
     this.turbo.group.visible = mode === 'turbo' || mode === 'drive-detail';
     this.turbo.setSection(mode === 'turbo' ? this.inspection : 'all', mode === 'turbo' && this.isolate);
     this.turbo.group.position.set(0, mode === 'drive-detail' ? 2 : 2.3, mode === 'drive-detail' ? -7.2 : 0);
-    this.finalDrive.group.visible = mode === 'drive-detail';
+    this.finalDrive.group.visible = ['drive-detail', 'differential'].includes(mode);
+    if (mode !== 'differential') this.finalDrive.demo = false;
+    this.systems.setView(mode, this.inspection, this.isolate);
+    if (['timing','oil','fuel'].includes(mode)) this.engine.group.visible = !this.isolate;
     this.connections.group.visible = mode === 'drive-detail';
     this.positionDetailedDrive();
-    this.grid.position.y = ['drive', 'drive-detail', 'gearbox', 'turbo'].includes(mode) ? -2.8 : mode === 'clutch' ? -0.75 : -0.1;
+    this.grid.position.y = ['oil','fuel','drive', 'drive-detail', 'gearbox', 'turbo'].includes(mode) ? -2.8 : mode === 'clutch' ? -0.75 : -0.1;
     this.applyInspection();
+    this.drive.gears.forEach((gear,i) => {
+      const visible = mode !== 'gearbox' || !this.inspection.startsWith('gear') || Number(this.inspection.slice(4)) === i + 1;
+      for (const part of ['top','bottom','sleeve','hub','cone','dog','shiftFork','rail']) gear[part].visible = visible;
+      gear.syncGlow.userData.focusVisible = visible;
+    });
+    this.finalDrive.input.visible = mode !== 'differential' || this.inspection !== 'core';
+    this.finalDrive.group.children.filter(child => child.userData.part === 'wheelHub').forEach(child => { child.visible = mode !== 'differential' || this.inspection !== 'core'; });
+    this.finalDrive.axles.forEach(axle => axle.children.forEach(child => { child.visible = mode !== 'differential' || this.inspection !== 'core' || child.userData.part === 'differential'; }));
     this.frameView(instant);
   }
 
   positionDetailedDrive() {
     const gap = this.mode === 'drive-detail' ? this.drive.exploded * 3.25 : 0;
     this.drive.gearbox.position.x = 3.8 + gap;
-    this.finalDrive.group.position.set(this.drive.group.position.x + 16 + gap, -1, 0);
+    this.finalDrive.group.position.set(this.mode === 'differential' ? 0 : this.drive.group.position.x + 16 + gap, this.mode === 'differential' ? 0 : -1, 0);
   }
 
   inspect(section, isolate = this.isolate) {
     this.inspection = section;
     this.isolate = isolate;
-    this.setView(this.mode);
+    this.setView(this.mode, true);
   }
 
   applyInspection() {
@@ -196,6 +212,7 @@ export class EngineScene {
     this.finalDrive.group.visible = ['all', 'finalDrive'].includes(section);
     this.turbo.group.visible = ['all', 'turbo'].includes(section);
     this.connections.group.visible = section === 'all';
+    if (['timing','oil','fuel'].includes(section)) this.engine.group.visible = false;
   }
 
   frameView(instant = false) {
@@ -203,27 +220,37 @@ export class EngineScene {
     const mode = this.mode;
     const section = this.inspection;
     let bounds;
-    if (mode === 'turbo') bounds = this.turbo.bounds(section);
+    if (['timing','oil','fuel'].includes(mode)) {
+      bounds = mode === 'fuel' && ['carburetor','highPressurePump'].includes(section) ? new THREE.Box3().setFromObject(section === 'carburetor' ? this.systems.carb : this.systems.highPump).expandByScalar(0.4) : this.systems.bounds(mode);
+      if (!this.isolate && !['carburetor','highPressurePump'].includes(section)) bounds.union(this.engine.bounds('engine', 0));
+    } else if (mode === 'differential') {
+      bounds = this.inspection === 'core' ? new THREE.Box3(vec(-0.85,-1,-0.9),vec(0.85,1,0.9)) : this.finalDrive.bounds();
+    } else if (mode === 'gearbox' && this.inspection.startsWith('gear')) {
+      const selected = this.drive.gears[Number(this.inspection.slice(4))-1];
+      bounds = new THREE.Box3(vec(selected.x - 0.1,-2.45,-0.65),vec(selected.x + 1.15,-0.95,0.65)).applyMatrix4(this.drive.gearbox.matrixWorld);
+    } else if (mode === 'turbo') bounds = this.turbo.bounds(section);
     else if (mode === 'drive-detail') {
       if (section === 'engine') bounds = this.engine.bounds('engine', 0);
       else if (['clutch', 'gearbox'].includes(section)) bounds = this.drive.bounds(section);
       else if (section === 'finalDrive') bounds = this.finalDrive.bounds();
       else if (section === 'turbo') bounds = this.turbo.bounds();
+      else if (['timing','oil','fuel'].includes(section)) bounds = this.systems.bounds(section);
       else bounds = this.engine.bounds('engine', 0).union(this.drive.bounds('drive')).union(this.finalDrive.bounds()).union(this.turbo.bounds()).union(new THREE.Box3(vec(-5, -1.5, -7.5), vec(5, 6.8, 0)));
     } else if (['clutch', 'gearbox'].includes(mode)) bounds = this.drive.bounds(mode);
     else {
       bounds = this.engine.bounds(mode, this.selectedCylinder);
       if (mode === 'drive') bounds.union(this.drive.bounds(mode));
-      if (mode === 'engine') bounds.max.x += 0.3;
+      if (mode === 'engine') bounds.union(this.systems.bounds('timing'));
     }
     const directions = {
+      timing: vec(-1.8,0.25,0.8), oil: vec(0.5,0.45,1.7), fuel: vec(-0.55,0.4,1.7), differential: vec(0.9,0.55,1.7),
       engine: this.engine.config.bankAngle ? vec(0.75, 0.75, 1.3) : vec(0.65, 0.36, 1.5),
       cylinder: vec(0.6, 0.15, 1.7), drive: vec(0.45, 0.36, 1.5),
       'drive-detail': vec(0.28, 0.5, 1.8), finalDrive: vec(1.25, 0.75, 1.5),
       clutch: vec(1.2, 0.45, 1.5), gearbox: vec(0.6, 0.46, 1.8), turbo: vec(0.8, 0.42, 1.7)
     };
     const view = mode === 'drive-detail' && section !== 'all' ? section : mode;
-    this.fitBounds(bounds, directions[view], instant);
+    this.fitBounds(bounds, mode === 'differential' && section === 'core' ? vec(1.6,0.6,0.9) : directions[view] || directions[mode], instant);
   }
 
   fitBounds(bounds, direction, instant) {
@@ -289,7 +316,8 @@ export class EngineScene {
     this.drive.update(sim, this.cutaway);
     this.turbo.update(sim, dt, this.cutaway);
     this.positionDetailedDrive();
-    this.finalDrive.update(sim, this.cutaway);
+    this.finalDrive.update(sim, this.cutaway, dt);
+    this.systems.update(sim);
     if (this.cameraGoal) {
       const lerp = 1 - Math.exp(-dt * 8);
       this.camera.position.lerp(this.cameraGoal, lerp);
@@ -310,7 +338,10 @@ export class EngineScene {
       const overview = ['block', 'clutch', 'gearbox', 'finalDrive', 'turbo'].includes(data.part);
       const detailLabel = this.mode !== 'drive-detail' || (this.inspection === 'all' ? overview : data.assembly === this.inspection && !['block', 'turbo'].includes(data.part));
       const turboLabel = this.mode !== 'turbo' || this.inspection === 'all' || data.part === this.inspection || this.inspection === 'turboBearing' && ['turboOil', 'turboShaft'].includes(data.part) || this.inspection === 'turbine' && data.part === 'exhaust' || this.inspection === 'intercooler' && data.part === 'throttleBody';
-      const show = detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
+      const gearLabel = this.mode !== 'gearbox' || !this.inspection.startsWith('gear') || data.part !== 'gearPair' || data.anchor.userData.gear === Number(this.inspection.slice(4));
+      const fuelLabel = this.mode !== 'fuel' || !['carburetor','highPressurePump'].includes(this.inspection) || data.part === this.inspection;
+      const diffLabel = this.mode !== 'differential' || this.inspection !== 'core' || ['differential','finalDrive'].includes(data.part);
+      const show = fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
       element.hidden = !show;
       line.style.display = show ? '' : 'none';
       if (!show) return;
@@ -349,6 +380,7 @@ export class EngineScene {
     this.drive.dispose();
     this.turbo.dispose();
     this.finalDrive.dispose();
+    this.systems.dispose();
     this.connections.dispose();
     Object.values(this.materials).forEach(m => m.dispose());
     this.grid.geometry.dispose();

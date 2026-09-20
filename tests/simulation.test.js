@@ -73,6 +73,7 @@ test('dumping the clutch at idle stalls; braking slows a moving vehicle', () => 
   const stalled = new Simulation();
   stalled.clutch = 1;
   stalled.shift(1);
+  advance(stalled, 2.5);
   stalled.clutch = 0;
   advance(stalled, 2);
   assert.equal(stalled.running, false);

@@ -16,7 +16,14 @@ export class EngineModel extends ModelGeometry {
     this.shaftEnd = this.length / 2 + 0.45;
     this.structure = this.subgroup();
     this.crankshaft = this.subgroup(this.structure, [0, 0.8, 0], 'crank');
-    this.cylinder(0.18, this.length + 1.2, 'steel', this.crankshaft, [0, 0, 0], 'x');
+    const openings = Array.from({ length: this.config.cylinders }, (_, i) => cylinderLayout(id, i).x).sort((a, b) => a - b);
+    let end = -this.shaftEnd;
+    for (const x of openings) {
+      const start = x - 0.22;
+      if (start > end) this.cylinder(0.18, start - end, 'steel', this.crankshaft, [(start + end) / 2, 0, 0], 'x', 'crank');
+      end = Math.max(end, x + 0.22);
+    }
+    if (end < this.shaftEnd) this.cylinder(0.18, this.shaftEnd - end, 'steel', this.crankshaft, [(end + this.shaftEnd) / 2, 0, 0], 'x', 'crank');
     this.housing = this.subgroup(this.structure, [0, 0, 0], 'block');
     this.box(this.length + 0.2, 0.18, 0.18, 'dark', this.housing, [0, 0.3, -0.8]);
     this.box(this.length + 0.2, 0.18, 0.18, 'dark', this.housing, [0, 0.3, 0.8]);
@@ -79,8 +86,8 @@ export class EngineModel extends ModelGeometry {
     const cap = this.annulus(0.21, 0.12, 0.19, 'steel', unit, [0, 0, 0], 'rod');
     const crank = this.subgroup(this.crankshaft, [layout.x, 0, 0], 'crank');
     crank.rotation.x = layout.offset * Math.PI / 180 + layout.bankRadians;
-    this.cylinder(0.115, 0.34, 'steel', crank, [0, 0.65, 0], 'x');
-    [-0.22, 0.22].forEach(x => {
+    this.cylinder(0.115, 0.41, 'steel', crank, [0, 0.65, 0], 'x');
+    [-0.205, 0.205].forEach(x => {
       this.box(0.11, 0.85, 0.3, 'dark', crank, [x, 0.24, 0]);
       this.cylinder(0.26, 0.12, 'steel', crank, [x, 0.65, 0], 'x');
       this.cylinder(0.32, 0.15, 'dark', crank, [x, -0.18, 0], 'x');
@@ -111,13 +118,22 @@ export class EngineModel extends ModelGeometry {
     const gdiTip = vec(0.36, 4.17, 0.3);
     const mpi = this.injector(unit, mpiTip, vec(-0.4, 0.9, 0.3));
     const gdi = this.injector(unit, gdiTip, vec(0.6, 0.8, 0.12));
-    const air = this.particles(14, 0x69d5ff, 0.024, unit);
-    const fuel = this.particles(20, 0xffcc51, 0.019, unit);
-    const gas = this.particles(14, 0xff8a70, 0.027, unit);
+    const air = this.particles(24, 0x69d5ff, 0.052, unit);
+    const fuel = this.particles(28, 0xffdc51, 0.041, unit);
+    const gas = this.particles(24, 0xff8a70, 0.053, unit);
+    const flames = this.subgroup(unit, [0, 0, 0], 'spark');
+    const flameMaterial = this.material({ color: 0xff7c24, transparent: true, opacity: 0.68, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }, true);
+    const flameCore = this.material({ color: 0xffec91, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }, true);
+    for (let n = 0; n < 9; n++) {
+      const a = n * 2.4;
+      const plume = this.mesh(this.geometry('flame', () => new THREE.LatheGeometry([[0,-0.5],[0.08,-0.35],[0.15,-0.13],[0.13,0.1],[0.065,0.32],[0,0.5]].map(([r,y]) => new THREE.Vector2(r,y)),12)), n % 3 ? flameMaterial : flameCore, flames, [Math.cos(a) * 0.32, 0, Math.sin(a) * 0.32]);
+      plume.rotation.z = Math.PI;
+    }
+    const charge = this.particles(38, 0xc1a0ff, 0.042, unit);
     const injectorAnchor = this.anchor('Wtrysk MPI · przed zaworem', unit, [-0.66, 5.45, 0], 'injection', ['cylinder'], index);
     this.anchor('Świeca', unit, [0.2, 4.74, 0.5], 'spark', ['cylinder'], index);
     this.anchor(String(index + 1), unit, [0, 5.34, 0], 'piston', ['engine', 'drive-detail'], index);
-    this.cylinders.push({ layout, pivot, unit, sleeve, front, piston, rod, cap, valves, spark, chamber, intake, exhaust, mpi, gdi, mpiTip, gdiTip, air, fuel, gas, injectorAnchor });
+    this.cylinders.push({ layout, pivot, unit, sleeve, front, piston, rod, cap, valves, spark, chamber, intake, exhaust, mpi, gdi, mpiTip, gdiTip, air, fuel, gas, flames, charge, injectorAnchor });
   }
 
   injector(parent, tip, direction) {
@@ -132,8 +148,12 @@ export class EngineModel extends ModelGeometry {
   }
 
   setView(mode, selected) {
-    this.group.visible = ['engine', 'cylinder', 'drive', 'drive-detail'].includes(mode);
-    this.structure.visible = mode !== 'cylinder';
+    this.group.visible = ['engine', 'cylinder', 'drive', 'drive-detail', 'timing', 'oil', 'fuel'].includes(mode);
+    this.structure.visible = true;
+    this.housing.visible = mode !== 'cylinder';
+    this.pulley.visible = mode !== 'cylinder';
+    this.camshafts.forEach(shaft => { shaft.parent.visible = mode !== 'cylinder'; });
+    this.crankshaft.children.forEach(child => { child.visible = mode !== 'cylinder' || Math.abs(child.position.x - this.cylinders[selected].layout.x) < 0.85; });
     this.cylinders.forEach((c, i) => { c.pivot.visible = mode !== 'cylinder' || i === selected; });
   }
 
@@ -164,7 +184,22 @@ export class EngineModel extends ModelGeometry {
       c.chamber.position.y = floor + height / 2;
       c.chamber.scale.y = height;
       c.chamber.material.color.setHex(PHASE_COLORS[phase]);
-      c.chamber.material.opacity = sim.running ? phase === 2 ? 0.2 : 0.1 : 0.03;
+      c.chamber.material.opacity = sim.running ? phase === 2 ? 0.26 : 0.19 : 0.03;
+      c.flames.visible = sim.running && degrees >= 355 && degrees < 495;
+      const flameProgress = Math.max(0, Math.min(1, (degrees - 355) / 140));
+      c.flames.children.forEach((plume, n) => {
+        const length = Math.min(height * 0.92, (0.2 + height * Math.sin(flameProgress * Math.PI) * 0.85) * (0.7 + 0.3 * Math.sin(n * 5 + degrees * 0.18)));
+        plume.scale.set(0.65 + flameProgress * 0.8, Math.max(0.02, length), 0.65 + flameProgress * 0.8);
+        plume.position.y = 4.16 - length / 2;
+      });
+      c.charge.visible = sim.running && (phase === 1 || phase === 2);
+      c.charge.material.color.setHex(phase === 2 ? 0xffb14d : 0xbb9bff);
+      for (let n = 0; n < 38; n++) {
+        const a = n * 2.4 + theta * 0.18;
+        const radius = 0.45 * Math.sqrt((n + 0.5) / 38);
+        this.particle(c.charge, n, vec(Math.cos(a) * radius, floor + 0.035 + (height - 0.07) * ((n * 0.618) % 1), Math.sin(a) * radius));
+      }
+      c.charge.instanceMatrix.needsUpdate = true;
       c.valves[0].position.y = 4.22 - (phase === 0 ? Math.sin(theta) * 0.18 : 0);
       c.valves[1].position.y = 4.22 - (phase === 3 ? Math.sin(theta - 3 * Math.PI) * 0.18 : 0);
       c.spark.visible = sim.running && degrees >= 347 && degrees < 373;
@@ -173,11 +208,11 @@ export class EngineModel extends ModelGeometry {
       const inlet = sim.running && phase === 0;
       const gdiFiring = sim.running && sim.injection === 'gdi' && degrees >= 230 && degrees <= 345;
       c.air.visible = inlet;
-      c.fuel.visible = sim.injection === 'mpi' ? inlet : gdiFiring;
+      c.fuel.visible = sim.injection !== 'gdi' ? inlet : gdiFiring;
       c.gas.visible = sim.running && phase === 3;
       const flowTime = (degrees % 180) / 180 * 2;
-      for (let n = 0; n < 14; n++) {
-        const p = (flowTime + n / 14) % 1;
+      for (let n = 0; n < 24; n++) {
+        const p = (flowTime + n / 24) % 1;
         let point;
         if (p < 0.65) point = c.intake.getPoint(p / 0.65);
         else {
@@ -191,11 +226,11 @@ export class EngineModel extends ModelGeometry {
         } else point = c.exhaust.getPoint((p - 0.3) / 0.7);
         this.particle(c.gas, n, point);
       }
-      for (let n = 0; n < 20; n++) {
-        const p = (flowTime + n / 20) % 1;
+      for (let n = 0; n < 28; n++) {
+        const p = (flowTime + n / 28) % 1;
         let point;
-        if (sim.injection === 'mpi') {
-          if (p < 0.63) point = c.intake.getPoint(0.38 + p / 0.63 * 0.62);
+        if (sim.injection !== 'gdi') {
+          if (p < 0.63) { const start = sim.injection === 'carb' ? 0 : 0.38; point = c.intake.getPoint(start + p / 0.63 * (1 - start)); }
           else {
             const t = (p - 0.63) / 0.37;
             point = vec(-0.27 + Math.cos(n * 2.4) * 0.1 * t, 4.17 - t * height * 0.8, -0.03 + Math.sin(n * 2.4) * 0.08 * t);
@@ -210,7 +245,7 @@ export class EngineModel extends ModelGeometry {
       c.fuel.instanceMatrix.needsUpdate = true;
       c.gas.instanceMatrix.needsUpdate = true;
       const label = this.anchors.find(a => a.anchor === c.injectorAnchor);
-      label.text = sim.injection === 'mpi' ? 'Wtrysk MPI · przed zaworem' : 'Wtrysk GDI · w cylindrze';
+      label.text = sim.injection === 'carb' ? 'Mieszanka z gaźnika' : sim.injection === 'mpi' ? 'Wtrysk MPI · przed zaworem' : 'Wtrysk GDI · w cylindrze';
       c.injectorAnchor.position.set(sim.injection === 'mpi' ? -0.65 : 0.65, 5.45, 0.25);
     });
     this.group.updateMatrixWorld(true);

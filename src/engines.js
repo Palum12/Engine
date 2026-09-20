@@ -18,7 +18,7 @@ export const cylinderLayout = (engineId, index) => {
   const bank = banks === 1 ? 0 : index % 2;
   const row = Math.floor(index / banks);
   const bankRadians = banks === 1 ? 0 : (bank === 0 ? -1 : 1) * engine.bankAngle * Math.PI / 360;
-  const x = (row - (rows - 1) / 2) * 1.8 + (banks === 1 ? 0 : bank === 0 ? -0.13 : 0.13);
+  const x = (row - (rows - 1) / 2) * 1.8 + (banks === 1 ? 0 : bank === 0 ? -0.28 : 0.28);
   return { x, row, bank, bankRadians, offset: engine.offsets[index] };
 };
 
