@@ -3,10 +3,10 @@ import { ENGINES, getEngine } from './engines.js';
 export const GEAR_RATIOS = [0, 3.5, 2.1, 1.4, 1.05, 0.82];
 export const PHASE_OFFSETS = ENGINES.r4.offsets;
 export const STROKES = [
-  { name: 'Ssanie', color: '#68c9ed', description: 'Tłok schodzi w dół. Otwarty zawór dolotowy wpuszcza powietrze, a przy MPI lub gaźniku — mieszankę powietrza z paliwem.' },
-  { name: 'Sprężanie', color: '#bd9aff', description: 'Tłok idzie w górę, a oba zawory są zamknięte. Ładunek w cylindrze zostaje sprężony. W tym przykładzie wtrysku bezpośredniego paliwo trafia do cylindra podczas sprężania.' },
-  { name: 'Praca', color: '#ffb34c', description: 'Iskra inicjuje spalanie. Rozprężające się gazy pchają tłok w dół, a korbowód obraca wał. To jedyny suw, który dostarcza energię mechaniczną.' },
-  { name: 'Wydech', color: '#ed7e77', description: 'Tłok wraca do góry. Otwarty zawór wydechowy pozwala usunąć spaliny. Następnie cały cykl zaczyna się od nowa.' }
+  { name: 'Ssanie', color: '#68c9ed', description: 'Tłok oddala się od głowicy. Otwarty zawór dolotowy wpuszcza powietrze, a przy MPI lub gaźniku — mieszankę powietrza z paliwem.' },
+  { name: 'Sprężanie', color: '#bd9aff', description: 'Tłok zbliża się do głowicy, a zawory dolotowe i wydechowe są zamknięte. Ładunek w cylindrze zostaje sprężony. W tym przykładzie wtrysku bezpośredniego paliwo trafia do cylindra podczas sprężania.' },
+  { name: 'Praca', color: '#ffb34c', description: 'Spalanie zaczyna się od iskry pod koniec sprężania. Front płomienia zużywa mieszankę, po czym zanika. Gorące gazy nadal rozprężają się i pchają tłok w stronę wału, przekazując energię przez korbowód.' },
+  { name: 'Wydech', color: '#c4d0dc', description: 'Tłok zbliża się do głowicy i wypycha produkty spalania przez otwarte zawory wydechowe. Jasne znaczniki pokazują drogę gazów. To nie czarny dym: normalne spaliny są w większości niewidoczne. Gazy nie przechodzą przez tłok ani wał.' }
 ];
 
 export const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -34,6 +34,7 @@ export class Simulation {
   setEngine(id) {
     if (!ENGINES[id]) return false;
     this.engineId = id;
+    this.timing = ENGINES[id].timing;
     return true;
   }
 

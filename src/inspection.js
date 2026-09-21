@@ -20,7 +20,7 @@ export const INSPECTIONS = {
     {id:'core',label:'Satelity · zbliżenie',part:'differential',hint:'Na wprost satelity krążą z koszem. W zakręcie dodatkowo obracają się na własnych osiach.'}
   ],
   timing: [
-    {id:'all',label:'Rozrząd przy silniku',part:'timing',hint:'24 zęby na wale, 48 na wałku: wałek rozrządu wykonuje 1 obrót na 2 obroty wału.'},
+    {id:'all',label:'Rozrząd przy silniku',part:'timing',hint:'Wałki rozrządu wykonują 1 obrót na 2 obroty wału. Gałęzie napędu zależą od głowic; VR/W mają w schemacie stopień pośredni.'},
     {id:'timing',label:'Napęd rozrządu',part:'timing',hint:'Wybierz pasek lub łańcuch w konfiguracji. Znaki na kołach pokazują stosunek obrotów 2:1.'}
   ],
   oil: [

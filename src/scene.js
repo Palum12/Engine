@@ -243,9 +243,9 @@ export class EngineScene {
       if (mode === 'engine') bounds.union(this.systems.bounds('timing'));
     }
     const directions = {
-      timing: vec(-1.8,0.25,0.8), oil: vec(0.5,0.45,1.7), fuel: vec(-0.55,0.4,1.7), differential: vec(0.9,0.55,1.7),
-      engine: this.engine.config.bankAngle ? vec(0.75, 0.75, 1.3) : vec(0.65, 0.36, 1.5),
-      cylinder: vec(0.6, 0.15, 1.7), drive: vec(0.45, 0.36, 1.5),
+      timing: vec(['vr6','w16'].includes(this.engine.id) ? 1.8 : -1.8, this.engine.id === 'boxer4' ? 0.8 : 0.25, 0.8), oil: vec(0.5,0.45,1.7), fuel: vec(-0.55,0.4,1.7), differential: vec(0.9,0.55,1.7),
+      engine: this.engine.id === 'boxer4' ? vec(0.8, 1.8, 0.9) : this.engine.config.bankAngle ? vec(0.75, 0.75, 1.3) : vec(0.65, 0.36, 1.5),
+      cylinder: vec(0.6, 0.15, this.engine.id === 'boxer4' && this.engine.cylinders[this.selectedCylinder].layout.bankRadians > 0 ? -1.7 : 1.7).applyAxisAngle(vec(1,0,0), this.engine.cylinders[this.selectedCylinder].layout.bankRadians), drive: vec(0.45, 0.36, 1.5),
       'drive-detail': vec(0.28, 0.5, 1.8), finalDrive: vec(1.25, 0.75, 1.5),
       clutch: vec(1.2, 0.45, 1.5), gearbox: vec(0.6, 0.46, 1.8), turbo: vec(0.8, 0.42, 1.7)
     };
@@ -269,7 +269,7 @@ export class EngineScene {
         corners.push(point);
       }
     };
-    if (['drive-detail', 'turbo'].includes(this.mode) && this.inspection === 'all') {
+    if (['engine', 'cylinder', 'timing'].includes(this.mode) || ['drive-detail', 'turbo'].includes(this.mode) && this.inspection === 'all') {
       this.root.traverseVisible(object => {
         if (!object.isMesh || object.isInstancedMesh) return;
         if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();

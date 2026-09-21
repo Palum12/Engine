@@ -24,23 +24,40 @@ export class SystemsModel extends ModelGeometry {
   }
 
   buildTiming() {
-    const x = -this.engine.shaftEnd - 0.3;
+    const rear = ['vr6', 'w16'].includes(this.engine.id);
+    const side = rear ? 1 : -1;
+    const x = side * (this.engine.shaftEnd + 0.3);
     this.timingWheels = [];
-    const centers = [{ y: 0.8, z: 0, r: 0.42, teeth: 24, speed: 1 }];
+    this.timingLoops = [];
     this.engine.group.updateMatrixWorld(true);
-    this.engine.camshafts.forEach(shaft => {
-      const p = shaft.getWorldPosition(vec(0, 0, 0));
-      centers.push({ y: p.y, z: p.z, r: 0.84, teeth: 48, speed: 0.5 });
+    const crank = { y: 0.8, z: 0, r: 0.32, teeth: 24, speed: 1 };
+    const intermediate = { y: 2.55, z: 0, r: 0.64, teeth: 48, speed: 0.5 };
+    if (rear) this.timingLoop(x, [crank, intermediate], 0.32);
+    this.engine.heads.forEach((_, head) => {
+      const plane = x + side * (rear ? head + 1 : head) * 0.25;
+      const cams = this.engine.camshafts.filter(shaft => shaft.userData.head === head).map(shaft => {
+        const p = shaft.getWorldPosition(vec(0, 0, 0));
+        return { y: p.y, z: p.z, r: 0.64, teeth: 48, speed: 0.5 };
+      });
+      this.timingLoop(plane, [rear ? intermediate : crank, ...cams], 0.32);
+      this.anchor(`Głowica ${head + 1} · dolot / wydech · ½ obrotów`, this.timing,
+        [plane, cams[0].y + 0.95, (cams[0].z + cams[1].z) / 2], 'timing', ['timing']);
     });
+    this.anchor('Wał korbowy · 1×', this.timing, [x, 0.15, 0.6], 'timing', ['timing', 'drive-detail']);
+    if (rear) this.anchor('Wałek pośredni · rozdział napędu', this.timing, [x, 2.55, 0.85], 'timing', ['timing']);
+  }
+
+  timingLoop(x, centers, travel) {
     centers.forEach(c => {
-      const wheel = this.gear(c.teeth, c.r, 0.16, c.speed === 1 ? 'fuel' : 'intake', this.timing, [x, c.y, c.z], 'timing');
-      this.cylinder(0.075, 0.75, 'steel', this.timing, [x + 0.4, c.y, c.z], 'x', 'timing');
-      this.box(0.02, c.r * 0.7, 0.065, 'white', wheel, [-0.1, c.r * 0.5, 0], 'timing');
+      const wheel = this.gear(c.teeth, c.r, 0.13, c.speed === 1 ? 'fuel' : 'intake', this.timing, [x, c.y, c.z], 'timing');
+      const shaftX = Math.sign(x) * this.engine.shaftEnd;
+      this.cylinder(0.075, Math.abs(x - shaftX), 'steel', this.timing, [(x + shaftX) / 2, c.y, c.z], 'x', 'timing');
+      this.box(0.025, c.r * 0.7, 0.065, 'white', wheel, [Math.sign(x) * 0.09, c.r * 0.5, 0], 'timing');
       this.timingWheels.push({ wheel, speed: c.speed });
     });
     const points = centers.flatMap(c => Array.from({ length: 64 }, (_, n) => {
       const a = n * Math.PI / 32;
-      return { y: c.y + (c.r + 0.055) * Math.cos(a), z: c.z + (c.r + 0.055) * Math.sin(a) };
+      return { y: c.y + (c.r + 0.035) * Math.cos(a), z: c.z + (c.r + 0.035) * Math.sin(a) };
     })).sort((a, b) => a.y - b.y || a.z - b.z);
     const cross = (a, b, c) => (b.y - a.y) * (c.z - a.z) - (b.z - a.z) * (c.y - a.y);
     const hull = sequence => {
@@ -49,23 +66,24 @@ export class SystemsModel extends ModelGeometry {
       return result.slice(0, -1);
     };
     const outline = [...hull(points), ...hull([...points].reverse())];
-    this.timingCurve = new THREE.CurvePath();
+    const curve = new THREE.CurvePath();
     outline.forEach((p, i) => {
       const q = outline[(i + 1) % outline.length];
-      this.timingCurve.add(new THREE.LineCurve3(vec(x, p.y, p.z), vec(x, q.y, q.z)));
+      curve.add(new THREE.LineCurve3(vec(x, p.y, p.z), vec(x, q.y, q.z)));
     });
-    this.belt = this.mesh(new THREE.TubeGeometry(this.timingCurve, 200, 0.06, 8, true), 'black', this.timing, [0, 0, 0], 'timing');
-    this.links = new THREE.InstancedMesh(this.geometry('timingLink', () => new THREE.BoxGeometry(0.19, 0.10, 0.065)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), 100);
-    this.links.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.links.frustumCulled = false;
-    this.links.userData.part = 'timing';
-    this.timing.add(this.links);
-    const tensioner = this.cylinder(0.23, 0.20, 'steel', this.timing, [x, 2.5, 0.35], 'x', 'tensioner');
-    this.box(0.12, 0.65, 0.10, 'dark', this.timing, [x + 0.18, 2.25, 0.35], 'tensioner');
-    this.tensioner = tensioner;
-    this.anchor('Wał korbowy · 24 zęby', this.timing, [x - 0.2, 0.15, 0.45], 'timing', ['timing', 'drive-detail']);
-    this.anchor('Wałek rozrządu · 48 zębów', this.timing, [x - 0.2, centers[1].y + 1, centers[1].z], 'timing', ['timing', 'drive-detail']);
-    this.anchor('Napinacz', this.timing, [x - 0.1, 2.5, 0.7], 'tensioner', ['timing']);
+    const belt = this.mesh(new THREE.TubeGeometry(curve, 180, 0.04, 6, true), 'black', this.timing, [0, 0, 0], 'timing');
+    const count = Math.ceil(curve.getLength() / 0.11);
+    const links = new THREE.InstancedMesh(this.geometry('timingLink', () => new THREE.BoxGeometry(0.14, 0.085, 0.06)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), count);
+    links.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    links.frustumCulled = false;
+    links.userData.part = 'timing';
+    this.timing.add(links);
+    const p = curve.getPoint(0.2);
+    const tangent = curve.getTangent(0.2);
+    const guide = this.box(0.11, 0.45, 0.10, 'dark', this.timing, [p.x, p.y, p.z], 'tensioner');
+    guide.quaternion.setFromUnitVectors(vec(0,1,0), tangent);
+    this.anchor('Ślizg / napinacz', this.timing, [p.x, p.y, p.z + 0.35], 'tensioner', ['timing']);
+    this.timingLoops.push({ curve, belt, links, travel });
   }
 
   buildOil() {
@@ -161,17 +179,17 @@ export class SystemsModel extends ModelGeometry {
     if (!this.group.visible) return;
     const a = sim.angle * Math.PI / 180;
     this.timingWheels.forEach(({wheel,speed}) => { wheel.rotation.x = a * speed; });
-    this.belt.visible = sim.timing === 'belt';
-    this.links.material.color.setHex(sim.timing === 'chain' ? 0xb5c8d6 : 0x607382);
-    const length = this.timingCurve.getLength();
-    for (let n = 0; n < 100; n++) {
-      const t = ((n / 100 + a * 0.475 / length) % 1 + 1) % 1;
-      const p = this.timingCurve.getPoint(t);
-      const tangent = this.timingCurve.getTangent(t);
-      this.matrix.compose(p,new THREE.Quaternion().setFromUnitVectors(vec(0,1,0),tangent),vec(1,sim.timing === 'belt' ? 0.45 : 1,1));
-      this.links.setMatrixAt(n,this.matrix);
-    }
-    this.links.instanceMatrix.needsUpdate = true;
+    this.timingLoops.forEach(({ curve, belt, links, travel }) => {
+      belt.visible = sim.timing === 'belt';
+      links.material.color.setHex(sim.timing === 'chain' ? 0xb4c5d1 : 0x687581);
+      const length = curve.getLength();
+      for (let n = 0; n < links.count; n++) {
+        const t = ((n / links.count + a * travel / length) % 1 + 1) % 1;
+        this.matrix.compose(curve.getPoint(t), new THREE.Quaternion().setFromUnitVectors(vec(0,1,0), curve.getTangent(t)), vec(1, sim.timing === 'belt' ? 0.45 : 1, 1));
+        links.setMatrixAt(n, this.matrix);
+      }
+      links.instanceMatrix.needsUpdate = true;
+    });
     this.oilRotor.rotation.x = a;
     this.oilIdler.rotation.x = -a;
     this.highPump.visible = sim.injection === 'gdi';

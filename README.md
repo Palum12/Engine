@@ -117,3 +117,11 @@ Dokumentacja grafiki: [Three.js](https://threejs.org/docs/).
 Podstawy działania turbo: [Garrett — turbina, wspólny wałek, sprężarka i chłodzenie powietrza](https://www.garrettmotion.com/knowledge-center-category/oem/what-is-a-turbo-and-how-does-it-work/), [Garrett — rodzaje turbo i wastegate](https://www.garrettmotion.com/knowledge-center-category/turbo-replacement/diving-into-the-distinctions-between-turbo-types/).
 
 Podstawy zasilania i mechanizmu różnicowego: [Bosch — układ GDI i dwa stopnie zasilania paliwem](https://www.bosch-mobility.com/en/solutions/powertrain/gasoline/gasoline-direct-injection/), [Eaton — otwarty mechanizm różnicowy](https://www.eaton.com/nl/nl-nl/products/differentials-traction-control/open-differential.html).
+
+### Układy cylindrów i ciągły cykl
+
+Dostępne są R4, Inline 6 (R6), V6, VR6 24V, V12, W16 inspirowany Bugatti i Boxer 4 DOHC. Modele zmieniają liczbę rzędów, ich kąty, wspólne głowice, wałki, dźwigienki oraz rozdział napędu rozrządu. VR6 ma jedną głowicę i dwa wałki, W16 dwie głowice i cztery wałki. Bokser ma osobne czopy dla przeciwległych tłoków.
+
+Ładunek płynnie przechodzi ze ssania do sprężania, następnie przez front spalania do rozprężania i wydechu. Jasne znaczniki spalin nie oznaczają czarnego dymu. Przycisk suwu przeprowadza animację do wskazanej fazy; suwak pozwala bezpośrednio ustawić kąt. Przy włączonym ograniczeniu animacji w systemie przyciski również zmieniają kąt bez przejścia.
+
+Źródła producentów, wybrane warianty i granice zgodności z rzeczywistymi silnikami opisuje [dokumentacja odwzorowania](docs/ENGINE_REFERENCES.md). W16 jest schematem architektury, nie repliką całego zespołu napędowego Bugatti.
