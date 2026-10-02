@@ -61,10 +61,10 @@ test('the actual application UI switches transmissions, retains four strokes and
       select('#scenario-select', 'regen'); $('#scenario-start').click();
       assert.equal(app.sim.paused, true);
       assert.equal(app.player.id, 'regen');
-      $('#scenario-next').click(); run(0.2);
+      $('#scenario-next').click();
       assert.ok(app.sim.hybrid.batteryPower < 0);
       assert.equal($('#energy-battery').dataset.direction, 'reverse');
-      $('#scenario-next').click(); run(0.1);
+      $('#scenario-next').click();
       assert.equal(app.sim.hybrid.soc, 0.85);
       assert.equal($('#energy-battery').dataset.active, 'false');
     });

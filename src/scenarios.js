@@ -129,6 +129,7 @@ export class ScenarioPlayer {
     this.elapsed = 0;
     this.step.enter();
     this.step.animate?.(0);
+    this.sim.update(0.002);
     this.sim.paused = true;
     return true;
   }
