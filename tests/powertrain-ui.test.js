@@ -33,6 +33,18 @@ test('the actual application UI switches transmissions, retains four strokes and
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 1);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 0);
     });
+    await t.test('camera pan toggle and device choice expose their current behavior', () => {
+      $('#camera-pan').click();
+      assert.equal($('#camera-pan').getAttribute('aria-pressed'), 'true');
+      assert.equal($('#scene').dataset.cameraPan, 'true');
+      assert.match($('.orbit-hint').textContent, /Przeciągnij: przesuwanie/);
+      select('#camera-input', 'mouse');
+      assert.match($('.orbit-hint').textContent, /kółko: zoom/);
+      select('#camera-input', 'touchpad');
+      assert.match($('.orbit-hint').textContent, /2 palce: przesuwanie/);
+      $('#camera-pan').click();
+      assert.equal($('#scene').dataset.cameraPan, 'false');
+    });
     await t.test('DCT removes the pedal, exposes six gears and prepares the opposite clutch', () => {
       select('#transmission-type', 'dct');
       assert.equal($('#clutch-control').hidden, true);

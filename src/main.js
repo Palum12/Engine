@@ -16,6 +16,7 @@ import './layout.css';
 import './inspection.css';
 import './cycle.css';
 import './powertrain.css';
+import './camera.css';
 import { getInspections } from './inspection.js';
 import { TRANSMISSIONS, DRIVE_LAYOUTS, evaluateTraction } from './powertrain.js';
 import { POWERTRAIN_CONTROLS, VEHICLE_TOOLS, SCENARIO_TOOLS, POWERTRAIN_PARTS } from './powertrain-ui.js';
@@ -36,6 +37,7 @@ const icons = {
   chevron: '<path d="m9 5 7 7-7 7"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5l3 3M21 4v6h-6M20 13a8 8 0 0 1-14 5l-3-3m0 6v-6h6"/>',
+  pan: '<path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
   expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>'
 };
@@ -136,8 +138,8 @@ app.innerHTML = `
           <button id="show-readout" class="show-readout quiet-button" hidden>Pokaż parametry</button>
           <div class="scene-options"><label><input id="cutaway" type="checkbox" checked><span>Przekrój</span></label><label><input id="labels" type="checkbox" checked><span>Opisy</span></label><label id="flow-option" hidden><input id="flow" type="checkbox" checked><span>Przepływ</span></label></div>
           <div class="scene-legend"><span><i style="--dot:#68c9ed"></i>Powietrze</span><span><i style="--dot:#ffdc80"></i>Paliwo</span><span><i style="--dot:#c4d0dc"></i>Spaliny</span></div>
-          <div class="camera-tools"><button id="zoom-in" class="icon-button" aria-label="Przybliż">${icon('plus')}</button><button id="zoom-out" class="icon-button" aria-label="Oddal">${icon('minus')}</button><button id="camera-reset" class="icon-button" aria-label="Przywróć kamerę">${icon('focus')}</button></div>
-          <div class="orbit-hint">${icon('rotate')}<span>Przeciągnij, by obrócić · przybliż dwoma palcami lub kółkiem myszy</span></div>
+          <div class="camera-tools" role="group" aria-label="Sterowanie kamerą"><label class="camera-device">Gesty<select id="camera-input" aria-label="Urządzenie sterujące kamerą" title="Auto rozpoznaje touchpad i kółko. Wybierz urządzenie, jeśli przewijanie reaguje inaczej niż oczekujesz."><option value="auto">Auto</option><option value="touchpad">Touchpad</option><option value="mouse">Mysz</option></select></label><button id="camera-pan" class="icon-button camera-pan" aria-label="Przesuwanie kamery" aria-pressed="false" title="Włącz, aby przeciąganie przesuwało kamerę">${icon('pan')}<span>Przesuwanie</span></button><div class="camera-zoom"><button id="zoom-in" class="icon-button" aria-label="Przybliż">${icon('plus')}</button><button id="zoom-out" class="icon-button" aria-label="Oddal">${icon('minus')}</button><button id="camera-reset" class="icon-button" aria-label="Przywróć kamerę">${icon('focus')}</button></div></div>
+          <div class="orbit-hint">${icon('rotate')}<span>Przeciągnij: obrót · 2 palce: przesuwanie · szczypnięcie: zoom</span></div>
           <div id="toast" role="status" aria-live="polite"></div>
         </div>
         <div class="quick-controls" aria-label="Sterowanie przy modelu"><label for="quick-throttle">Gaz <output id="quick-throttle-value">0%</output><input id="quick-throttle" type="range" min="0" max="100" value="0"></label><label for="quick-clutch">Sprzęgło <output id="quick-clutch-value">0%</output><input id="quick-clutch" class="blue-range" type="range" min="0" max="100" value="0"></label><label for="quick-gear">Bieg<select id="quick-gear"><option value="0">N</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label></div>
@@ -169,7 +171,7 @@ app.innerHTML = `
     <footer class="page-footer"><span>ENGINE / LAB <span class="footer-separator">·</span> Model edukacyjny</span><span>Obróć. Przybliż. Zrozum.</span></footer>
   </main>
   <dialog id="cycle-dialog" class="cycle-explainer"><div class="dialog-heading"><h2>Co dzieje się w cylindrze?</h2><button id="close-cycle" class="icon-button" aria-label="Zamknij opis cyklu">×</button></div><p>Niebieskie znaczniki oznaczają powietrze, żółte paliwo. Podczas sprężania ta sama mieszanka zajmuje coraz mniej miejsca — nie zmienia się nagle w inny gaz. Przy GDI paliwo dodajemy dopiero w czasie sprężania.</p><p>Iskra przed górnym martwym punktem rozpoczyna spalanie. Front płomienia rozchodzi się od świecy, a gorące produkty spalania rozprężają się i naciskają na tłok. Płomień gaśnie przed końcem suwu pracy; spaliny pozostają do wydechu.</p><p>Jasnoszare znaczniki to umownie pokazane spaliny, nie dym. Rozgrzany, sprawny silnik benzynowy nie powinien stale kopcić na czarno. Czerń oznacza sadzę z niepełnego spalania; widoczna biała mgiełka przy zimnym wydechu może być skroploną wodą. Barwy i rozmiary cząstek są dydaktyczne, nie przedstawiają wyglądu cząsteczek.</p><p>Model pokazuje idealizowane suwy 0–180–360–540–720°. Rzeczywiste otwieranie zaworów wykracza poza te granice i zależy od silnika, obrotów i zmiennych faz rozrządu.</p><a href="https://www.grc.nasa.gov/www/k-12/airplane/combst1.html" target="_blank" rel="noreferrer">Spalanie — NASA</a> · <a href="https://github.com/Palum12/Engine/blob/main/docs/ENGINE_REFERENCES.md" target="_blank" rel="noreferrer">Źródła i zakres odwzorowania silników</a></dialog>
-  <dialog id="help-dialog"><div class="dialog-heading"><h2>Twoje małe laboratorium</h2><button id="close-help" class="icon-button" aria-label="Zamknij instrukcję">×</button></div><p>Obracaj model palcem lub myszą. Przybliżaj dwoma palcami, kółkiem myszy albo przyciskami + i −. Klikaj części, aby poznać ich działanie.</p><ol><li><strong>Odkryj cztery suwy.</strong> Kliknij suw, aby zatrzymać model w jego środku. Suwak kąta pozwala ręcznie przesuwać wał przez pełny cykl.</li><li><strong>Rusz z miejsca.</strong> Wciśnij sprzęgło, wybierz pierwszy bieg, ustaw około 25% gazu i powoli zwalniaj sprzęgło suwakiem.</li><li><strong>Zmień bieg.</strong> Odejmij gaz, wciśnij sprzęgło, wybierz następny bieg i płynnie zwolnij pedał.</li><li><strong>Porównaj konfiguracje.</strong> Zmień MPI na GDI i zobacz położenie wtryskiwacza. Włącz turbo, dodaj gazu i obserwuj narastające doładowanie.</li></ol><p><strong>Skróty:</strong> spacja — pauza, Shift — sprzęgło (przytrzymaj), strzałki góra/dół — gaz, N i 1–5 — bieg. Skróty nie działają podczas edycji pól.</p><p class="dialog-note">To uproszczona symulacja dydaktyczna, a nie model konkretnego samochodu. Pomijamy m.in. szczegółową termodynamikę spalania oraz szczegółową dynamikę tarcia synchronizatora. Etapy zmiany biegów są celowo spowolnione do 2,4 s; obroty wejścia są wyrównywane przed połączeniem. Chłodzenie powietrza, smarowanie turbo oraz sterowanie wastegate są zilustrowane, ale nie obliczane fizycznie. GDI może w rzeczywistości wtryskiwać paliwo w różnych fazach; tutaj pokazano wtrysk przy sprężaniu. Dwuwałkowa skrzynia pokazuje stale zazębione pary, przesuwki i widełki. Używa osobnej przesuwki na bieg, aby ułatwić obserwację. Modele V mają kąt 60° oraz przykładową numerację i kolejność zapłonu. To schematy dydaktyczne, nie rysunki konstrukcyjne. Widok turbo jest osobnym przekrojem.</p></dialog>
+  <dialog id="help-dialog"><div class="dialog-heading"><h2>Twoje małe laboratorium</h2><button id="close-help" class="icon-button" aria-label="Zamknij instrukcję">×</button></div><p>Przeciąganie obraca model. Dwa palce przesuwane po touchpadzie przesuwają kamerę, a szczypnięcie przybliża tylko model. Na ekranie dotykowym użyj dwóch palców do przesuwania i powiększania. Przycisk Przesuwanie pozwala przesuwać kamerę zwykłym przeciąganiem. Kółko myszy i przyciski + / − przybliżają model. Jeśli Auto myli urządzenie, wybierz Touchpad lub Mysz w polu Gesty. Gesty przechwytujemy tylko nad sceną; poza nią powiększanie strony działa normalnie. Klikaj części, aby poznać ich działanie.</p><ol><li><strong>Odkryj cztery suwy.</strong> Kliknij suw, aby zatrzymać model w jego środku. Suwak kąta pozwala ręcznie przesuwać wał przez pełny cykl.</li><li><strong>Rusz z miejsca.</strong> Wciśnij sprzęgło, wybierz pierwszy bieg, ustaw około 25% gazu i powoli zwalniaj sprzęgło suwakiem.</li><li><strong>Zmień bieg.</strong> Odejmij gaz, wciśnij sprzęgło, wybierz następny bieg i płynnie zwolnij pedał.</li><li><strong>Porównaj konfiguracje.</strong> Zmień MPI na GDI i zobacz położenie wtryskiwacza. Włącz turbo, dodaj gazu i obserwuj narastające doładowanie.</li></ol><p><strong>Skróty:</strong> spacja — pauza, Shift — sprzęgło (przytrzymaj), strzałki góra/dół — gaz, N i 1–5 — bieg. Skróty nie działają podczas edycji pól.</p><p class="dialog-note">To uproszczona symulacja dydaktyczna, a nie model konkretnego samochodu. Pomijamy m.in. szczegółową termodynamikę spalania oraz szczegółową dynamikę tarcia synchronizatora. Etapy zmiany biegów są celowo spowolnione do 2,4 s; obroty wejścia są wyrównywane przed połączeniem. Chłodzenie powietrza, smarowanie turbo oraz sterowanie wastegate są zilustrowane, ale nie obliczane fizycznie. GDI może w rzeczywistości wtryskiwać paliwo w różnych fazach; tutaj pokazano wtrysk przy sprężaniu. Dwuwałkowa skrzynia pokazuje stale zazębione pary, przesuwki i widełki. Używa osobnej przesuwki na bieg, aby ułatwić obserwację. Modele V mają kąt 60° oraz przykładową numerację i kolejność zapłonu. To schematy dydaktyczne, nie rysunki konstrukcyjne. Widok turbo jest osobnym przekrojem.</p></dialog>
 `;
 
 const controlsTemplate = document.createElement('template');
@@ -442,6 +444,20 @@ $('#inspect-description').addEventListener('click', () => choosePart(getInspecti
 $('#turbo-activate').addEventListener('click', () => { sim.turbo = !sim.turbo; updateConfiguration(); updateUI(); });
 $('#zoom-in').addEventListener('click', () => scene?.zoom(0.8));
 $('#zoom-out').addEventListener('click', () => scene?.zoom(1.25));
+function updateCameraInput() {
+  const pan = $('#camera-pan').getAttribute('aria-pressed') === 'true';
+  const device = $('#camera-input').value;
+  scene?.cameraInput.setPan(pan);
+  scene?.cameraInput.setDevice(device);
+  $('#scene').dataset.cameraPan = pan;
+  $('#camera-pan').title = pan ? 'Wyłącz, aby przeciąganie obracało model' : 'Włącz, aby przeciąganie przesuwało kamerę';
+  $('.orbit-hint span').textContent = `Przeciągnij: ${pan ? 'przesuwanie' : 'obrót'} · ${device === 'mouse' ? 'kółko: zoom' : '2 palce: przesuwanie · szczypnięcie: zoom'}`;
+}
+$('#camera-pan').addEventListener('click', () => {
+  $('#camera-pan').setAttribute('aria-pressed', $('#camera-pan').getAttribute('aria-pressed') !== 'true');
+  updateCameraInput();
+});
+$('#camera-input').addEventListener('change', updateCameraInput);
 $('#camera-reset').addEventListener('click', () => { if (getInspections(mode, sim)) { $('#inspect-section').value = 'all'; $('#isolate').checked = false; inspectSection(); } else scene?.setView(mode); });
 $('#fullscreen').addEventListener('click', async () => {
   try {

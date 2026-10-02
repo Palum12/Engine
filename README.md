@@ -50,7 +50,11 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - **Hybryda**: wybierz EV, podział mocy, ładowanie lub automat; wybierak ma D/N/P. Bateria, falownik, MG1 i MG2 mają osobne przybliżenia. Warstwa elektryczna pokazuje przewód dodatni i powrotny DC oraz trzy fazy AC. Strzałki AC oznaczają kierunek energii, nie stały kierunek przemiennego prądu. Schemat obok pokazuje również moc, prąd baterii, SOC i bilans energii.
 - **Doświadczenia**: przygotuj ruszanie, zmianę biegu, zakręt, poślizg, reduktor, jazdę EV, wspomaganie, rekuperację lub ładowanie na postoju. **Odtwórz** animuje rzeczywistą symulację, **Następny krok** wykonuje kolejną część i zatrzymuje pokaz. Zmiana pedału lub konfiguracji kończy scenariusz.
 - Przeciągnięcie myszy / jednego palca: obrót kamery.
-- Kółko myszy / gest dwoma palcami / przyciski + i −: przybliżanie.
+- Touchpad: przesuwanie dwoma palcami przesuwa kamerę; szczypnięcie przybliża wyłącznie model, także nad etykietami.
+- Ekran dotykowy: jeden palec obraca, dwa palce przesuwają i powiększają model.
+- Przycisk **Przesuwanie** zmienia przeciąganie w przesuwanie kamery; ponowne kliknięcie przywraca obrót.
+- **Gesty**: Auto rozpoznaje typ przewijania. Ponieważ przeglądarka nie podaje rodzaju urządzenia, w razie pomyłki wybierz jawnie Touchpad lub Mysz.
+- Kółko myszy / przyciski + i −: przybliżanie. Gesty nad sceną nie zmieniają powiększenia interfejsu; poza sceną zoom przeglądarki pozostaje dostępny.
 - Wybór silnika w nagłówku: R4, R6, V6, VR6, V12, W16 lub Boxer 4.
 - Widoki: cały silnik, cylinder, napęd, **Napęd szczegółowy**, sprzęgło, skrzynia, dyferencjał, rozrząd, olej, paliwo / gaźnik, turbo, 4WD i hybryda e-CVT.
 - **Napęd szczegółowy**: wybierz podzespół z listy, aby ustawić kamerę. **Odizoluj** ukrywa pozostałe zespoły, a **Opis podzespołu** wyjaśnia jego działanie. Dostępne są silnik, rozbieralne sprzęgło, skrzynia, przekładnia główna z półosiami, turbo, rozrząd, olej i zasilanie paliwem.

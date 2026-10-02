@@ -12,6 +12,7 @@ import { HybridModel } from './models/hybrid-model.js';
 import { TransferModel } from './models/transfer-model.js';
 import { VehicleModel } from './models/vehicle-model.js';
 import { Simulation } from './simulation.js';
+import { CameraInput } from './camera-input.js';
 
 export class EngineScene {
   constructor(container, onSelect, sim = new Simulation()) {
@@ -31,7 +32,7 @@ export class EngineScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.domElement.setAttribute('aria-label', 'Model 3D silnika. Przeciągnij, aby obracać; przybliżaj kółkiem myszy lub dwoma palcami.');
+    this.renderer.domElement.setAttribute('aria-label', 'Model 3D silnika. Przeciągnij, aby obracać. Dwa palce na touchpadzie przesuwają kamerę, szczypnięcie przybliża model. Przycisk Przesuwanie zmienia działanie przeciągania.');
     this.renderer.domElement.setAttribute('role', 'img');
     container.prepend(this.renderer.domElement);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -41,6 +42,7 @@ export class EngineScene {
     this.controls.maxDistance = 65;
     this.controls.maxPolarAngle = Math.PI * 0.9;
     this.controls.addEventListener('start', () => { this.cameraGoal = null; });
+    this.cameraInput = new CameraInput(container, this.controls, () => { this.cameraGoal = null; });
     const environment = new RoomEnvironment();
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.environmentTarget = pmrem.fromScene(environment);
@@ -91,9 +93,14 @@ export class EngineScene {
     this.setView('engine', true);
     this.raycaster = new THREE.Raycaster();
     let origin;
-    this.renderer.domElement.addEventListener('pointerdown', event => { origin = [event.clientX, event.clientY]; });
+    this.renderer.domElement.addEventListener('pointerdown', event => {
+      origin = event.button === 0 && event.isPrimary !== false && !this.cameraInput.pan && !event.ctrlKey && !event.metaKey && !event.shiftKey ? [event.clientX, event.clientY] : null;
+    });
+    this.renderer.domElement.addEventListener('pointercancel', () => { origin = null; });
     this.renderer.domElement.addEventListener('pointerup', event => {
-      if (!origin || Math.hypot(event.clientX - origin[0], event.clientY - origin[1]) > 6) return;
+      const start = origin;
+      origin = null;
+      if (!start || Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 6) return;
       const rect = this.renderer.domElement.getBoundingClientRect();
       this.raycaster.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), this.camera);
       const visible = object => object.visible && (!object.parent || visible(object.parent));
@@ -352,9 +359,7 @@ export class EngineScene {
   }
 
   zoom(factor) {
-    this.cameraGoal = null;
-    this.camera.position.sub(this.controls.target).multiplyScalar(factor).add(this.controls.target);
-    this.controls.update();
+    this.cameraInput.zoom(factor);
   }
 
   setCamera(view) {
@@ -444,6 +449,7 @@ export class EngineScene {
 
   dispose() {
     this.resizeObserver.disconnect();
+    this.cameraInput.dispose();
     this.controls.dispose();
     this.engine.dispose();
     this.drive.dispose();

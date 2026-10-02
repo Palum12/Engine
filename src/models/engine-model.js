@@ -61,7 +61,7 @@ export class EngineModel extends ModelGeometry {
             cam.rotation.x = -c.layout.offset * Math.PI / 360 + (kind ? -135 : 135) * Math.PI / 180;
             const lobe = this.cylinder(0.14, 0.1, 'brass', cam, [0, 0.045, 0], 'x');
             lobe.scale.y = 1.2;
-            const start = root.localToWorld(vec(x, 4.25, shaft.position.z));
+            const start = this.structure.worldToLocal(root.localToWorld(vec(x, 4.25, shaft.position.z)));
             const rocker = this.cylinder(0.035, 1, 'steel', this.structure, [0, 0, 0], 'y', 'valves', 8);
             this.rockers.push({ rocker, start, valve });
           });
@@ -292,7 +292,7 @@ export class EngineModel extends ModelGeometry {
     });
     this.group.updateMatrixWorld(true);
     this.rockers.forEach(({ rocker, start, valve }) => {
-      const end = valve.localToWorld(vec(0, 0.72, 0));
+      const end = rocker.parent.worldToLocal(valve.localToWorld(vec(0, 0.72, 0)));
       this.between(rocker, start, end);
     });
   }

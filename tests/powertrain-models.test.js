@@ -88,6 +88,41 @@ test('whole-vehicle packaging accommodates all seven engine architectures withou
   });
 });
 
+test('valve rockers keep local dimensions and meet valve tips when engines are moved into a whole vehicle', () => {
+  const m = materials();
+  const sim = new Simulation();
+  try {
+    for (const id of Object.keys(ENGINES)) {
+      const engine = new EngineModel(m, id);
+      try {
+        sim.setEngine(id);
+        for (const angle of [0, 90, 180, 355, 540, 710]) {
+          sim.angle = angle;
+          engine.group.position.set(0, 0, 0);
+          engine.group.rotation.set(0, 0, 0);
+          engine.group.scale.setScalar(1);
+          engine.update(sim, true);
+          const lengths = engine.rockers.map(({ rocker }) => rocker.scale.y);
+          for (const rotation of [0, -Math.PI / 2]) {
+            engine.group.position.set(-7, 0.9, -2.1);
+            engine.group.rotation.y = rotation;
+            engine.group.scale.setScalar(0.28);
+            engine.update(sim, true);
+            engine.group.updateMatrixWorld(true);
+            engine.rockers.forEach(({ rocker, start, valve }, n) => {
+              near(rocker.scale.y, lengths[n]);
+              const ends = [rocker.localToWorld(vec(0, -0.5, 0)), rocker.localToWorld(vec(0, 0.5, 0))];
+              near(ends[0].distanceTo(rocker.parent.localToWorld(start.clone())), 0);
+              near(ends[1].distanceTo(valve.localToWorld(vec(0, 0.72, 0))), 0);
+              assert.ok(rocker.scale.y < 2.5, `${id}: ${rocker.scale.y}`);
+            });
+          }
+        }
+      } finally { engine.dispose(); }
+    }
+  } finally { Object.values(m).forEach(material => material.dispose()); }
+});
+
 test('DCT input and output plates rotate independently and its output gears follow the shafts', () => {
   fixture((scene, sim) => {
     sim.setTransmission('dct'); scene.dct.group.visible = true;

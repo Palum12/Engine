@@ -1,0 +1,19 @@
+.camera-tools { width: 122px; bottom: 65px; }
+.camera-device { padding: 6px 8px; display: flex; align-items: center; gap: 5px; color: #a9b7c1; font-size: 10px; }
+.camera-device select { min-width: 0; width: 78px; font-size: 11px; padding: 4px 2px; }
+.camera-tools .camera-pan { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 10px; width: 100%; border-top: 1px solid #394550; border-bottom: 1px solid #394550; }
+.camera-pan svg { width: 16px; height: 16px; }
+.camera-tools .camera-pan[aria-pressed="true"] { background: #254657; color: #97e2ff; }
+.camera-zoom { display: flex; }
+.camera-tools .camera-zoom .icon-button { flex: 1; border-bottom: 0; border-right: 1px solid #394550; }
+.camera-tools .camera-zoom .icon-button:last-child { border-right: 0; }
+.scene { touch-action: none; overscroll-behavior: contain; }
+.scene canvas { cursor: grab; }
+.scene canvas:active { cursor: grabbing; }
+.scene[data-camera-pan="true"] canvas { cursor: move; }
+.orbit-hint { padding-right: 120px; line-height: 1.4; }
+@media (max-width: 520px) {
+  .camera-tools { right: 10px; bottom: 72px; }
+  .orbit-hint { padding-right: 0; max-width: none; right: 10px; left: 14px; font-size: 10px; }
+  .scene-legend { bottom: 53px; left: 14px; gap: 10px; flex-wrap: wrap; max-width: calc(100% - 28px); }
+}
