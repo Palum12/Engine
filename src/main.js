@@ -250,6 +250,7 @@ function configureInspection(view) {
   const section = entries.some(entry => entry.id === scene?.inspection) ? scene.inspection : 'all';
   if (scene) scene.inspection = section;
   $('#inspect-section').value = section;
+  $('.visual-panel').dataset.inspection = section;
   $('#isolate-option').hidden = ['clutch','differential', 'transfer'].includes(view) || view === 'gearbox' && sim.transmission === 'manual';
   $('#isolate').checked = scene?.isolate || false;
   $('#inspection-note').textContent = (entries.find(entry => entry.id === $('#inspect-section').value) || entries[0]).hint;
@@ -260,6 +261,7 @@ function inspectSection() {
     updateConfiguration();
   }
   scene?.inspect($('#inspect-section').value, $('#isolate').checked);
+  $('.visual-panel').dataset.inspection = $('#inspect-section').value;
   const entry = getInspections(mode, sim).find(entry => entry.id === $('#inspect-section').value);
   $('#inspection-note').textContent = entry.hint;
   $('#part-panel').hidden = true;
