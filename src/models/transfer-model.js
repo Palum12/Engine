@@ -126,7 +126,8 @@ export class TransferModel extends ModelGeometry {
     this.lockPacks.forEach((pack, i) => { pack.rotation.x = i ? rear : front; });
     this.mainShaft.rotation.x = sim.outputAngle / sim.transferRatio;
     this.frontShaft.rotation.x = sim.driveMode === '2H' ? front : this.mainShaft.rotation.x;
-    this.sprockets.forEach((sprocket, i) => { sprocket.rotation.x = i ? this.frontShaft.rotation.x : this.mainShaft.rotation.x; });
+    const chainAngle = this.frontShaft.rotation.x;
+    this.sprockets.forEach(sprocket => { sprocket.rotation.x = chainAngle; });
     this.coupler.position.x = sim.driveMode === '2H' ? 0.78 : 0.5;
     this.lowSun.rotation.x = sim.outputAngle;
     this.lowRing.rotation.x = sim.driveMode === '4L' ? 0 : sim.outputAngle;
@@ -135,7 +136,7 @@ export class TransferModel extends ModelGeometry {
     this.lowSelector.position.x = sim.driveMode === '4L' ? -0.93 : -1.25;
     this.cover.visible = !cutaway;
     for (let n = 0; n < this.chain.count; n++) {
-      const t = ((n / this.chain.count + this.mainShaft.rotation.x * 0.04) % 1 + 1) % 1;
+      const t = ((n / this.chain.count + chainAngle * 0.04) % 1 + 1) % 1;
       this.matrix.compose(this.chainCurve.getPointAt(t), new THREE.Quaternion().setFromUnitVectors(vec(0, 0, 1), this.chainCurve.getTangentAt(t)), vec(1, 1, 1));
       this.chain.setMatrixAt(n, this.matrix);
     }

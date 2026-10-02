@@ -145,3 +145,15 @@ test('hybrid current paths reverse for charging, AC arrows denote energy and pau
     assert.ok(scene.hybrid.paths.every(({ path }) => !path.arrows.visible));
   });
 });
+
+test('disconnected 2H chain follows the passive front axle; 4H reconnects both sprockets to the main shaft', () => {
+  fixture((scene, sim) => {
+    sim.setDriveLayout('partTime'); scene.transfer.group.visible = true;
+    sim.axleAngles = [0.7, 1.2]; sim.outputAngle = 1.2 * 3.9;
+    scene.transfer.update(sim, true);
+    scene.transfer.sprockets.forEach(gear => near(gear.rotation.x, 0.7 * 3.9));
+    assert.notEqual(scene.transfer.mainShaft.rotation.x, scene.transfer.sprockets[0].rotation.x);
+    sim.driveMode = '4H'; scene.transfer.update(sim, true);
+    scene.transfer.sprockets.forEach(gear => near(gear.rotation.x, scene.transfer.mainShaft.rotation.x));
+  });
+});
