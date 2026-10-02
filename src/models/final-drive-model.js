@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ModelGeometry, vec } from './geometry.js';
+import { bevelGearGeometry } from './mechanical-geometry.js';
 
 export class FinalDriveModel extends ModelGeometry {
   constructor(materials) {
@@ -13,44 +14,58 @@ export class FinalDriveModel extends ModelGeometry {
     this.carrierSpeed = 0;
     this.leftMaterial = this.material({ color: 0x55c5f2, metalness: 0.45, roughness: 0.4 });
     this.rightMaterial = this.material({ color: 0xf7ba55, metalness: 0.45, roughness: 0.4 });
-    this.input = this.subgroup(this.group, [-1.4, 0, 0], 'propShaft');
-    this.cylinder(0.13, 2.6, 'steel', this.input, [-1.3, 0, 0], 'x', 'propShaft');
-    this.pinion = this.gear(10, 0.32, 0.3, 'brass', this.input, [0, 0, 0], 'finalDrive');
-    [-0.6, -2.5].forEach(x => {
+    this.input = this.subgroup(this.group, [0, 0, -1.02], 'propShaft');
+    this.cylinder(0.09, 2.6, 'steel', this.input, [-2.45, 0, 0], 'x', 'propShaft');
+    this.pinion = this.subgroup(this.input, [0, 0, 0], 'finalDrive');
+    this.pinion.quaternion.setFromUnitVectors(vec(0, 1, 0), vec(-1, 0, 0));
+    this.mesh(bevelGearGeometry(10, 39, 0.06, 0.25, 0.10), 'brass', this.pinion);
+    [-1.5, -2.9].forEach(x => {
       this.annulus(0.23, 0.14, 0.12, 'dark', this.input, [x, 0, 0], 'propShaft');
       this.box(0.12, 0.52, 0.15, 'steel', this.input, [x, 0, 0], 'propShaft');
       this.box(0.12, 0.15, 0.52, 'steel', this.input, [x, 0, 0], 'propShaft');
     });
     this.carrier = this.subgroup(this.group, [0, 0, 0], 'differential');
-    this.crown = this.gear(39, 1.248, 0.18, 'brass', this.carrier, [0, 0, -0.38], 'finalDrive');
-    this.crown.rotation.y = Math.PI / 2;
-    for (const z of [-0.45, 0.45]) {
-      const ring = this.annulus(0.85, 0.68, 0.1, 'steel', this.carrier, [0, 0, z], 'differential');
+    this.crown = this.subgroup(this.carrier, [0, 0, -1.02], 'finalDrive');
+    this.crown.quaternion.setFromUnitVectors(vec(0, 1, 0), vec(0, 0, 1));
+    this.mesh(bevelGearGeometry(39, 10, 0.06, 0.25, 0.25), 'brass', this.crown);
+    this.sideGears = [];
+    this.sideHolders = [];
+    for (const z of [-0.65, 0.65]) {
+      const ring = this.annulus(0.82, 0.66, 0.09, 'steel', this.carrier, [0, 0, z], 'differential');
       ring.rotation.y = Math.PI / 2;
     }
     for (let i = 0; i < 4; i++) {
       const a = i * Math.PI / 2;
-      const rib = this.box(0.15, 0.15, 0.92, 'steel', this.carrier, [Math.cos(a) * 0.72, Math.sin(a) * 0.72, 0], 'differential');
+      const rib = this.box(0.12, 0.12, 1.3, 'steel', this.carrier, [Math.cos(a) * 0.74, Math.sin(a) * 0.74, 0], 'differential');
       rib.rotation.z = a;
     }
     this.carrierFrame = this.carrier.children.slice();
-    this.cylinder(0.065, 1.25, 'dark', this.carrier, [0, 0, 0], 'y', 'differential');
+    this.cylinder(0.055, 1.48, 'dark', this.carrier, [0, 0, 0], 'y', 'differential');
     this.planets = [];
     for (const side of [-1, 1]) {
-      const holder = this.subgroup(this.carrier, [0, side * 0.40, 0], 'differential');
+      const holder = this.subgroup(this.carrier, [0, 0, 0], 'differential');
       holder.quaternion.setFromUnitVectors(vec(0, 1, 0), vec(0, side, 0));
-      const planet = this.bevel(12, 0.33, 0.23, 'exhaust', holder);
-      this.box(0.35, 0.025, 0.055, 'white', planet, [0, 0.125, 0], 'differential');
-      this.planets.push({ planet, side });
+      const planet = this.subgroup(holder, [0, 0, 0], 'differential');
+      this.mesh(bevelGearGeometry(12, 16, 0.07, 0.20, 0.06), 'exhaust', planet);
+      this.box(0.18, 0.012, 0.025, 'white', planet, [0.17, 0.69, 0], 'differential');
+      const washer = this.annulus(0.30, 0.07, 0.04, 'brass', holder, [0, 0.72, 0], 'differential');
+      washer.rotation.z = Math.PI / 2;
+      this.planets.push({ planet, holder, side });
     }
     this.wheels = [];
     this.axles = [];
     for (const side of [-1, 1]) {
       const axle = this.subgroup(this.group, [0, 0, 0], 'halfShaft');
-      this.cylinder(0.13, 2.95, side < 0 ? this.leftMaterial : this.rightMaterial, axle, [0, 0, side * 1.7], 'z', 'halfShaft');
-      const holder = this.subgroup(axle, [0, 0, side * 0.34], 'differential');
+      this.cylinder(0.095, 2.98, side < 0 ? this.leftMaterial : this.rightMaterial, axle, [0, 0, side * 1.70], 'z', 'halfShaft');
+      const holder = this.subgroup(axle, [0, 0, 0], 'differential');
       holder.quaternion.setFromUnitVectors(vec(0,1,0),vec(0,0,side));
-      this.bevel(16, 0.45, 0.23, side < 0 ? this.leftMaterial : this.rightMaterial, holder);
+      const sideGear = this.mesh(bevelGearGeometry(16, 12, 0.07, 0.20, 0.105), side < 0 ? this.leftMaterial : this.rightMaterial, holder);
+      this.sideGears.push(sideGear);
+      this.sideHolders.push(holder);
+      const washer = this.annulus(0.42, 0.11, 0.025, 'brass', holder, [0, 0.57, 0], 'differential');
+      washer.rotation.z = Math.PI / 2;
+      const bearing = this.annulus(0.22, 0.105, 0.12, 'dark', this.group, [0, 0, side * 0.9], 'bearing');
+      bearing.rotation.y = Math.PI / 2;
       for (const z of [0.95, 2.65]) {
         this.cylinder(0.23, 0.35, 'dark', axle, [0, 0, side * z], 'z', 'halfShaft');
         for (let n = 0; n < 4; n++) this.ring(0.225, 0.022, 'black', axle, [0, 0, side * (z - 0.12 + n * 0.08)], 'z', 'halfShaft');
@@ -82,40 +97,31 @@ export class FinalDriveModel extends ModelGeometry {
     this.anchor('Piasta i hamulec', this.group, [0, 1.5, 3], 'wheelHub', ['drive-detail', 'differential']);
   }
 
-  bevel(teeth, radius, depth, material, parent) {
-    const group = this.subgroup(parent, [0, 0, 0], 'differential');
-    this.mesh(new THREE.CylinderGeometry(radius * 0.55, radius, depth, teeth * 2), material, group);
-    for (let n = 0; n < teeth; n++) {
-      const a = n / teeth * Math.PI * 2;
-      const tooth = this.box(0.1, depth * 0.92, 0.065, material, group, [Math.cos(a) * radius * 0.82, 0, Math.sin(a) * radius * 0.82], 'differential');
-      tooth.rotation.y = -a;
-      tooth.rotation.z = 0.42;
-    }
-    return group;
-  }
-
   bounds() {
     this.group.updateMatrixWorld(true);
     return new THREE.Box3(vec(-4.2, -1.45, -3.4), vec(1.6, 1.85, 3.4)).applyMatrix4(this.group.matrixWorld);
   }
 
-  update(sim, cutaway, dt = 0) {
+  update(sim, cutaway, dt = 0, axleIndex) {
     if (!this.group.visible) return;
+    const locked = axleIndex === 0 ? sim.frontLock : sim.rearLock;
+    const turn = locked ? 0 : sim.turn;
     if (this.demo && !sim.paused) {
       this.demoAngle += dt * 1.4;
-      this.demoOffset += dt * 1.4 * sim.turn * 0.5;
+      this.demoOffset += dt * 1.4 * turn * 0.5;
     }
-    const angle = this.demo ? this.demoAngle : sim.outputAngle / 3.9;
-    const offset = this.demo ? this.demoOffset : sim.differentialAngle;
-    this.carrierSpeed = this.demo ? 1.4 * 30 / Math.PI : sim.speed / 0.31 * 30 / Math.PI;
-    this.leftSpeed = this.carrierSpeed * (1 - sim.turn * 0.5);
-    this.rightSpeed = this.carrierSpeed * (1 + sim.turn * 0.5);
+    const angle = this.demo ? this.demoAngle : axleIndex === undefined ? sim.outputAngle / 3.9 : sim.axleAngles[axleIndex];
+    const offset = this.demo ? this.demoOffset : axleIndex === undefined ? sim.differentialAngle : (sim.wheelAngles[axleIndex * 2 + 1] - sim.wheelAngles[axleIndex * 2]) / 2;
+    this.carrierSpeed = this.demo ? 1.4 * 30 / Math.PI : axleIndex === undefined ? sim.speed / 0.31 * 30 / Math.PI : sim.traction.carrierOmega[axleIndex] * 30 / Math.PI;
+    this.leftSpeed = this.demo || axleIndex === undefined ? this.carrierSpeed * (1 - turn * 0.5) : sim.traction.wheels[axleIndex * 2].rpm;
+    this.rightSpeed = this.demo || axleIndex === undefined ? this.carrierSpeed * (1 + turn * 0.5) : sim.traction.wheels[axleIndex * 2 + 1].rpm;
     this.input.rotation.x = -angle * 3.9;
     this.carrier.rotation.z = -angle;
     this.axles[0].rotation.z = -(angle - offset);
     this.axles[1].rotation.z = -(angle + offset);
-    this.planets.forEach(({planet,side}) => { planet.rotation.y = side * offset * 16 / 12; });
+    this.planets.forEach(({planet,holder,side}) => { planet.rotation.y = Math.PI / 12 + side * offset * 16 / 12; holder.position.y = side * (this.exploded || 0) * 0.5; });
+    this.sideHolders.forEach((holder, i) => { holder.position.z = (i ? 1 : -1) * (this.exploded || 0) * 0.7; });
     this.housing.visible = !cutaway && !this.openCarrier;
-    this.carrierFrame.forEach(part => { part.visible = !this.openCarrier; });
+    this.carrierFrame.forEach((part, i) => { part.visible = !this.openCarrier || i === 1 || i > 2 && part.position.y < -0.3; });
   }
 }

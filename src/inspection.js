@@ -42,3 +42,40 @@ export const INSPECTIONS = {
     { id: 'intercooler', label: '5 · Intercooler i przepustnica', part: 'intercooler', hint: 'Po sprężeniu powietrze jest cieplejsze. Intercooler je chłodzi przed przepustnicą i cylindrami.' }
   ]
 };
+
+export function getInspections(view, sim) {
+  if (['drive', 'drive-detail'].includes(view)) {
+    const transmission = sim.transmission === 'hybrid' ? [
+      { id: 'psd', label: 'Podział mocy · przekładnia planetarna', part: 'psd', hint: 'Jarzmo: silnik. Słońce: MG1. Wieniec: wyjście. Koła pozostają zazębione, a sterownik dobiera obroty maszyn.' },
+      { id: 'mg1', label: 'MG1 · generator / rozrusznik', part: 'mg1', hint: 'MG1 może generować, napędzać albo obracać się biernie. Sam obrót nie oznacza przepływu energii.' },
+      { id: 'mg2', label: 'MG2 · napęd / rekuperacja', part: 'mg2', hint: 'MG2 jest połączone z wyjściem. Przy hamowaniu koła napędzają generator.' },
+      { id: 'battery', label: 'Bateria · moduły / styczniki / prąd DC', part: 'battery', hint: 'Pomarańczowy przewód: dodatni, jasny: powrotny. Kierunek prądu stałego odwraca się podczas ładowania.' },
+      { id: 'inverter', label: 'Falownik · DC ↔ trójfazowe AC', part: 'inverter', hint: 'Prąd fazowy zmienia kierunek. Strzałki na kablach AC przedstawiają średni kierunek przekazywania energii.' }
+    ] : [
+      { id: 'clutch', label: sim.transmission === 'dct' ? 'Dwa sprzęgła · K1 / K2' : 'Sprzęgło · tarcza / docisk', part: sim.transmission === 'dct' ? 'dctClutches' : 'clutch', hint: sim.transmission === 'dct' ? 'Docisk pakietu przenosi moment. Bieg przygotowany na drugim wale pozostaje odłączony od silnika.' : 'Wciśnij pedał. Tarcza zwalnia się i silnik może obracać się niezależnie od skrzyni.' },
+      { id: 'gearbox', label: sim.transmission === 'dct' ? 'DCT · wały / biegi / przesuwki' : 'Manual · pary kół / synchronizatory', part: sim.transmission === 'dct' ? 'dct' : 'gearbox', hint: 'Stale zazębione pary kół. Przesuwka łączy wybrane koło z wałem; sama obecność zazębienia nie oznacza napędu.' },
+      ...(sim.transmission === 'dct' ? [{ id: 'mechatronics', label: 'Mechatronika i hydraulika DCT', part: 'mechatronics', hint: 'Zawory regulują ciśnienie tłoków docisku i sterują wybierakami. Obieg oleju obejmuje pompę, filtr i chłodnicę.' }] : [])
+    ];
+    return [
+      { id: 'all', label: 'Cały pojazd', part: 'driveDetail', hint: 'Wybierz warstwę, podzespół i poziom detalu. Gaz, bieg i hamulec zmieniają wspólną symulację wszystkich podzespołów.' },
+      { id: 'engine', label: 'Silnik · tłoki / wał / rozrząd', part: 'crank', hint: 'Zbliżenie zachowuje położenie silnika w pojeździe. „Odizoluj” pozwala ukryć pozostałe zespoły.' },
+      ...transmission,
+      ...(['awd', 'quattro', 'partTime'].includes(sim.driveLayout) ? [{ id: 'transfer', label: sim.driveLayout === 'partTime' ? 'Skrzynia rozdzielcza i reduktor' : 'Centralny mechanizm różnicowy', part: sim.driveLayout === 'quattro' ? 'quattro' : 'transfer', hint: 'Rozdział napędu między osiami. Porównaj obroty, moment i zachowanie na różnej nawierzchni.' }] : []),
+      { id: 'frontAxle', label: 'Przednia oś · dyferencjał / półosie', part: 'frontAxle', hint: 'Przednie koła skręcają. W FWD/AWD są napędzane; w RWD toczą się bez momentu napędowego.' },
+      { id: 'rearAxle', label: 'Tylna oś · dyferencjał / półosie', part: 'rearAxle', hint: 'Różnica obrotów półosi wynika z zakrętu lub utraty przyczepności. Moment i obroty są oddzielnymi wielkościami.' },
+      ...INSPECTIONS['drive-detail'].filter(entry => ['timing', 'oil', 'fuel', 'turbo'].includes(entry.id))
+    ];
+  }
+  if (view === 'hybrid') return [
+    { id: 'all', label: 'Cała hybryda', part: 'hybrid', hint: 'Wybierz EV, podział mocy, rekuperację lub ładowanie na postoju. Śledź osobno mechanikę oraz prąd DC / energię AC.' },
+    ...getInspections('drive-detail', { ...sim, transmission: 'hybrid' }).filter(entry => ['psd', 'mg1', 'mg2', 'battery', 'inverter'].includes(entry.id))
+  ];
+  if (view === 'transfer') return [{ id: 'all', label: 'Rozdział napędu między osiami', part: sim.driveLayout === 'quattro' ? 'quattro' : 'transfer', hint: 'Wybierz 4WD / AWD / quattro w konfiguracji. Blokada wymusza wspólne obroty, a nie stały podział momentu 50:50.' }];
+  if (sim.transmission === 'dct' && view === 'clutch') return [{ id: 'all', label: 'Pakiety K1 / K2', part: 'dctClutches', hint: 'Tarcze wejściowe obraca silnik, tarcze wyjściowe obraca odpowiedni wał. Ciśnienie docisku reguluje moment.' }];
+  if (sim.transmission === 'dct' && view === 'gearbox') return [
+    { id: 'all', label: 'Cała DCT', part: 'dct', hint: 'Niebieski K1: 1/3/5. Miedziany K2: 2/4/6. Bieg przygotowany ma wybraną przesuwkę i otwarte sprzęgło.' },
+    { id: 'dctShafts', label: 'Dwa współosiowe wały wejściowe', part: 'dctShafts', hint: 'Wewnętrzny wał K1 obraca się niezależnie od rurowego wału K2. Dwa wały wyjściowe przekazują napęd dalej.' },
+    { id: 'mechatronics', label: 'Mechatronika i obieg oleju', part: 'mechatronics', hint: 'Elektrozawory sterują dociskiem sprzęgieł i ruchem wybieraków. Olej także smaruje oraz chłodzi.' }
+  ];
+  return INSPECTIONS[view];
+}

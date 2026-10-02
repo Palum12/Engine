@@ -80,9 +80,9 @@ export class ModelGeometry {
     return this.mesh(geometry, material, parent, position, part);
   }
 
-  gear(teeth, radius, thickness, material, parent, position = [0, 0, 0], part = 'gearbox') {
+  gear(teeth, radius, thickness, material, parent, position = [0, 0, 0], part = 'gearbox', bore) {
     const group = this.subgroup(parent, position, part);
-    const geometry = this.geometry(`g:${teeth}:${radius}:${thickness}`, () => {
+    const geometry = this.geometry(`g:${teeth}:${radius}:${thickness}:${bore}`, () => {
       const shape = new THREE.Shape();
       const toothDepth = Math.min(0.075, radius * 2 / teeth * 0.7);
       for (let i = 0; i <= teeth * 4; i++) {
@@ -93,7 +93,7 @@ export class ModelGeometry {
       }
       shape.closePath();
       const hole = new THREE.Path();
-      hole.absarc(0, 0, Math.min(0.16, radius * 0.33), 0, Math.PI * 2, true);
+      hole.absarc(0, 0, bore ?? Math.min(0.16, radius * 0.33), 0, Math.PI * 2, true);
       shape.holes.push(hole);
       const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 1, curveSegments: 16 });
       geometry.translate(0, 0, -thickness / 2);
@@ -102,10 +102,13 @@ export class ModelGeometry {
     });
     group.userData.face = this.mesh(geometry, material, group);
     this.annulus(radius * 0.7, radius * 0.6, thickness + 0.035, 'dark', group);
-    this.annulus(Math.min(0.27, radius * 0.45), Math.min(0.15, radius * 0.3), thickness + 0.09, 'steel', group);
+    const hubOuter = Math.max((bore || 0) + 0.035, Math.min(0.27, radius * 0.45));
+    this.annulus(hubOuter, bore ?? Math.min(0.15, radius * 0.3), thickness + 0.09, 'steel', group);
     for (let i = 0; i < 5; i++) {
       const a = i * Math.PI * 2 / 5;
-      this.cylinder(Math.min(0.07, radius * 0.1), thickness + 0.025, 'black', group, [0, Math.cos(a) * radius * 0.43, Math.sin(a) * radius * 0.43], 'x');
+      const boltRadius = Math.min(0.07, radius * 0.1);
+      const boltCircle = Math.max(radius * 0.43, (bore ?? Math.min(0.16, radius * 0.33)) + boltRadius + 0.025);
+      if (boltCircle + boltRadius < radius * 0.6) this.cylinder(boltRadius, thickness + 0.025, 'black', group, [0, Math.cos(a) * boltCircle, Math.sin(a) * boltCircle], 'x');
     }
     return group;
   }

@@ -15,7 +15,11 @@ import './style.css';
 import './layout.css';
 import './inspection.css';
 import './cycle.css';
-import { INSPECTIONS } from './inspection.js';
+import './powertrain.css';
+import { getInspections } from './inspection.js';
+import { TRANSMISSIONS, DRIVE_LAYOUTS, evaluateTraction } from './powertrain.js';
+import { POWERTRAIN_CONTROLS, VEHICLE_TOOLS, SCENARIO_TOOLS, POWERTRAIN_PARTS } from './powertrain-ui.js';
+import { ScenarioPlayer, SCENARIOS } from './scenarios.js';
 import { EngineScene } from './scene.js';
 import { ENGINES, getEngine } from './engines.js';
 import { Simulation, STROKES, GEAR_RATIOS, cycleDegrees, strokeIndex } from './simulation.js';
@@ -37,6 +41,7 @@ const icons = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.info}</svg>`;
 const sim = new Simulation();
+const player = new ScenarioPlayer(sim);
 let selectedCylinder = 0;
 let mode = 'engine';
 let scene;
@@ -105,6 +110,7 @@ const PARTS = {
 };
 
 const app = document.querySelector('#app');
+Object.assign(PARTS, POWERTRAIN_PARTS);
 app.innerHTML = `
   <header class="app-header">
     <a class="brand" href="./" aria-label="Engine Lab — strona główna"><span class="brand-symbol">${icon('piston')}</span><span>ENGINE<span class="brand-light"> / LAB</span></span></a>
@@ -166,6 +172,19 @@ app.innerHTML = `
   <dialog id="help-dialog"><div class="dialog-heading"><h2>Twoje małe laboratorium</h2><button id="close-help" class="icon-button" aria-label="Zamknij instrukcję">×</button></div><p>Obracaj model palcem lub myszą. Przybliżaj dwoma palcami, kółkiem myszy albo przyciskami + i −. Klikaj części, aby poznać ich działanie.</p><ol><li><strong>Odkryj cztery suwy.</strong> Kliknij suw, aby zatrzymać model w jego środku. Suwak kąta pozwala ręcznie przesuwać wał przez pełny cykl.</li><li><strong>Rusz z miejsca.</strong> Wciśnij sprzęgło, wybierz pierwszy bieg, ustaw około 25% gazu i powoli zwalniaj sprzęgło suwakiem.</li><li><strong>Zmień bieg.</strong> Odejmij gaz, wciśnij sprzęgło, wybierz następny bieg i płynnie zwolnij pedał.</li><li><strong>Porównaj konfiguracje.</strong> Zmień MPI na GDI i zobacz położenie wtryskiwacza. Włącz turbo, dodaj gazu i obserwuj narastające doładowanie.</li></ol><p><strong>Skróty:</strong> spacja — pauza, Shift — sprzęgło (przytrzymaj), strzałki góra/dół — gaz, N i 1–5 — bieg. Skróty nie działają podczas edycji pól.</p><p class="dialog-note">To uproszczona symulacja dydaktyczna, a nie model konkretnego samochodu. Pomijamy m.in. szczegółową termodynamikę spalania oraz szczegółową dynamikę tarcia synchronizatora. Etapy zmiany biegów są celowo spowolnione do 2,4 s; obroty wejścia są wyrównywane przed połączeniem. Chłodzenie powietrza, smarowanie turbo oraz sterowanie wastegate są zilustrowane, ale nie obliczane fizycznie. GDI może w rzeczywistości wtryskiwać paliwo w różnych fazach; tutaj pokazano wtrysk przy sprężaniu. Dwuwałkowa skrzynia pokazuje stale zazębione pary, przesuwki i widełki. Używa osobnej przesuwki na bieg, aby ułatwić obserwację. Modele V mają kąt 60° oraz przykładową numerację i kolejność zapłonu. To schematy dydaktyczne, nie rysunki konstrukcyjne. Widok turbo jest osobnym przekrojem.</p></dialog>
 `;
 
+const controlsTemplate = document.createElement('template');
+controlsTemplate.innerHTML = POWERTRAIN_CONTROLS;
+document.querySelector('.control-heading').after(controlsTemplate.content.querySelector('.powertrain-config'));
+document.querySelector('.gear-control').after(controlsTemplate.content.querySelector('.hybrid-controls'), controlsTemplate.content.querySelector('.traction-settings'));
+document.querySelector('#scene').insertAdjacentHTML('beforebegin', VEHICLE_TOOLS);
+document.querySelector('.playback').insertAdjacentHTML('beforebegin', SCENARIO_TOOLS);
+document.querySelector('.view-tabs').insertAdjacentHTML('beforeend', '<button class="view-tab" data-view="transfer" aria-pressed="false">4WD / AWD</button><button class="view-tab" data-view="hybrid" aria-pressed="false">Hybryda / bateria</button>');
+document.querySelector('#quick-clutch').closest('label').id = 'quick-clutch-control';
+document.querySelector('#clutch').closest('.pedal-control').id = 'clutch-control';
+document.querySelector('#quick-gear').closest('label').insertAdjacentHTML('beforebegin', '<button id="quick-brake" class="secondary-button" aria-pressed="false" hidden>Hamulec</button>');
+document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="dct-lesson" hidden><span id="dct-k1"></span><span id="dct-k2"></span><strong id="dct-state"></strong><button id="dct-shift-step" class="secondary-button">Następny etap</button></div>');
+document.querySelector('#diff-lesson').insertAdjacentHTML('beforeend', '<label>Rozłóż mechanizm<input id="diff-explode" type="range" min="0" max="100" value="0" aria-label="Rozłożenie mechanizmu różnicowego"></label>');
+
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const fmt = new Intl.NumberFormat('pl-PL');
@@ -190,6 +209,9 @@ function choosePart(part, cylinder) {
   $('#part-panel').hidden = false;
 }
 function changeView(value) {
+  if (value === 'hybrid' && sim.transmission !== 'hybrid') { player.stop(); sim.setTransmission('hybrid'); updatePowertrainConfiguration(); updateConfiguration(); }
+  if (value === 'transfer' && !['awd', 'quattro', 'partTime'].includes(sim.driveLayout)) { sim.setDriveLayout('partTime'); updatePowertrainConfiguration(); }
+  if (sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(value)) value = 'hybrid';
   mode = value;
   scene?.setView(value);
   $$('.view-tab').forEach(button => {
@@ -197,31 +219,38 @@ function changeView(value) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
-  $('#view-caption').textContent = { engine: `Przekrój ${getEngine(sim.engineId).name} · ${getEngine(sim.engineId).cylinders} cylindrów`, cylinder: 'Komora spalania, zawory i wtryskiwacz', drive: 'Od wału korbowego do kół', 'drive-detail': 'Pełny układ · wybierz podzespół do inspekcji', clutch: 'Tarcza, docisk i mechanizm wysprzęglania', gearbox: 'Stałe zazębienie i wybór przełożenia', turbo: 'Energia spalin napędza sprężarkę', differential: 'Dwa koła · różne prędkości · wspólny kosz', timing: 'Dwa obroty wału na jeden obrót wałka', oil: 'Obieg smarowania · kierunki przepływu', fuel: 'Droga paliwa i przygotowanie mieszanki' }[value];
+  $('#view-caption').textContent = { engine: `Przekrój ${getEngine(sim.engineId).name} · ${getEngine(sim.engineId).cylinders} cylindrów`, cylinder: 'Komora spalania, zawory i wtryskiwacz', drive: 'Cały pojazd · od silnika do czterech kół', 'drive-detail': 'Cały pojazd · wybierz mechanizm i zbliżenie', clutch: sim.transmission === 'dct' ? 'Mokre pakiety K1 / K2 · sterowanie dociskiem' : 'Tarcza, docisk i mechanizm wysprzęglania', gearbox: sim.transmission === 'dct' ? 'DCT · bieg aktywny i przygotowany' : 'Stałe zazębienie i wybór przełożenia', turbo: 'Energia spalin napędza sprężarkę', differential: 'Dwa koła · różne prędkości · wspólny kosz', timing: 'Dwa obroty wału na jeden obrót wałka', oil: 'Obieg smarowania · kierunki przepływu', fuel: 'Droga paliwa i przygotowanie mieszanki', hybrid: 'e-CVT · mechanika, bateria i prąd', transfer: 'Przednia / tylna oś · reduktor lub dyferencjał' }[value];
+  const whole = ['drive', 'drive-detail'].includes(value);
+  $('.visual-panel').classList.toggle('vehicle-mode', whole);
+  $('#vehicle-tools').hidden = !whole;
+  $('#scenario-panel').hidden = !['drive', 'drive-detail', 'clutch', 'gearbox', 'differential', 'transfer', 'hybrid'].includes(value);
   $('#cycle-panel').hidden = false;
   configureInspection(value);
   updateReadouts();
-  $('#flow-option').hidden = !['drive', 'drive-detail', 'clutch', 'gearbox', 'turbo', 'oil', 'fuel'].includes(value);
+  $('#flow-option').hidden = !['drive', 'drive-detail', 'clutch', 'gearbox', 'turbo', 'oil', 'fuel', 'hybrid'].includes(value);
   $('.scene-legend').innerHTML = ['drive', 'drive-detail', 'clutch', 'gearbox'].includes(value)
     ? '<span><i style="--dot:#ffc35a"></i>Przepływ momentu</span><span><i style="--dot:#68c9ed"></i>Wejście skrzyni</span>'
     : value === 'turbo' ? '<span><i style="--dot:#e68565"></i>Spaliny</span><span><i style="--dot:#f5b74e"></i>Ciepłe powietrze</span><span><i style="--dot:#69d5ee"></i>Chłodne powietrze</span>' : '<span><i style="--dot:#68c9ed"></i>Powietrze</span><span><i style="--dot:#ffdc80"></i>Paliwo</span><span><i style="--dot:#c4d0dc"></i>Spaliny</span>';
   if (value === 'oil') $('.scene-legend').innerHTML = '<span><i style="--dot:#70edb1"></i>Olej pod ciśnieniem</span><span><i style="--dot:#319b74"></i>Spływ oleju</span>';
   if (value === 'differential') $('.scene-legend').innerHTML = '<span><i style="--dot:#69d5ff"></i>Lewe koło</span><span><i style="--dot:#f7ba55"></i>Prawe koło</span><span><i style="--dot:#e68565"></i>Satelity</span>';
-  $('#explode-control').hidden = !['clutch', 'drive-detail'].includes(value);
+  if (whole || value === 'hybrid') updateVehicleLegend();
+  $('#explode-control').hidden = value !== 'clutch';
   $('#next-stroke').hidden = false;
   $('#part-panel').hidden = true;
   selectedPart = null;
   updateUI();
 }
 function configureInspection(view) {
-  const entries = INSPECTIONS[view];
+  const entries = getInspections(view, sim);
   $('#inspection-toolbar').hidden = !entries;
   $('.visual-panel').classList.toggle('inspecting', Boolean(entries));
   updateLessons();
   if (!entries) return;
   $('#inspect-section').innerHTML = entries.map(entry => `<option value="${entry.id}">${entry.label}</option>`).join('');
-  $('#inspect-section').value = scene?.inspection || 'all';
-  $('#isolate-option').hidden = ['clutch','gearbox','differential'].includes(view);
+  const section = entries.some(entry => entry.id === scene?.inspection) ? scene.inspection : 'all';
+  if (scene) scene.inspection = section;
+  $('#inspect-section').value = section;
+  $('#isolate-option').hidden = ['clutch','differential', 'transfer'].includes(view) || view === 'gearbox' && sim.transmission === 'manual';
   $('#isolate').checked = scene?.isolate || false;
   $('#inspection-note').textContent = (entries.find(entry => entry.id === $('#inspect-section').value) || entries[0]).hint;
 }
@@ -231,14 +260,14 @@ function inspectSection() {
     updateConfiguration();
   }
   scene?.inspect($('#inspect-section').value, $('#isolate').checked);
-  const entry = INSPECTIONS[mode].find(entry => entry.id === $('#inspect-section').value);
+  const entry = getInspections(mode, sim).find(entry => entry.id === $('#inspect-section').value);
   $('#inspection-note').textContent = entry.hint;
   $('#part-panel').hidden = true;
   updateReadouts();
   updateLessons();
 }
 function updateReadouts() {
-  const relevant = ['drive', 'clutch', 'gearbox', 'turbo'].includes(mode) || mode === 'drive-detail' && ['all','clutch','gearbox','turbo'].includes(scene?.inspection);
+  const relevant = ['clutch', 'gearbox', 'turbo'].includes(mode) || ['drive', 'drive-detail'].includes(mode) && ['clutch','gearbox','turbo'].includes(scene?.inspection);
   const turbo = mode === 'turbo' || mode === 'drive-detail' && scene?.inspection === 'turbo';
   const visible = relevant && $('#labels').checked && !readoutMuted;
   $('#mechanism-readout').hidden = !visible || turbo;
@@ -246,13 +275,14 @@ function updateReadouts() {
   $('#show-readout').hidden = !relevant || visible;
 }
 function lessonView() {
-  return mode === 'drive-detail' ? scene?.inspection : mode;
+  return ['drive', 'drive-detail'].includes(mode) ? scene?.inspection : mode;
 }
 function updateLessons() {
   const view = lessonView();
-  $('#clutch-lesson').hidden = view !== 'clutch';
-  $('#gear-lesson').hidden = view !== 'gearbox';
-  $('#diff-lesson').hidden = !['differential','finalDrive'].includes(view);
+  $('#clutch-lesson').hidden = view !== 'clutch' || sim.transmission !== 'manual';
+  $('#gear-lesson').hidden = view !== 'gearbox' || sim.transmission !== 'manual';
+  $('#dct-lesson').hidden = sim.transmission !== 'dct' || !['clutch', 'gearbox'].includes(view);
+  $('#diff-lesson').hidden = !['differential','finalDrive','frontAxle','rearAxle'].includes(view);
   $('#diff-demo').hidden = view !== 'differential';
 }
 function updateLessonState() {
@@ -268,19 +298,21 @@ function updateLessonState() {
   $$('[data-shift-stage]').forEach(element => element.classList.toggle('active', element.dataset.shiftStage === stage && (sim.shiftTarget !== null || sim.gear > 0)));
   $('#shift-step').disabled = sim.shiftTarget === null;
   const selected = sim.shiftTarget || sim.gear;
-  const output = sim.speed / 0.31 * 3.9 * 30 / Math.PI;
-  const free = selected ? sim.inputOmega / GEAR_RATIOS[selected] * 30 / Math.PI : 0;
+  const output = sim.outputOmega * 30 / Math.PI;
+  const free = selected ? sim.inputOmega / sim.ratios[selected] * 30 / Math.PI : 0;
   $('#shift-detail').textContent = sim.shiftTarget !== null ? `${sim.shiftFrom || 'N'} → ${sim.shiftTarget || 'N'} · ${stage === 'release' ? 'Tuleja opuszcza zęby poprzedniego biegu.' : stage === 'synchronize' ? 'Pierścień trze o stożek, wyrównując obroty.' : 'Tuleja zachodzi na zęby kłowe koła.'} Koło ${Math.round(free)} / wał ${Math.round(output)} obr./min.` : sim.gear ? `Bieg ${sim.gear} połączony. Koło i wał: ${Math.round(output)} obr./min. Zwolnij sprzęgło, aby przekazać moment.` : 'Luz: wszystkie koła obracają się swobodnie na wale. Wciśnij sprzęgło i wybierz bieg; możesz zatrzymać zmianę i przejść etapami.';
-  const diff = scene?.finalDrive;
+  const diff = mode === 'differential' ? scene?.finalDrive : scene?.vehicle[scene?.inspection === 'frontAxle' || sim.driveLayout === 'fwd' ? 'front' : 'rear'];
   $('#diff-left').textContent = `${(diff?.leftSpeed || 0).toFixed(1)}`;
   $('#diff-carrier').textContent = `${(diff?.carrierSpeed || 0).toFixed(1)}`;
   $('#diff-right').textContent = `${(diff?.rightSpeed || 0).toFixed(1)}`;
   $('#diff-demo').textContent = diff?.demo ? 'Zakończ pokaz stołowy' : 'Uruchom pokaz stołowy';
   $('#diff-demo').setAttribute('aria-pressed', Boolean(diff?.demo));
   $$('[data-turn]').forEach(button => { const active = Number(button.dataset.turn) === sim.turn; button.classList.toggle('active',active); button.setAttribute('aria-pressed',active); });
-  $('#diff-detail').textContent = `${diff?.demo ? 'Pokaz stołowy · umowne obroty, niezależne od samochodu.' : 'Napęd ze skrzyni; na postoju koła stoją.'} ${sim.turn === 0 ? 'Na wprost: obie półosie obracają się jednakowo.' : sim.turn > 0 ? 'Zakręt w lewo: prawe koło jest zewnętrzne i obraca się szybciej.' : 'Zakręt w prawo: lewe koło jest zewnętrzne i obraca się szybciej.'} (L + P) / 2 = kosz · obr./min.`;
+  $('#diff-detail').textContent = `${diff?.demo ? 'Pokaz stołowy · umowne obroty, niezależne od samochodu.' : 'Obroty i moment pochodzą z symulacji kół; poślizg może rozpędzić koło na postoju.'} ${sim.turn === 0 ? 'Na wprost: obie półosie obracają się jednakowo.' : sim.turn > 0 ? 'Zakręt w lewo: prawe koło jest zewnętrzne i obraca się szybciej.' : 'Zakręt w prawo: lewe koło jest zewnętrzne i obraca się szybciej.'} (L + P) / 2 = kosz · obr./min.`;
 }
 function setPedal(name, value) {
+  if (name === 'clutch' && sim.transmission !== 'manual') return;
+  player.stop();
   sim[name] = Math.max(0, Math.min(1, value));
   $(`#${name}`).value = Math.round(sim[name] * 100);
   $(`#${name}-value`).innerHTML = `${Math.round(sim[name] * 100)}<span>%</span>`;
@@ -295,8 +327,9 @@ function setPedal(name, value) {
   updateUI();
 }
 function shift(value) {
+  player.stop();
   if (!sim.shift(value)) toast(sim.shiftTarget !== null ? 'Dokończ obecną zmianę biegu.' : 'Najpierw wciśnij sprzęgło co najmniej do 85%.');
-  else if (value && mode === 'gearbox' && scene.inspection !== 'all') {
+  else if (value && sim.transmission === 'manual' && mode === 'gearbox' && scene?.inspection !== 'all') {
     $('#inspect-section').value = `gear${value}`;
     inspectSection();
   }
@@ -321,7 +354,7 @@ function setCycle(angle, animate = false) {
 }
 
 try {
-  scene = new EngineScene($('#scene'), choosePart);
+  scene = new EngineScene($('#scene'), choosePart, sim);
 } catch (error) {
   console.error(error);
   const fallback = document.createElement('div');
@@ -345,7 +378,7 @@ $('#next-stroke').addEventListener('click', () => setCycle(((strokeIndex(sim.ang
 $('#animation-speed').addEventListener('change', event => { sim.animationScale = Number(event.target.value); });
 ['throttle', 'clutch'].forEach(name => $(`#${name}`).addEventListener('input', event => setPedal(name, Number(event.target.value) / 100)));
 ['throttle', 'clutch'].forEach(name => $(`#quick-${name}`).addEventListener('input', event => setPedal(name, Number(event.target.value) / 100)));
-$('#quick-gear').addEventListener('change', event => shift(Number(event.target.value)));
+$('#quick-gear').addEventListener('change', event => { player.stop(); if (sim.transmission === 'hybrid') setHybridRange(event.target.value); else shift(Number(event.target.value)); });
 $('#clutch-toggle').addEventListener('click', () => setPedal('clutch', sim.clutch >= 0.85 ? 0 : 1));
 $$('[data-gear]').forEach(button => button.addEventListener('click', () => shift(Number(button.dataset.gear))));
 $$('[data-injection]').forEach(button => button.addEventListener('click', () => {
@@ -389,7 +422,7 @@ $('#diff-demo').addEventListener('click', () => {
   updateUI();
 });
 $$('[data-turn]').forEach(button => button.addEventListener('click', () => { sim.turn = Number(button.dataset.turn); updateUI(); }));
-$('#diff-open').addEventListener('change', event => { if (scene) scene.finalDrive.openCarrier = event.target.checked; });
+$('#diff-open').addEventListener('change', event => { if (scene) [scene.finalDrive, scene.vehicle.front, scene.vehicle.rear].forEach(diff => { diff.openCarrier = event.target.checked; }); });
 $('#turbo').addEventListener('change', event => {
   sim.turbo = event.target.checked;
   updateConfiguration();
@@ -400,14 +433,14 @@ window.matchMedia('(max-width:600px)').addEventListener('change', event => { if 
 $('#labels').addEventListener('change', event => { if (scene) scene.labels = event.target.checked; updateReadouts(); });
 $$('.close-readout').forEach(button => button.addEventListener('click', () => { readoutMuted = true; updateReadouts(); }));
 $('#show-readout').addEventListener('click', () => { readoutMuted = false; $('#labels').checked = true; if (scene) scene.labels = true; updateReadouts(); });
-$('#flow').addEventListener('change', event => { if (scene) { scene.drive.showFlow = event.target.checked; scene.turbo.showFlow = event.target.checked; scene.systems.showFlow = event.target.checked; } });
+$('#flow').addEventListener('change', event => { if (scene) { [scene.drive, scene.turbo, scene.systems, scene.dct, scene.hybrid].forEach(model => { model.showFlow = event.target.checked; }); } });
 $('#inspect-section').addEventListener('change', inspectSection);
 $('#isolate').addEventListener('change', inspectSection);
-$('#inspect-description').addEventListener('click', () => choosePart(INSPECTIONS[mode].find(entry => entry.id === $('#inspect-section').value).part));
+$('#inspect-description').addEventListener('click', () => choosePart(getInspections(mode, sim).find(entry => entry.id === $('#inspect-section').value).part));
 $('#turbo-activate').addEventListener('click', () => { sim.turbo = !sim.turbo; updateConfiguration(); updateUI(); });
 $('#zoom-in').addEventListener('click', () => scene?.zoom(0.8));
 $('#zoom-out').addEventListener('click', () => scene?.zoom(1.25));
-$('#camera-reset').addEventListener('click', () => { if (INSPECTIONS[mode]) { $('#inspect-section').value = 'all'; $('#isolate').checked = false; inspectSection(); } else scene?.setView(mode); });
+$('#camera-reset').addEventListener('click', () => { if (getInspections(mode, sim)) { $('#inspect-section').value = 'all'; $('#isolate').checked = false; inspectSection(); } else scene?.setView(mode); });
 $('#fullscreen').addEventListener('click', async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -416,18 +449,25 @@ $('#fullscreen').addEventListener('click', async () => {
   } catch { toast('Przeglądarka nie pozwoliła włączyć pełnego ekranu.'); }
 });
 $('#ignition').addEventListener('click', () => {
-  if (sim.running) { sim.running = false; sim.stalled = false; }
+  player.stop();
+  if (sim.transmission === 'hybrid') sim.hybridEnabled = !sim.hybridEnabled;
+  else if (sim.running) { sim.running = false; sim.stalled = false; }
   else if (!sim.start()) toast('Aby uruchomić silnik, wybierz N lub wciśnij sprzęgło.');
   updateUI();
 });
 $('#brake').addEventListener('click', () => {
+  player.stop();
   sim.brake = sim.brake ? 0 : 1;
   $('#brake').setAttribute('aria-pressed', Boolean(sim.brake));
 });
 $('#reset').addEventListener('click', () => {
+  player.stop();
   sim.reset();
-  if (scene) { scene.finalDrive.demo = false; scene.finalDrive.openCarrier = false; }
+  if (scene) { scene.finalDrive.demo = false; [scene.finalDrive, scene.vehicle.front, scene.vehicle.rear].forEach(diff => { diff.openCarrier = false; diff.exploded = 0; }); scene.dct.exploded = 0; scene.drive.exploded = 0; }
   $('#diff-open').checked = false;
+  $('#diff-explode').value = 0;
+  $('#explode').value = 0;
+  $('#explode-value').textContent = '0%';
   $('#timing-type').value = 'belt';
   scene?.setEngine('r4');
   updateEngineUI();
@@ -440,6 +480,7 @@ $('#reset').addEventListener('click', () => {
   $('#animation-speed').value = 0.02;
   $('#brake').setAttribute('aria-pressed', 'false');
   updateConfiguration();
+  updatePowertrainConfiguration();
   updateUI();
   changeView('engine');
   toast('Przywrócono silnik wolnossący z wtryskiem pośrednim.');
@@ -455,10 +496,10 @@ let previousClutch = null;
 window.addEventListener('keydown', event => {
   if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(document.activeElement?.tagName) || $('#help-dialog').open || $('#cycle-dialog').open || event.ctrlKey || event.metaKey || event.altKey) return;
   if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) pause(); }
-  if (event.key === 'Shift' && !event.repeat) { previousClutch = sim.clutch; setPedal('clutch', 1); }
+  if (event.key === 'Shift' && !event.repeat && sim.transmission === 'manual') { previousClutch = sim.clutch; setPedal('clutch', 1); }
   if (event.key === 'ArrowUp') { event.preventDefault(); setPedal('throttle', sim.throttle + 0.05); }
   if (event.key === 'ArrowDown') { event.preventDefault(); setPedal('throttle', sim.throttle - 0.05); }
-  if (/^[1-5]$/.test(event.key) || event.key.toLowerCase() === 'n') shift(event.key.toLowerCase() === 'n' ? 0 : Number(event.key));
+  if (sim.transmission !== 'hybrid' && (/^[1-6]$/.test(event.key) || event.key.toLowerCase() === 'n')) shift(event.key.toLowerCase() === 'n' ? 0 : Number(event.key));
 });
 function releaseKeyboardClutch() {
   if (previousClutch !== null) { setPedal('clutch', previousClutch); previousClutch = null; }
@@ -508,27 +549,212 @@ $$('.engine-buttons [data-engine]').forEach(button => button.addEventListener('c
 }));
 $('#explode').addEventListener('change', () => scene?.setView(mode));
 $('#explode').addEventListener('input', event => {
-  if (scene) scene.drive.exploded = Number(event.target.value) / 100;
+  if (scene) { scene.drive.exploded = Number(event.target.value) / 100; scene.dct.exploded = Number(event.target.value) / 100; }
   $('#explode-value').textContent = `${event.target.value}%`;
 });
+
+let configuredTransmission = null;
+function updatePowertrainConfiguration() {
+  const automatic = sim.transmission !== 'manual';
+  $('#transmission-type').value = sim.transmission;
+  $('#drive-layout').value = sim.driveLayout;
+  [...$('#drive-layout').options].forEach(option => { option.disabled = sim.transmission === 'hybrid' && option.value !== 'fwd'; });
+  $('#powertrain-note').textContent = `${TRANSMISSIONS[sim.transmission].hint} ${DRIVE_LAYOUTS[sim.driveLayout].hint}`;
+  $('#clutch-control').hidden = automatic;
+  $('#quick-clutch-control').hidden = automatic;
+  $('#quick-brake').hidden = !automatic;
+  $('.quick-controls').classList.toggle('automatic', automatic);
+  $('.gear-control').hidden = sim.transmission === 'hybrid';
+  $('#hybrid-controls').hidden = sim.transmission !== 'hybrid';
+  $('#dct-auto-option').hidden = sim.transmission !== 'dct';
+  $('#dct-auto').checked = sim.dct.automatic;
+  $('#transfer-mode-option').hidden = sim.driveLayout !== 'partTime';
+  $('#transfer-mode').value = sim.driveMode;
+  $('#center-lock-option').hidden = sim.driveLayout !== 'awd';
+  $('#front-lock').checked = sim.frontLock;
+  $('#rear-lock').checked = sim.rearLock;
+  $('#center-lock').checked = sim.centerLock;
+  $('#hybrid-mode').value = sim.hybrid.mode;
+  $('#hybrid-range').value = sim.hybrid.range;
+  $('#turbo').disabled = sim.transmission === 'hybrid';
+  $('#focus-transfer').hidden = !['awd', 'partTime', 'quattro'].includes(sim.driveLayout);
+  $('#focus-battery').hidden = sim.transmission !== 'hybrid';
+  $('#focus-transmission').dataset.focus = sim.transmission === 'hybrid' ? 'psd' : 'gearbox';
+  $('#focus-transmission').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : sim.transmission === 'dct' ? 'DCT' : 'Skrzynia';
+  $('#vehicle-layer option[value="electric"]').disabled = sim.transmission !== 'hybrid';
+  if (sim.transmission !== 'hybrid' && $('#vehicle-layer').value === 'electric') $('#vehicle-layer').value = 'mechanical';
+  if (scene) scene.vehicle.layer = $('#vehicle-layer').value;
+  $$('[data-surface]').forEach(select => { select.value = sim.surfaces[Number(select.dataset.surface)]; });
+  if (configuredTransmission !== sim.transmission) {
+    if (sim.transmission === 'hybrid' || configuredTransmission === 'hybrid') {
+      $('#vehicle-layer').value = sim.transmission === 'hybrid' ? 'electric' : 'mechanical';
+      if (scene) scene.vehicle.layer = $('#vehicle-layer').value;
+    }
+    configuredTransmission = sim.transmission;
+    const options = sim.transmission === 'hybrid' ? ['D', 'N', 'P'] : sim.ratios.map((_, i) => i);
+    $('#quick-gear').innerHTML = options.map(value => `<option value="${value}">${value === 0 ? 'N' : value}</option>`).join('');
+    $('.gear-buttons').innerHTML = sim.ratios.map((_, i) => `<button data-gear="${i}" aria-pressed="false">${i || 'N'}</button>`).join('');
+    if (scene) { scene.inspection = 'all'; scene.isolate = false; }
+  }
+  const previousScenario = $('#scenario-select').value;
+  const available = Object.entries(SCENARIOS).filter(([, entry]) => entry.types.includes(sim.transmission));
+  $('#scenario-select').innerHTML = available.map(([id, entry]) => `<option value="${id}">${entry.name}</option>`).join('');
+  $('#scenario-select').value = available.some(([id]) => id === previousScenario) ? previousScenario : sim.transmission === 'hybrid' ? 'ev' : 'launch';
+}
+
+function focusAssembly(section) {
+  const entries = getInspections(mode, sim);
+  if (!entries?.some(entry => entry.id === section)) return;
+  $('#inspect-section').value = section;
+  inspectSection();
+  $$('[data-focus]').forEach(button => button.classList.toggle('active', button.dataset.focus === section));
+}
+
+function setHybridRange(range) {
+  if (!['D', 'N', 'P'].includes(range)) return;
+  if (range === 'P' && sim.speed > 0.2) { toast('P wybierz na postoju. Najpierw zahamuj.'); $('#hybrid-range').value = sim.hybrid.range; $('#quick-gear').value = sim.hybrid.range; return; }
+  sim.hybrid.range = range;
+  $('#hybrid-range').value = range;
+  updateUI();
+}
+
+function updatePowertrainMetrics() {
+  for (const name of ['throttle', 'clutch']) {
+    const value = Math.round(sim[name] * 100);
+    $(`#${name}`).value = $(`#quick-${name}`).value = value;
+    $(`#${name}-value`).innerHTML = `${value}<span>%</span>`;
+    $(`#quick-${name}-value`).textContent = `${value}%`;
+    $(`#${name}`).style.setProperty('--fill', `${value}%`);
+    $(`#quick-${name}`).style.setProperty('--fill', `${value}%`);
+  }
+  $('#vehicle-turn').value = sim.turn * 100;
+  $('#quick-brake').setAttribute('aria-pressed', Boolean(sim.brake));
+  $('#brake').setAttribute('aria-pressed', Boolean(sim.brake));
+  $('#pause').innerHTML = icon(sim.paused ? 'play' : 'pause');
+  $('#pause').setAttribute('aria-label', sim.paused ? 'Wznów symulację' : 'Wstrzymaj symulację');
+  $('#clutch-toggle').setAttribute('aria-pressed', sim.clutch >= 0.85);
+  $('#clutch-toggle').innerHTML = `${sim.clutch >= 0.85 ? 'Zwolnij pedał' : 'Wciśnij pedał'} <kbd>Shift</kbd>`;
+  $('#scenario-play').textContent = player.id && !sim.paused ? 'Wstrzymaj' : 'Odtwórz';
+  $('#scenario-next').disabled = !player.id || player.index >= player.steps.length - 1;
+  $('#scenario-description').textContent = player.id ? `${player.index + 1}/${player.steps.length} · ${player.step.text}` : 'Wybierz doświadczenie. Możesz odtworzyć animację lub przechodzić krokami.';
+  sim.traction.wheels.forEach((wheel, i) => {
+    $(`#wheel-rpm-${i}`).textContent = `${Math.round(wheel.rpm)} obr./min`;
+    $(`#wheel-torque-${i}`).textContent = `${Math.round(wheel.torque)} Nm${wheel.slip > 1 ? ' · poślizg' : ''}${wheel.driven ? '' : ' · toczy się'}`;
+  });
+  $('#traction-note').textContent = sim.traction.binding ? 'Sztywne połączenie osi + zakręt na asfalcie: wymagane drogi osi różnią się. Pojawia się wymuszony poślizg opon i naprężenie napędu.' : sim.traction.slip ? 'Przyczepność ogranicza moment docierający do podłoża. Porównaj otwarty dyferencjał z blokadą i obserwuj poślizg słabszego koła.' : 'Model przyczepności jest quasi-statyczny. W otwartym dyferencjale moment obu półosi jest równy; obroty mogą być różne.';
+  $('#dct-k1').textContent = `K1 · bieg ${sim.dct.selected[0]} · docisk ${Math.round(sim.dct.engagement[0] * 100)}% · ${Math.round(sim.dct.torques[0])} Nm`;
+  $('#dct-k2').textContent = `K2 · bieg ${sim.dct.selected[1]} · docisk ${Math.round(sim.dct.engagement[1] * 100)}% · ${Math.round(sim.dct.torques[1])} Nm`;
+  $('#dct-state').textContent = sim.shiftTarget !== null ? `${sim.shiftFrom || 'N'} → ${sim.shiftTarget || 'N'} · ${sim.shiftStage === 'preselect' ? 'wybór biegu' : sim.shiftStage === 'handover' ? 'przejmowanie momentu z poślizgiem' : 'ustalenie docisku'}` : sim.gear ? `Aktywny ${sim.gear} · przygotowany ${sim.dct.prepared}` : 'N · brak napędu';
+  $('#dct-shift-step').disabled = sim.shiftTarget === null;
+  const h = sim.hybrid;
+  const kw = power => `${(power / 1000).toFixed(1).replace('.', ',')} kW`;
+  $('#hybrid-state').textContent = h.state;
+  if (document.activeElement !== $('#battery-soc')) $('#battery-soc').value = h.soc * 100;
+  $('#battery-soc-value').textContent = `${Math.round(h.soc * 100)}%`;
+  $('#battery-current').textContent = `${Math.abs(h.batteryCurrent).toFixed(1).replace('.', ',')} A ${h.batteryPower > 50 ? '→ falownik' : h.batteryPower < -50 ? '→ bateria' : '· spoczynek'}`;
+  $('#battery-power').textContent = `${kw(Math.abs(h.batteryPower))} ${h.batteryPower > 50 ? 'oddaje' : h.batteryPower < -50 ? 'przyjmuje' : ''}`;
+  $('#battery-energy').textContent = `${(h.soc * h.capacityKwh).toFixed(2).replace('.', ',')} kWh`;
+  $('#energy-battery-label').textContent = `Bateria ${Math.round(h.soc * 100)}%`;
+  $('#energy-mg1-value').textContent = kw(h.generatorPower);
+  $('#energy-mg2-value').textContent = kw(h.motorPower);
+  $('#energy-battery-value').textContent = kw(h.batteryPower);
+  $('#mg1-rpm').textContent = `${Math.round(h.mg1Omega * 30 / Math.PI)} obr./min`;
+  $('#mg2-rpm').textContent = `${Math.round(h.mg2Omega * 30 / Math.PI)} obr./min`;
+  $('#hybrid-engine-rpm').textContent = `${Math.round(sim.rpm)} obr./min`;
+  $('#hybrid-balance').textContent = `Bilans: silnik ${kw(h.enginePower)} + bateria ${kw(h.batteryPower)} = wyjście ${kw(h.mechanicalPower + h.motorPower)} + straty ${kw(h.lossPower)}${h.startPower > 0 ? ` + rozruch ${kw(h.startPower)}` : ''}.`;
+  const powers = { engine: h.enginePower - (h.startPower || 0), mechanical: h.mechanicalPower, generation: h.generatorMechanical, mg1: h.generatorPower, mg2: h.motorDcPower, wheel: h.motorPower, battery: h.batteryPower };
+  Object.entries(powers).forEach(([id, power]) => {
+    const line = $(`#energy-${id}`);
+    const active = Math.abs(power) > 50;
+    line.dataset.active = String(active);
+    line.dataset.direction = power < 0 ? 'reverse' : 'forward';
+    line.setAttribute('marker-end', active && power > 0 ? 'url(#energy-arrow)' : 'none');
+    line.setAttribute('marker-start', active && power < 0 ? 'url(#energy-arrow)' : 'none');
+    line.style.strokeWidth = active ? String(2 + Math.min(3, Math.abs(power) / 10000)) : '1.3';
+  });
+  $('.energy-map').classList.toggle('paused', sim.paused);
+}
+
+$('#transmission-type').addEventListener('change', event => {
+  player.stop();
+  sim.setTransmission(event.target.value);
+  updatePowertrainConfiguration();
+  updateConfiguration();
+  changeView(sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(mode) ? 'hybrid' : mode);
+});
+$('#drive-layout').addEventListener('change', event => { player.stop(); sim.setDriveLayout(event.target.value); updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); updateUI(); });
+$('#dct-auto').addEventListener('change', event => { player.stop(); sim.dct.automatic = event.target.checked; });
+$('#transfer-mode').addEventListener('change', event => {
+  player.stop();
+  if ((event.target.value === '4L' || sim.driveMode === '4L') && (sim.speed > 0.2 || sim.transmission === 'manual' && sim.gear > 0 && sim.clutch < 0.85)) {
+    event.target.value = sim.driveMode;
+    toast('Reduktor przełączaj na postoju, z wciśniętym sprzęgłem lub na N.');
+    return;
+  }
+  sim.driveMode = event.target.value;
+  sim.traction = evaluateTraction(sim, sim.traction.requestedTorque);
+  updateUI();
+});
+$('#hybrid-mode').addEventListener('change', event => { player.stop(); sim.hybrid.mode = event.target.value; });
+$('#hybrid-range').addEventListener('change', event => { player.stop(); setHybridRange(event.target.value); });
+$('#battery-soc').addEventListener('input', event => { player.stop(); sim.hybrid.soc = Number(event.target.value) / 100; updateUI(); });
+$('#quick-brake').addEventListener('click', () => $('#brake').click());
+$('.gear-buttons').addEventListener('click', event => { const button = event.target.closest('[data-gear]'); if (button) shift(Number(button.dataset.gear)); });
+$$('[data-surface]').forEach(select => select.addEventListener('change', event => { player.stop(); sim.surfaces[Number(event.target.dataset.surface)] = event.target.value; sim.traction = evaluateTraction(sim, sim.traction.requestedTorque); updateUI(); }));
+for (const [id, property] of [['front-lock', 'frontLock'], ['rear-lock', 'rearLock'], ['center-lock', 'centerLock']]) $( `#${id}`).addEventListener('change', event => { player.stop(); sim[property] = event.target.checked; sim.traction = evaluateTraction(sim, sim.traction.requestedTorque); updateUI(); });
+$('#vehicle-turn').addEventListener('input', event => { player.stop(); sim.turn = Number(event.target.value) / 100; sim.traction = evaluateTraction(sim, sim.traction.requestedTorque); updateUI(); });
+function updateVehicleLegend() {
+  const layer = mode === 'hybrid' ? 'electric' : $('#vehicle-layer').value;
+  $('.scene-legend').innerHTML = layer === 'electric' ? '<span><i style="--dot:#f5ae58"></i>DC · prąd baterii</span><span><i style="--dot:#68c9ed"></i>AC · energia MG1</span><span><i style="--dot:#85e2b3"></i>AC · energia MG2</span>' : layer === 'oil' ? '<span><i style="--dot:#76d5ac"></i>Smarowanie</span>' : layer === 'fuel' ? '<span><i style="--dot:#f5be4f"></i>Paliwo</span>' : layer === 'gases' ? '<span><i style="--dot:#68c9ed"></i>Powietrze</span><span><i style="--dot:#e68565"></i>Spaliny</span>' : '<span><i style="--dot:#ffc35a"></i>Moment napędowy</span><span><i style="--dot:#68c9ed"></i>Przód / lewa strona</span>';
+}
+$('#vehicle-layer').addEventListener('change', event => {
+  if (scene) { scene.vehicle.layer = event.target.value; scene.vehicle.applyVisibility(sim); }
+  updateVehicleLegend();
+});
+$('#vehicle-detail').addEventListener('change', event => { if (scene) { scene.vehicle.restoreDetail(); scene.vehicle.detail = event.target.value; } });
+$$('[data-focus]').forEach(button => button.addEventListener('click', () => focusAssembly(button.dataset.focus)));
+$$('[data-camera]').forEach(button => button.addEventListener('click', () => scene?.setCamera(button.dataset.camera)));
+$('#diff-explode').addEventListener('input', event => { if (scene) [scene.finalDrive, scene.vehicle.front, scene.vehicle.rear].forEach(diff => { diff.exploded = Number(event.target.value) / 100; }); });
+$('#dct-shift-step').addEventListener('click', () => {
+  if (sim.shiftTarget === null) return;
+  player.stop(); pause(true);
+  const target = sim.shiftProgress < 0.2 ? 0.45 : sim.shiftProgress < 0.8 ? 0.9 : 1.001;
+  const duration = (target - sim.shiftProgress) * 1.6;
+  for (let t = 0; t < duration; t += 0.002) sim.integrate(Math.min(0.002, duration - t));
+  updateUI();
+});
+function prepareScenario() {
+  if (!player.start($('#scenario-select').value)) return;
+  updatePowertrainConfiguration();
+  updateConfiguration();
+  if (sim.transmission === 'hybrid') { $('#vehicle-layer').value = 'electric'; if (scene) scene.vehicle.layer = 'electric'; }
+  scene?.setView(mode);
+  configureInspection(mode);
+  updateVehicleLegend();
+  updateUI();
+}
+$('#scenario-start').addEventListener('click', prepareScenario);
+$('#scenario-play').addEventListener('click', () => { if (!player.id) prepareScenario(); pause(); });
+$('#scenario-next').addEventListener('click', () => { if (player.next()) { updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); updateUI(); } });
+
 function updateUI() {
   $('#rpm').textContent = fmt.format(Math.round(sim.rpm / 10) * 10);
   $('#rpm-bar').style.width = `${Math.min(100, sim.rpm / 6500 * 100)}%`;
   $('#speed').textContent = Math.round(sim.speed * 3.6);
   $('#torque').textContent = Math.round(sim.torque);
   $('#boost').textContent = `${sim.boost.toFixed(2).replace('.', ',')} bar`;
-  const status = sim.paused ? 'SYMULACJA WSTRZYMANA' : sim.running ? 'SILNIK PRACUJE' : sim.stalled ? 'SILNIK ZGASŁ' : 'SILNIK WYŁĄCZONY';
+  const status = sim.paused ? 'SYMULACJA WSTRZYMANA' : sim.transmission === 'hybrid' && sim.hybridEnabled && !sim.running ? 'GOTOWY · NAPĘD ELEKTRYCZNY' : sim.running ? 'SILNIK PRACUJE' : sim.stalled ? 'SILNIK ZGASŁ' : 'SILNIK WYŁĄCZONY';
   $('#engine-status').textContent = status;
   $('#engine-status').classList.toggle('inactive', !sim.running || sim.paused);
-  $('#ignition span').textContent = sim.running ? 'Wyłącz silnik' : 'Uruchom silnik';
-  $('#quick-gear').value = sim.shiftTarget ?? sim.gear;
-  $('#ratio-label').textContent = sim.gear ? `${GEAR_RATIOS[sim.gear].toFixed(2).replace('.', ',')} : 1` : 'Luz';
+  $('#ignition span').textContent = sim.transmission === 'hybrid' ? sim.hybridEnabled ? 'Wyłącz hybrydę' : 'Włącz hybrydę' : sim.running ? 'Wyłącz silnik' : 'Uruchom silnik';
+  $('#quick-gear').value = sim.transmission === 'hybrid' ? sim.hybrid.range : sim.shiftTarget ?? sim.gear;
+  $('#ratio-label').textContent = sim.gear ? `${sim.ratios[sim.gear].toFixed(2).replace('.', ',')} : 1` : 'Luz';
   $$('[data-gear]').forEach(button => {
     const active = Number(button.dataset.gear) === (sim.shiftTarget ?? sim.gear);
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
-  $('#drive-status').textContent = sim.shiftTarget !== null ? 'Zmiana biegu trwa. Obserwuj pierścień i przesuwkę; trzymaj pedał wciśnięty.' : sim.stalled ? 'Silnik zgasł. Wciśnij sprzęgło i uruchom go ponownie.' : sim.gear === 0 ? 'Luz: silnik nie napędza kół.' : sim.clutch >= 0.85 ? 'Sprzęgło rozłączone: silnik nie napędza kół.' : sim.clutch > 0.05 && sim.clutchSlip > 60 ? 'Poślizg sprzęgła: obroty wałów się wyrównują.' : 'Sprzęgło przenosi moment do kół.';
+  $('#drive-status').textContent = sim.transmission === 'dct' ? sim.shiftTarget !== null ? 'Zmiana DCT: sterownik reguluje docisk i poślizg K1 / K2.' : sim.gear ? `Bieg ${sim.gear} aktywny; ${sim.dct.prepared} przygotowany na odłączonej gałęzi.` : 'N: oba sprzęgła nie przenoszą napędu.' : sim.shiftTarget !== null ? 'Zmiana biegu trwa. Obserwuj pierścień i przesuwkę; trzymaj pedał wciśnięty.' : sim.stalled ? 'Silnik zgasł. Wciśnij sprzęgło i uruchom go ponownie.' : sim.gear === 0 ? 'Luz: silnik nie napędza kół.' : sim.clutch >= 0.85 ? 'Sprzęgło rozłączone: silnik nie napędza kół.' : sim.clutch > 0.05 && sim.clutchSlip > 60 ? 'Poślizg sprzęgła: obroty wałów się wyrównują.' : 'Sprzęgło przenosi moment do kół.';
   $$('[data-cylinder]').forEach(button => {
     const i = Number(button.dataset.cylinder);
     const phase = strokeIndex(sim.angle, i, sim.engineId);
@@ -544,9 +770,13 @@ function updateUI() {
   $('#turbo-activate').textContent = sim.turbo ? 'Wyłącz turbo' : 'Włącz turbo';
   $('#mechanism-engine-rpm').textContent = `${Math.round(sim.rpm)} obr./min`;
   $('#mechanism-input-rpm').textContent = `${Math.round(sim.inputOmega * 30 / Math.PI)} obr./min`;
-  $('#mechanism-output-rpm').textContent = `${Math.round(sim.speed / 0.31 * 3.9 * 30 / Math.PI)} obr./min`;
+  $('#mechanism-output-rpm').textContent = `${Math.round(sim.outputOmega * 30 / Math.PI)} obr./min`;
   $('#mechanism-state').textContent = sim.clutch >= 0.85 ? 'Pedał wciśnięty · sprzęgło rozłączone' : sim.clutch > 0.02 ? 'Pedał częściowo wciśnięty · poślizg' : 'Pedał zwolniony · sprzęgło połączone';
-  $('#mechanism-detail').textContent = sim.shiftTarget !== null ? 'Trwa zmiana biegu: śledź etapy w pasku nad modelem. Skrzynia chwilowo jest na luzie.' : mode === 'clutch' ? `Poślizg: ${Math.round(sim.clutchSlip)} obr./min. Wciśnij pedał i obserwuj łożysko, sprężynę oraz docisk.` : sim.gear ? `Bieg ${sim.gear}: wejście obraca się ${GEAR_RATIOS[sim.gear].toFixed(2).replace('.', ',')} raza na obrót wyjścia. Złote strzałki pokazują drogę momentu.` : 'Luz: koła zębate obracają się swobodnie. Żadna para nie jest połączona z wałem wyjściowym.';
+  $('#mechanism-detail').textContent = sim.shiftTarget !== null ? 'Trwa zmiana biegu: śledź etapy w pasku nad modelem.' : mode === 'clutch' ? `Poślizg: ${Math.round(sim.clutchSlip)} obr./min. Wciśnij pedał i obserwuj łożysko, sprężynę oraz docisk.` : sim.gear ? `Bieg ${sim.gear}: wejście obraca się ${sim.ratios[sim.gear].toFixed(2).replace('.', ',')} raza na obrót wyjścia. Strzałki pokazują drogę momentu.` : 'Luz: koła zębate obracają się swobodnie. Żadna para nie jest połączona z wałem wyjściowym.';
+  if (sim.transmission === 'dct') {
+    $('#mechanism-state').textContent = sim.shiftTarget !== null ? 'DCT · przejmowanie napędu między sprzęgłami' : sim.gear ? `K${sim.dct.active + 1} napędza bieg ${sim.gear}` : 'DCT · N · oba pakiety odłączone';
+    $('#mechanism-detail').textContent = `K1: ${Math.round(sim.dct.torques[0])} Nm · K2: ${Math.round(sim.dct.torques[1])} Nm. Przygotowany bieg ${sim.dct.prepared} ma otwarte sprzęgło.`;
+  }
   const phase = strokeIndex(sim.angle, selectedCylinder, sim.engineId);
   const visual = cycleVisuals(cycleDegrees(sim.angle, selectedCylinder, sim.engineId));
   $('#intake-status').textContent = `Dolot: ${visual.intake > 0.02 ? 'otwarty' : 'zamknięty'}`;
@@ -564,6 +794,7 @@ function updateUI() {
     $('#stroke-badge').style.color = STROKES[phase].color;
   }
   updateLessonState();
+  updatePowertrainMetrics();
   $('#phase-overlay').hidden = !['engine','cylinder','timing'].includes(mode);
   $('#phase-overlay').textContent = `${String(selectedCylinder + 1).padStart(2,'0')} · ${STROKES[phase].name.toUpperCase()} ${phase % 2 ? '↑' : '↓'}`;
   $('#phase-overlay').style.color = STROKES[phase].color;
@@ -573,9 +804,11 @@ function updateUI() {
 }
 
 updateEngineUI();
+updatePowertrainConfiguration();
 setPedal('throttle', 0);
 setPedal('clutch', 0);
 updateUI();
+changeView('drive-detail');
 let previousTime = performance.now();
 let uiTime = 0;
 function animate(time) {
@@ -585,6 +818,7 @@ function animate(time) {
   if (!document.hidden) {
     const wasRunning = sim.running;
     sim.update(dt);
+    if (player.update(dt)) { updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); }
     if (cycleTransition) {
       cycleTransition.elapsed += dt;
       const t = Math.min(1, cycleTransition.elapsed / cycleTransition.duration);
