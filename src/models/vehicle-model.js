@@ -13,8 +13,11 @@ export class VehicleModel extends ModelGeometry {
     this.section = 'all';
     this.front = new FinalDriveModel(materials);
     this.rear = new FinalDriveModel(materials);
+    this.front.setCoreScale(0.48);
+    this.rear.setCoreScale(0.48);
     this.front.group.position.set(-7, 0, 0);
     this.rear.group.position.set(7, 0, 0);
+    this.front.group.rotation.z = Math.PI;
     this.group.add(this.front.group, this.rear.group);
     this.chassis = this.subgroup(this.group, [0, 0, 0], 'vehicle');
     const ghost = this.material({ color: 0x8da6b9, transparent: true, opacity: 0.09, depthWrite: false });
@@ -67,7 +70,12 @@ export class VehicleModel extends ModelGeometry {
     const placement = sim.enginePlacement || 'front';
     const axle = placement === 'front' ? 0 : 1;
     const engineScale = Math.min(0.42, (transverse ? 2.45 : 3.5) / (engine.length + 1));
-    const shaftY = 0.9 + 0.8 * engineScale;
+    const gearboxScale = sim.transmission === 'hybrid' ? 0.28 : sim.transmission === 'automatic' ? transverse ? 0.25 : 0.4 : transverse ? 0.18 : 0.33;
+    // A transverse transmission drives a small final-drive gear close to the
+    // wheel axis. Its countershaft is lower than the input in the manual model.
+    const automaticOutput = automatic?.outputPosition;
+    const outputHeight = sim.transmission === 'manual' ? -1.8 : sim.transmission === 'automatic' ? (Array.isArray(automaticOutput) ? automaticOutput[1] : automaticOutput?.y) || 0 : 0;
+    const shaftY = transverse ? 0.55 - outputHeight * gearboxScale : 0.9 + 0.8 * engineScale;
     const rotation = transverse ? -Math.PI / 2 : placement === 'front' ? 0 : Math.PI;
     const drivetrainPosition = transverse ? [placement === 'rear' ? 8 : placement === 'mid' ? 6 : -6.8, shaftY, -0.15] : [placement === 'rear' ? 6.3 : placement === 'mid' ? 3.5 : -4.6, shaftY, 0];
     // The crankshaft ends at local (shaftEnd, 0.8, 0); keep that point on
@@ -78,7 +86,6 @@ export class VehicleModel extends ModelGeometry {
     pose(systems, enginePosition, engineScale);
     pose(connections, enginePosition, engineScale);
     engine.setView('drive-detail', 0);
-    const gearboxScale = sim.transmission === 'hybrid' ? 0.28 : sim.transmission === 'automatic' ? transverse ? 0.25 : 0.4 : transverse ? 0.18 : 0.33;
     pose(drive, drivetrainPosition, gearboxScale);
     drive.setView('drive-detail');
     drive.exploded = 0;
@@ -106,7 +113,10 @@ export class VehicleModel extends ModelGeometry {
     if (this.axleSpur) {
       const finalDrive = axle ? this.rear : this.front;
       finalDrive.carrier.add(this.axleSpur);
-      this.axleSpur.position.set(0, 0, 2.1);
+      // Routing geometry has vehicle dimensions; carrier geometry is enlarged
+      // only on the bench. Cancel its packaging scale for the meshing spur.
+      this.axleSpur.scale.setScalar(1 / finalDrive.coreScale);
+      this.axleSpur.position.set(0, 0, 2.1 / finalDrive.coreScale);
     }
     this.front.wheels.forEach(wheel => { wheel.visible = false; });
     this.rear.wheels.forEach(wheel => { wheel.visible = false; });
@@ -130,7 +140,7 @@ export class VehicleModel extends ModelGeometry {
     const both = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout);
     const drivenAxles = [sim.driveLayout !== 'rwd', sim.driveLayout !== 'fwd'];
     const center = vec(0.8, 0.65, 0);
-    const input = [vec(-3.25, 0, -1.02), vec(3.25, 0, -1.02)];
+    const input = [this.front.inputEndpoint(), this.rear.inputEndpoint()];
     this.paths = [];
     // Flow cones only describe the shafts between assemblies. Each transmission
     // owns its internal torque path, so there is no duplicate line through it.
@@ -143,7 +153,7 @@ export class VehicleModel extends ModelGeometry {
       this.axleSpur = g.subgroup(g.group, [0, 0, 0], 'finalDrive');
       const gear = g.gear(39, distance * 3.9 / 4.9, 0.15, 'brass', this.axleSpur, [0, 0, 0], 'finalDrive', 0.13);
       gear.rotation.y = -Math.PI / 2;
-      const cup = g.annulus(0.23, 0.13, 1.65, 'steel', this.axleSpur, [0, 0, -0.95], 'finalDrive');
+      const cup = g.annulus(0.16, 0.085, 1.65, 'steel', this.axleSpur, [0, 0, -0.95], 'finalDrive');
       cup.rotation.y = -Math.PI / 2;
       this.axlePinion = g.subgroup(g.group, [output.x, output.y, 2.1], 'finalDrive');
       this.axlePinion.rotation.y = -Math.PI / 2;
@@ -239,8 +249,7 @@ export class VehicleModel extends ModelGeometry {
       return new THREE.Box3(vec(front ? -8.5 : 5.5, -1.5, -3.3), vec(front ? -5.5 : 8.5, 1.7, 3.3));
     }
     if (section === 'differential') {
-      const x = this.sim.driveLayout === 'fwd' ? -7 : 7;
-      return new THREE.Box3(vec(x - 0.95, -1.05, -1.15), vec(x + 0.95, 1.15, 1.15));
+      return (this.sim.driveLayout === 'fwd' ? this.front : this.rear).coreBounds();
     }
     if (section === 'transfer') return transfer.bounds();
     if (['oil', 'fuel', 'timing'].includes(section)) return systems.bounds(section);

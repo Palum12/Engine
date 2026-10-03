@@ -38,6 +38,12 @@ the exact internals or scale of every real vehicle preset.
   replace its shafts, flow paths, and any transverse final-drive spur.
 - Manual output is local `(12.1, -1.8, 0)`, DCT `(12.85, 0, 0)`, hybrid
   `(6.25, 0, 0)`. The automatic exposes `outputPosition` for its own endpoint.
+- Vehicle differentials use `setCoreScale(0.48)` while bench gears remain full
+  size. Scale the central mechanism, bearings and inner joints independently of
+  wheel reach. Use `inputEndpoint()` for longitudinal routing; the transverse
+  spur cancels its carrier parent's scale to retain meshing pitch circles.
+- Camshaft `shaftEndpoints` describe the actual shaft geometry. Timing-wheel
+  connectors must use them, not the longer crankshaft's `shaftEnd`.
 
 ## Animation, flows, and visibility
 
@@ -68,6 +74,12 @@ the exact internals or scale of every real vehicle preset.
 - Manual gears rotate freely on needle bearings until a sleeve joins dog teeth
   to its splined hub. Cones contact before dog engagement. Clutch geometry uses
   `manualClutchState`; keep contact, deformation, force and slip explanations in sync.
+- Manual clutch explosion is an inspection layout, independent of pedal travel.
+  Use `explodedGearboxOffset` for attached shaft/bounds spacing. The interface
+  remembers the chosen bench layout; whole-car mounting always assembles parts.
+- A continuous casting joins each head's chambers in engine views; the single
+  chamber casting is retained for cylinder views. Only the first head anchor has
+  `userData.overview`, keeping a discoverable head label in vehicle overviews.
 
 Run `npm test` and `npm run build` from the project root. The headless geometry
 tests use real Three.js meshes without a WebGL renderer. Focus on attachment

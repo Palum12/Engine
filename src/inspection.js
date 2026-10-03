@@ -16,7 +16,7 @@ export const INSPECTIONS = {
     { id: 'turbo', label: '5 · Turbo i intercooler', part: 'turbo', hint: 'Oddzielne drogi: spaliny napędzają turbinę, powietrze płynie przez sprężarkę i intercooler.' }
   ],
   clutch: [
-    {id:'all',label:'Całe sprzęgło · droga momentu',part:'clutch',hint:'Koło zamachowe → okładziny tarczy → piasta → wejście skrzyni. Docisk maleje przed powstaniem szczeliny.'},
+    {id:'all',label:'Całe sprzęgło · droga momentu',part:'clutch',hint:'„Pokaż warstwy” rozsuwa części do nauki; szare kreski pokazują linię złożenia. „Złóż części” pokazuje rzeczywisty styk; pedał zmniejsza docisk, zanim otworzy szczelinę.'},
     {id:'flywheel',label:'1 · Koło zamachowe · silnik',part:'flywheel',hint:'Połączone z wałem silnika. Obraca się również wtedy, gdy tarcza sprzęgła jest odłączona.'},
     {id:'friction',label:'2 · Tarcza cierna i piasta',part:'friction',hint:'Okładziny odbierają moment przez tarcie. Piasta z wielowypustem napędza wał skrzyni; sprężyny tłumią szarpnięcia.'},
     {id:'pressurePlate',label:'3 · Docisk i sprężyste taśmy',part:'pressurePlate',hint:'Docisk obraca się z silnikiem i ściska tarczę. Taśmy przenoszą obrót oraz odsuwają docisk po odciążeniu.'},

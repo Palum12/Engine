@@ -30,6 +30,10 @@ export class FinalDriveModel extends ModelGeometry {
     this.mesh(bevelGearGeometry(39, 10, 0.06, 0.25, 0.25), 'brass', this.crown);
     this.sideGears = [];
     this.sideHolders = [];
+    this.coreScale = 1;
+    this.shafts = [];
+    this.innerJoints = [];
+    this.bearings = [];
     for (const z of [-0.65, 0.65]) {
       const ring = this.annulus(0.82, 0.66, 0.09, 'steel', this.carrier, [0, 0, z], 'differential');
       ring.rotation.y = Math.PI / 2;
@@ -52,11 +56,12 @@ export class FinalDriveModel extends ModelGeometry {
       washer.rotation.z = Math.PI / 2;
       this.planets.push({ planet, holder, side });
     }
+    this.coreParts = this.carrier.children.slice();
     this.wheels = [];
     this.axles = [];
     for (const side of [-1, 1]) {
       const axle = this.subgroup(this.group, [0, 0, 0], 'halfShaft');
-      this.cylinder(0.095, 2.98, side < 0 ? this.leftMaterial : this.rightMaterial, axle, [0, 0, side * 1.70], 'z', 'halfShaft');
+      this.shafts.push(this.cylinder(0.095, 2.98, side < 0 ? this.leftMaterial : this.rightMaterial, axle, [0, 0, side * 1.70], 'z', 'halfShaft'));
       const holder = this.subgroup(axle, [0, 0, 0], 'differential');
       holder.quaternion.setFromUnitVectors(vec(0,1,0),vec(0,0,side));
       const sideGear = this.mesh(bevelGearGeometry(16, 12, 0.07, 0.20, 0.105), side < 0 ? this.leftMaterial : this.rightMaterial, holder);
@@ -66,9 +71,12 @@ export class FinalDriveModel extends ModelGeometry {
       washer.rotation.z = Math.PI / 2;
       const bearing = this.annulus(0.22, 0.105, 0.12, 'dark', this.group, [0, 0, side * 0.9], 'bearing');
       bearing.rotation.y = Math.PI / 2;
+      this.bearings.push(bearing);
       for (const z of [0.95, 2.65]) {
-        this.cylinder(0.23, 0.35, 'dark', axle, [0, 0, side * z], 'z', 'halfShaft');
-        for (let n = 0; n < 4; n++) this.ring(0.225, 0.022, 'black', axle, [0, 0, side * (z - 0.12 + n * 0.08)], 'z', 'halfShaft');
+        const joint = this.subgroup(axle, [0, 0, side * z], 'halfShaft');
+        this.cylinder(0.23, 0.35, 'dark', joint, [0, 0, 0], 'z', 'halfShaft');
+        for (let n = 0; n < 4; n++) this.ring(0.225, 0.022, 'black', joint, [0, 0, side * (-0.12 + n * 0.08)], 'z', 'halfShaft');
+        if (z === 0.95) this.innerJoints.push(joint);
       }
       const wheel = this.subgroup(axle, [0, 0, side * 3.0], 'wheelHub');
       this.ring(1.05, 0.22, 'black', wheel, [0, 0, 0], 'z', 'wheelHub');
@@ -91,10 +99,51 @@ export class FinalDriveModel extends ModelGeometry {
     }
     this.housing = this.mesh(new THREE.SphereGeometry(1.39, 28, 18), this.material({ color: 0x68828e, metalness: 0.5, roughness: 0.4, transparent: true, opacity: 0.2, depthWrite: false }), this.group, [0, 0, 0], 'finalDrive');
     this.housing.scale.z = 0.55;
-    this.anchor('Przekładnia główna · 3,9:1', this.group, [-1.4, 1.6, 0], 'finalDrive', ['drive-detail', 'differential']);
-    this.anchor('Kosz i satelity', this.group, [0, 1.25, 0.7], 'differential', ['drive-detail', 'differential']);
+    this.finalDriveAnchor = this.anchor('Przekładnia główna · 3,9:1', this.group, [-1.4, 1.6, 0], 'finalDrive', ['drive-detail', 'differential']);
+    this.carrierAnchor = this.anchor('Kosz i satelity', this.group, [0, 1.25, 0.7], 'differential', ['drive-detail', 'differential']);
     this.anchor('Półosie i przeguby', this.group, [0, 0.5, 1.85], 'halfShaft', ['drive-detail', 'differential']);
     this.anchor('Piasta i hamulec', this.group, [0, 1.5, 3], 'wheelHub', ['drive-detail', 'differential']);
+  }
+
+  // The bench magnifies the gears for teaching. In a car only the central
+  // mechanism shrinks; the halfshafts must still reach the wheel hubs.
+  setCoreScale(scale = 1) {
+    this.coreScale = scale;
+    this.carrier.scale.setScalar(scale);
+    this.input.scale.setScalar(scale);
+    this.input.position.z = -1.02 * scale;
+    this.housing.scale.set(scale, scale, 0.55 * scale);
+    this.sideHolders.forEach(holder => holder.scale.setScalar(scale));
+    this.bearings.forEach((bearing, index) => {
+      bearing.scale.setScalar(scale);
+      bearing.position.z = (index ? 1 : -1) * 0.9 * scale;
+    });
+    this.innerJoints.forEach((joint, index) => {
+      joint.scale.setScalar(scale);
+      joint.position.z = (index ? 1 : -1) * 0.95 * scale;
+    });
+    this.shafts.forEach((shaft, index) => {
+      const inside = 0.21 * scale, outside = 3.19;
+      shaft.position.z = (index ? 1 : -1) * (inside + outside) / 2;
+      // Cylinder height is local Y, rotated onto the halfshaft's Z axis.
+      shaft.scale.set(scale, (outside - inside) / 2.98, scale);
+    });
+    this.finalDriveAnchor.position.set(-1.4 * scale, 1.6 * scale, 0);
+    this.carrierAnchor.position.set(0, 1.25 * scale, 0.7 * scale);
+  }
+
+  inputEndpoint() {
+    this.group.updateWorldMatrix(true, true);
+    return this.input.localToWorld(vec(-3.75, 0, 0));
+  }
+
+  coreBounds() {
+    this.group.updateWorldMatrix(true, true);
+    const bounds = new THREE.Box3();
+    for (const part of [...this.coreParts, ...this.sideHolders]) {
+      if (part.visible) bounds.union(new THREE.Box3().setFromObject(part));
+    }
+    return bounds.expandByScalar(0.08 * this.coreScale);
   }
 
   bounds() {
@@ -120,7 +169,7 @@ export class FinalDriveModel extends ModelGeometry {
     this.axles[0].rotation.z = -(angle - offset);
     this.axles[1].rotation.z = -(angle + offset);
     this.planets.forEach(({planet,holder,side}) => { planet.rotation.y = Math.PI / 12 + side * offset * 16 / 12; holder.position.y = side * (this.exploded || 0) * 0.5; });
-    this.sideHolders.forEach((holder, i) => { holder.position.z = (i ? 1 : -1) * (this.exploded || 0) * 0.7; });
+    this.sideHolders.forEach((holder, i) => { holder.position.z = (i ? 1 : -1) * (this.exploded || 0) * 0.7 * this.coreScale; });
     this.housing.visible = !cutaway && !this.openCarrier;
     this.carrierFrame.forEach((part, i) => { part.visible = !this.openCarrier || i === 1 || i > 2 && part.position.y < -0.3; });
   }

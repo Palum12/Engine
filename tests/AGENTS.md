@@ -25,5 +25,11 @@
   Check its own free-wheel RPM and explanation; do not label it as connected.
 - Keep the timing belt visible under vehicle LOD and verify isolated heads restore
   the full engine. Inspect the screenshots for head/camshaft clipping after a fit.
+- `head-timing-clarity.test.js`, `clutch-spacing.test.js` and
+  `vehicle-proportions.test.js` check continuous shaft attachments, spaced layers,
+  camera envelopes, compact differentials and routing that still meets wheel hubs.
+- The browser matrix compares mechanism views in Ibiza, A4, 911, 508, Corolla
+  hybrid and Veyron, as well as the general all-tab/preset/phone checks. Inspect
+  whole-car, head, clutch and gearbox screenshots before deploying visual changes.
 - FWD differential tests must exercise `vehicle.front`, mean halfshaft speed,
   cornering satellites, locks, pause and stopping the visual bench demo.

@@ -6,6 +6,8 @@ import { ModelGeometry, vec } from './geometry.js';
 
 const TEETH = [[20, 70], [30, 63], [40, 56], [60, 63], [50, 41]];
 const DOG_TOOTH_PITCH = Math.PI * 2 / 36;
+// These offsets separate the layers for inspection, independently of pedal travel.
+const CLUTCH_EXPLOSION = Object.freeze({ disc: 1.6, pressure: 3.2, diaphragm: 4.8, cover: 5.8, bearing: 6.8 });
 const smooth = value => { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); };
 
 export class DrivetrainModel extends ModelGeometry {
@@ -21,6 +23,10 @@ export class DrivetrainModel extends ModelGeometry {
     this.buildGearbox();
     this.showFlow = true;
     this.flow = this.arrows(8, 0xffc35a, this.group, 0.14);
+  }
+
+  get explodedGearboxOffset() {
+    return Math.max(0, Math.min(1, this.exploded)) * CLUTCH_EXPLOSION.bearing;
   }
 
   buildClutch() {
@@ -46,9 +52,9 @@ export class DrivetrainModel extends ModelGeometry {
       this.pipe(this.curve(points), 0.016, 'intake', spring, 'torsionSprings');
     }
     this.pressure = this.subgroup(this.clutch, [0.48, 0, 0], 'pressurePlate');
-    this.annulus(1.05, 0.45, 0.12, 'steel', this.pressure, [0, 0, 0], 'pressurePlate');
+    this.pressureFace = this.annulus(1.05, 0.45, 0.12, 'steel', this.pressure, [0, 0, 0], 'pressurePlate');
     this.cover = this.subgroup(this.clutch, [0.68, 0, 0], 'pressurePlate');
-    this.annulus(1.13, 0.99, 0.22, 'intake', this.cover);
+    this.coverRing = this.annulus(1.13, 0.99, 0.22, 'intake', this.cover);
     for (let i = 0; i < 6; i++) {
       const a = i / 6 * Math.PI * 2;
       const rib = this.box(0.32, 0.34, 0.12, 'intake', this.cover, [0, Math.cos(a) * 0.86, Math.sin(a) * 0.86]);
@@ -63,7 +69,7 @@ export class DrivetrainModel extends ModelGeometry {
       this.straps.push({ angle, segments });
     }
     this.diaphragm = this.subgroup(this.clutch, [0.57, 0, 0], 'diaphragm');
-    this.ring(0.78, 0.035, 'brass', this.diaphragm, [0, 0, 0], 'x', 'diaphragm');
+    this.diaphragmRing = this.ring(0.78, 0.035, 'brass', this.diaphragm, [0, 0, 0], 'x', 'diaphragm');
     this.fingers = [];
     for (let i = 0; i < 20; i++) {
       const a = i / 20 * Math.PI * 2;
@@ -84,6 +90,20 @@ export class DrivetrainModel extends ModelGeometry {
       const spline = this.box(1.25, 0.027, 0.023, 'steel', this.inputSplines, [0.6, Math.cos(a) * 0.148, Math.sin(a) * 0.148], 'discHub');
       spline.rotation.x = a;
     }
+    this.assemblyGuides = this.subgroup(this.clutch);
+    this.assemblyGuides.userData.ignorePick = true;
+    this.assemblyGuides.visible = false;
+    this.guideMaterial = new THREE.LineDashedMaterial({ color: 0x91a7b1, transparent: true, opacity: 0.34, dashSize: 0.12, gapSize: 0.08, depthWrite: false });
+    this.ownedMaterials.add(this.guideMaterial);
+    const guideGeometry = this.geometry('clutch-assembly-guide', () => new THREE.BufferGeometry().setFromPoints([vec(0, 0, 0), vec(1, 0, 0)]));
+    this.guideLines = [-0.7, 0.7].map(y => {
+      const line = new THREE.Line(guideGeometry, this.guideMaterial);
+      line.position.set(-0.08, y, -1.04);
+      line.userData.ignorePick = true;
+      line.computeLineDistances();
+      this.assemblyGuides.add(line);
+      return line;
+    });
     const contact = this.material({ color: 0x75efad, transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }, true);
     this.contacts = [-0.048, 0.048].map(x => this.annulus(1.08, 0.70, 0.008, contact, this.disc, [x, 0, 0], 'friction'));
     this.box(0.02, 0.3, 0.055, 'fuel', this.flywheel, [0.17, 0.77, 0], 'flywheel');
@@ -236,6 +256,12 @@ export class DrivetrainModel extends ModelGeometry {
       if (this.isolate && selected) child.visible = selected.includes(child);
       else if (child !== this.cover) child.visible = true;
     });
+    // Metal attachments remain physical when assembled. In an exploded drawing
+    // they would stretch into a cage; dashed guides indicate the assembly axis.
+    const separated = ['clutch', 'drive-detail'].includes(this.mode) && this.exploded > 0.15;
+    this.pressureStraps.visible &&= !separated;
+    this.fingers.forEach(({ outer }) => { outer.visible = !separated; });
+    this.assemblyGuides.visible = separated && !(this.isolate && selected);
     const match = /^gear([1-5])$/.exec(this.section);
     this.gears.forEach((gear, i) => {
       const visible = !match || i + 1 === Number(match[1]);
@@ -268,25 +294,30 @@ export class DrivetrainModel extends ModelGeometry {
       return new THREE.Box3().setFromObject(gear.top).union(new THREE.Box3().setFromObject(gear.bottom)).union(new THREE.Box3().setFromObject(gear.sleeve)).union(new THREE.Box3().setFromObject(gear.hub)).union(new THREE.Box3().setFromObject(gear.shiftFork)).expandByScalar(0.2);
     }
     const local = mode === 'clutch'
-      ? new THREE.Box3(vec(-0.3, -1.45, -1.3), vec(1.7 + this.exploded * 3.25, 1.55, 1.3))
+      ? new THREE.Box3(vec(-0.3, -1.45, -1.3), vec(1.7 + this.explodedGearboxOffset, 1.55, 1.3))
       : mode === 'gearbox'
         ? new THREE.Box3(vec(3.1, -3.4, -1.5), vec(12.2, 1.4, 2.0))
-        : new THREE.Box3(vec(-0.3, -3.4, -1.5), vec(13.4, 1.6, 2.0));
-    if (mode === 'gearbox' && this.mode === 'drive-detail') local.translate(vec(this.exploded * 3.25, 0, 0));
-    return local.applyMatrix4(this.group.matrixWorld);
+        : new THREE.Box3(vec(-0.3, -3.4, -1.5), vec(13.4 + (this.mode === 'drive-detail' ? this.explodedGearboxOffset : 0), 1.6, 2.0));
+    if (mode === 'gearbox' && this.mode === 'drive-detail') local.translate(vec(this.explodedGearboxOffset, 0, 0));
+    const result = local.applyMatrix4(this.group.matrixWorld);
+    // Rotating rings, spring fingers and the fork can exceed the nominal envelope.
+    // Include their current geometry as well as the next exploded layout above.
+    if (mode !== 'gearbox') result.union(new THREE.Box3().setFromObject(this.clutch));
+    if (mode !== 'clutch') result.union(new THREE.Box3().setFromObject(this.gearbox));
+    return result.expandByScalar(0.05);
   }
 
   update(sim, cutaway) {
     if (!this.group.visible) return;
     const a = sim.angle * Math.PI / 180;
-    const e = ['clutch', 'drive-detail'].includes(this.mode) ? this.exploded : 0;
-    this.gearbox.position.x = this.mode === 'drive-detail' ? 3.8 + e * 3.25 : 3.8;
+    const e = ['clutch', 'drive-detail'].includes(this.mode) ? Math.max(0, Math.min(1, this.exploded)) : 0;
+    this.gearbox.position.x = this.mode === 'drive-detail' ? 3.8 + this.explodedGearboxOffset : 3.8;
     this.flywheel.rotation.x = a;
     const state = manualClutchState(sim.clutch, getEngine(sim.engineId).torque, sim.shiftTarget !== null);
     const relativeOmega = Math.abs(sim.rpm * Math.PI / 30 - sim.inputOmega);
     const displayPower = Math.min(Math.abs(sim.transmittedTorque), state.capacity) * relativeOmega;
     this.clutchState = { ...state, slipPower: displayPower, slipRpm: relativeOmega * 30 / Math.PI };
-    this.disc.position.x = 0.2 + e * 0.85 + state.discFloat;
+    this.disc.position.x = 0.2 + e * CLUTCH_EXPLOSION.disc + state.discFloat;
     this.contacts.forEach(contact => {
       contact.visible = state.contact;
       contact.material.opacity = 0.12 + 0.76 * Math.sqrt(state.clampFactor);
@@ -294,14 +325,14 @@ export class DrivetrainModel extends ModelGeometry {
     });
     this.frictionMaterial.emissiveIntensity = Math.min(0.65, displayPower / 12000);
     this.disc.rotation.x = sim.inputAngle;
-    this.pressure.position.x = 0.3075 + e * 1.7 + state.plateGap;
+    this.pressure.position.x = 0.3075 + e * CLUTCH_EXPLOSION.pressure + state.plateGap;
     this.pressure.rotation.x = a;
-    this.cover.position.x = 0.68 + e * 2.0;
+    this.cover.position.x = 0.68 + e * CLUTCH_EXPLOSION.cover;
     this.cover.rotation.x = a;
-    this.diaphragm.position.x = 0.57 + e * 2.5;
+    this.diaphragm.position.x = 0.57 + e * CLUTCH_EXPLOSION.diaphragm;
     this.diaphragm.rotation.x = a;
     const fingerTip = 0.28 - state.fingerTravel;
-    this.bearing.position.x = this.diaphragm.position.x + fingerTip + 0.085 + state.bearingClearance + e * 0.75;
+    this.bearing.position.x = this.diaphragm.position.x + fingerTip + 0.085 + state.bearingClearance + e * (CLUTCH_EXPLOSION.bearing - CLUTCH_EXPLOSION.diaphragm);
     this.fork.position.x = this.bearing.position.x;
     this.fingers.forEach(({ finger, outer, a }) => {
       const pivot = vec(0, Math.cos(a) * 0.78, Math.sin(a) * 0.78);
@@ -317,8 +348,17 @@ export class DrivetrainModel extends ModelGeometry {
       segments.forEach((segment, n) => this.between(segment, points[n], points[n + 1]));
     });
     this.cover.visible = this.mode !== 'engine' && (!cutaway || ['clutch', 'drive-detail'].includes(this.mode));
-    this.stub.scale.y = (3.2 + e * 3.25) / 3.2;
-    this.stub.position.x = (3.2 + e * 3.25) / 2 + 0.1;
+    // In the clutch bench the gearbox is hidden; stop beyond the release bearing.
+    // In a complete detailed drive the same shaft reaches the gearbox input.
+    const shaftEnd = this.mode === 'clutch' ? this.bearing.position.x + 0.6 : this.gearbox.position.x - 0.5;
+    const shaftLength = Math.max(1.45, shaftEnd - 0.1);
+    this.stub.scale.y = shaftLength / 3.2;
+    this.stub.position.x = shaftLength / 2 + 0.1;
+    this.inputSplines.position.x = e * CLUTCH_EXPLOSION.disc;
+    const guideLength = this.bearing.position.x + 0.4;
+    this.guideLines.forEach(line => { line.scale.x = guideLength; });
+    this.guideMaterial.dashSize = 0.12 / guideLength;
+    this.guideMaterial.gapSize = 0.08 / guideLength;
     this.caseFront.visible = !cutaway;
     this.gears.forEach((gear, i) => {
       const active = sim.gear === i + 1;

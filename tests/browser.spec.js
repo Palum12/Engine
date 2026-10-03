@@ -175,3 +175,61 @@ test('custom configuration, head, progressive manual clutch and FWD differential
   await expect(page.locator('#diff-demo')).toHaveAttribute('aria-pressed', 'false');
   expect(errors).toEqual([]);
 });
+
+for (const id of ['ibiza-mpi-2016', 'a4-quattro-2011', '911-carrera-s-2025', '508-eat8-2018', 'corolla-hybrid-2025', 'veyron-2005']) test(`mechanism views remain clear: ${id}`, async ({ page }, info) => {
+  test.setTimeout(180_000);
+  const errors = await openApp(page);
+  const screenshot = async name => {
+    // Refit instantly through the real inspection control. Software WebGL may
+    // render too few frames to finish an animated camera transition in 850 ms.
+    await page.locator('#inspect-section').dispatchEvent('change');
+    await page.waitForTimeout(250);
+    await page.locator('.visual-panel').screenshot({ path: info.outputPath(`${name}.png`) });
+  };
+    const preset = CAR_PRESETS.find(preset => preset.id === id);
+    await page.locator('#car-preset').selectOption(id);
+    await page.locator('[data-camera="perspective"]').click();
+    await screenshot(`${id}-whole`);
+    await expect(page.locator('.model-label:visible').filter({ hasText: /^Głowica/ })).toHaveCount(1);
+    await page.locator('#show-head').click();
+    await expect(page.locator('#inspect-section')).toHaveValue('cylinderHead');
+    await expect(page.locator('#isolate')).toBeChecked();
+    await expect(page.locator('#part-description')).toContainText('Głowica');
+    await page.locator('#close-part').click();
+    if (['ibiza-mpi-2016', '911-carrera-s-2025', 'veyron-2005'].includes(id)) await screenshot(`${id}-head`);
+    await page.locator('#isolate').uncheck();
+    await page.locator('#inspect-section').selectOption('all');
+    await screenshot(`${id}-engine`);
+    await page.locator('.view-tab[data-view="timing"]').click();
+    if (id === 'ibiza-mpi-2016') await screenshot(`${id}-timing`);
+    if (preset.transmission === 'hybrid') {
+      await page.locator('.view-tab[data-view="hybrid"]').click();
+      await screenshot(`${id}-hybrid`);
+    } else {
+      await page.locator('.view-tab[data-view="clutch"]').click();
+      if (preset.transmission === 'manual') {
+        await expect(page.locator('#explode')).toHaveValue('55');
+        await expect(page.locator('#mechanism-readout')).toBeHidden();
+        await screenshot(`${id}-clutch-layers`);
+        await page.locator('#spread-clutch').click();
+        await expect(page.locator('#explode')).toHaveValue('70');
+        await screenshot(`${id}-clutch-wide`);
+        await page.locator('#assemble-clutch').click();
+        await expect(page.locator('#explode')).toHaveValue('0');
+        await page.locator('#quick-clutch').evaluate(element => {
+          element.value = '100'; element.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await screenshot(`${id}-clutch-released`);
+      } else await screenshot(`${id}-clutch`);
+      await page.locator('.view-tab[data-view="gearbox"]').click();
+      await screenshot(`${id}-gearbox`);
+    }
+    await page.locator('.view-tab[data-view="differential"]').click();
+    await page.locator('#inspect-section').selectOption('core');
+    await expect(page.locator('#scene canvas')).toBeVisible();
+    await page.locator('.view-tab[data-view="drive-detail"]').click();
+    await expect(page.locator('#car-preset')).toHaveValue(id);
+    await expect(page.locator('#scene')).toHaveAttribute('data-engine-orientation', preset.engineOrientation);
+    await expect(page.locator('#scene')).toHaveAttribute('data-transmission', preset.transmission);
+  expect(errors).toEqual([]);
+});

@@ -3,23 +3,28 @@ import { getEngine, cylinderLayout } from '../engines.js';
 import { cycleDegrees, pistonHeight } from '../simulation.js';
 import { cycleVisuals, chargeSample, smooth } from '../cycle-visuals.js';
 import { ModelGeometry, vec, PHASE_COLORS, UP } from './geometry.js';
-import { buildCylinderHead } from './cylinder-head.js';
+import { buildCylinderHead, buildContinuousHead } from './cylinder-head.js';
 
 export class EngineModel extends ModelGeometry {
   constructor(materials, id = 'r4') {
     super(materials);
     this.id = id;
+    this.viewMode = 'engine';
     this.config = getEngine(id);
     this.group.userData.part = 'block';
     this.cylinders = [];
     this.camshafts = [];
     this.heads = [];
+    this.headCastings = [];
     this.rockers = [];
     const rows = this.config.cylinders / this.config.angles.length;
     this.length = rows * this.config.pitch;
     this.shaftEnd = this.length / 2 + 0.45;
+    this.headAlloy = this.material({ color: 0x548fa2, metalness: 0.35, roughness: 0.62 });
+    this.headCutFace = this.material({ color: 0x9fc5d0, metalness: 0.25, roughness: 0.7 });
     this.structure = this.subgroup();
     this.crankshaft = this.subgroup(this.structure, [0, 0.8, 0], 'crank');
+    this.crankshaft.userData.shaftEndpoints = [[-this.shaftEnd, 0, 0], [this.shaftEnd, 0, 0]];
     const openings = Array.from({ length: this.config.cylinders }, (_, i) => cylinderLayout(id, i).x).sort((a, b) => a - b);
     let end = -this.shaftEnd;
     for (const x of openings) {
@@ -53,7 +58,9 @@ export class EngineModel extends ModelGeometry {
         const shaft = this.subgroup(root, [0, 4.35, kind ? 0.95 : -0.95], 'valves');
         shaft.userData.head = head;
         shaft.userData.kind = kind;
-        this.cylinder(0.075, this.length + 0.15, 'steel', shaft, [0, 0, 0], 'x');
+        const shaftLength = this.length + 0.15;
+        shaft.userData.shaftBody = this.cylinder(0.075, shaftLength, 'steel', shaft, [0, 0, 0], 'x');
+        shaft.userData.shaftEndpoints = [[-shaftLength / 2, 0, 0], [shaftLength / 2, 0, 0]];
         this.group.updateMatrixWorld(true);
         this.cylinders.filter(c => c.layout.head === head).forEach(c => {
           c.valves.filter(v => v.userData.kind === kind).forEach((valve, n) => {
@@ -70,7 +77,11 @@ export class EngineModel extends ModelGeometry {
         this.camshafts.push(shaft);
         this.anchor(`${head + 1} · wałek ${kind ? 'wydechowy' : 'dolotowy'}`, root, [-this.length / 2, 4.8, shaft.position.z], 'timing', ['timing']);
       }
-      this.anchor(`Głowica ${head + 1}${this.config.angles.length > this.config.headAngles.length ? ' · wspólna dla 2 rzędów' : ''}`, root, [0, 4.8, 0], 'cylinderHead', ['engine', 'timing', 'drive-detail']);
+      const casting = buildContinuousHead(this, root, this.cylinders.filter(c => c.layout.head === head));
+      this.headCastings.push(casting);
+      const headAnchor = this.anchor(`Głowica ${head + 1}${this.config.angles.length > this.config.headAngles.length ? ' · wspólna dla 2 rzędów' : ''}`, root,
+        [casting.center.x, casting.center.y, casting.bounds.max.z + 0.22], 'cylinderHead', ['engine', 'timing', 'drive-detail']);
+      headAnchor.userData.overview = head === 0;
     });
     this.pulley = this.gear(36, 0.48, 0.12, 'dark', this.structure, [-this.shaftEnd, 0.8, 0], 'crank');
     this.anchor('1 · Silnik', this.structure, [0, 5.65, 0], 'block', ['drive-detail']);
@@ -174,6 +185,7 @@ export class EngineModel extends ModelGeometry {
   }
 
   setView(mode, selected) {
+    this.viewMode = mode;
     this.headOnly = false;
     this.group.visible = ['engine', 'cylinder', 'drive', 'drive-detail', 'timing', 'oil', 'fuel'].includes(mode);
     this.structure.visible = true;
@@ -186,6 +198,7 @@ export class EngineModel extends ModelGeometry {
     this.cylinders.forEach((c, i) => {
       c.pivot.visible = mode !== 'cylinder' || i === selected;
       for (const key of ['sleeve', 'piston', 'rod', 'cap', 'chamber', 'blockSupports', 'headCasting']) (c[key].group || c[key]).visible = true;
+      c.headCasting.panels.forEach(panel => { panel.visible = mode === 'cylinder'; });
     });
   }
 
@@ -217,7 +230,8 @@ export class EngineModel extends ModelGeometry {
     this.crankshaft.rotation.x = radians;
     this.pulley.rotation.x = radians;
     this.camshafts.forEach(shaft => { shaft.rotation.x = radians / 2; });
-    this.portMaterials.forEach(material => { material.opacity = cutaway ? 0.24 : 1; material.depthWrite = !cutaway; });
+    this.headCastings.forEach(casting => { casting.front.visible = !cutaway; });
+    this.portMaterials.forEach(material => { material.opacity = cutaway ? 0.58 : 1; material.depthWrite = !cutaway; });
     this.cylinders.forEach((c, index) => {
       const degrees = cycleDegrees(sim.angle, index, this.id);
       const theta = degrees * Math.PI / 180;
@@ -228,7 +242,7 @@ export class EngineModel extends ModelGeometry {
       this.between(c.rod, pin, vec(0, y, 0));
       c.cap.position.copy(pin);
       c.front.visible = !cutaway && !this.headOnly;
-      c.headCasting.front.visible = !cutaway;
+      c.headCasting.front.visible = !cutaway && this.viewMode === 'cylinder';
       const floor = y + 0.25;
       const height = Math.max(0.025, 4.18 - floor);
       c.chamber.position.y = floor + height / 2;

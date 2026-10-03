@@ -54,7 +54,9 @@ let selectedPart = null;
 let toastTimer;
 let disposed = false;
 let readoutMuted = window.matchMedia('(max-width:600px)').matches;
+let explodedReadoutRequested = false;
 let selectedPresetId = '';
+let manualClutchExplosion = 0.55;
 
 const PARTS = {
   timing: ['Rozrząd: pasek lub łańcuch', 'Wał korbowy napędza wałki rozrządu. Koło wałka ma dwa razy więcej zębów, dlatego zawory wykonują jeden cykl na dwa obroty wału. Pasek ma zęby; łańcuch współpracuje z kołami łańcuchowymi i wymaga smarowania. Przełącznik zmienia ilustrację napędu, nie osiągi silnika. Trasa, napinacz i krzywki są schematyczne.'],
@@ -87,7 +89,7 @@ const PARTS = {
   throttleBody: ['Przepustnica', 'Obrotowa klapa reguluje dopływ powietrza do silnika benzynowego. Suwak gazu otwiera ją. Za przepustnicą powietrze dociera kolektorem do zaworów dolotowych; spaliny płyną osobnym układem.'],
   rod: ['Korbowód', 'Łączy sworzeń tłoka z czopem wału korbowego. Zmienia kąt podczas obrotu wału, zachowując stałą długość. W modelach V korbowody obu banków napędzają jeden wspólny wał.'],
   banks: ['Rzędy cylindrów i głowice', 'W silniku widlastym cylindry są pochylone w dwóch rzędach, ale napędzają jeden wał korbowy.'],
-  cylinderHead: ['Głowica silnika', 'Głowica zamyka cylindry od góry. Jej dolna powierzchnia tworzy sklepienie komory spalania, a uszczelka oddziela gazy, olej i płyn chłodzący. W odlewie biegną kanały dolotu, wydechu i chłodzenia. Zawory otwierają drogę gazom; krzywki przez dźwigienki wciskają zawory, sprężyny je zamykają. Niebieski oznacza dolot, miedziany wydech. W przekroju usunięto przednią ścianę odlewu, aby było widać gniazda, prowadnice i sprężyny.'],
+  cylinderHead: ['Głowica silnika', 'Głowica zamyka cylindry od góry. Jej dolna powierzchnia tworzy sklepienie komory spalania, a uszczelka oddziela gazy, olej i płyn chłodzący. Niebieskoszary odlew obejmuje wszystkie cylindry danej głowicy. W nim biegną kanały dolotu, wydechu i chłodzenia. Zawory otwierają drogę gazom; krzywki przez dźwigienki wciskają zawory, sprężyny je zamykają. Niebieskie kanały oznaczają dolot, miedziane wydech. W przekroju usunięto przednią ścianę odlewu, aby było widać gniazda, prowadnice i sprężyny.'],
   headGasket: ['Uszczelka pod głowicą', 'Leży między blokiem a głowicą i uszczelnia komorę spalania. Oddziela też kanały oleju i chłodziwa. Pokazany pierścień wokół cylindra ilustruje jej położenie; rzeczywista uszczelka obejmuje całą powierzchnię głowicy.'],
   valveSeat: ['Gniazdo zaworu', 'Zamknięty zawór opiera się o pierścień gniazda, uszczelniając komorę. Krzywka wciska zawór w kierunku tłoka; powstaje szczelina, przez którą płyną gazy. Sprężyna przywraca styk zaworu z gniazdem.'],
   valveGuide: ['Prowadnica zaworu', 'Utrzymuje trzonek zaworu w osi i pozwala mu przesuwać się góra–dół. Nie obraca się z wałkiem rozrządu.'],
@@ -203,6 +205,8 @@ document.querySelector('#quick-gear').closest('label').insertAdjacentHTML('befor
 document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="dct-lesson" hidden><span id="dct-k1"></span><span id="dct-k2"></span><strong id="dct-state"></strong><button id="dct-shift-step" class="secondary-button">Następny etap</button></div>');
 document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="automatic-lesson" hidden><span id="automatic-slip"></span><span id="automatic-lockup"></span><strong id="automatic-state"></strong></div>');
 document.querySelector('#clutch-lesson').insertAdjacentHTML('beforeend', '<button class="secondary-button" id="clutch-slip-demo">Pokaż ruszanie z poślizgiem</button><small class="mechanics-explanation">Łożysko wciska palce sprężyny już przy częściowym wciśnięciu pedału. Spada docisk, choć tarcze nadal się stykają. Dopiero po odciążeniu powstaje szczelina. Poślizg oznacza różne obroty, a jego energia zamienia się w ciepło.</small>');
+document.querySelector('#assemble-clutch').insertAdjacentHTML('beforebegin', '<button class="secondary-button" id="spread-clutch">Pokaż warstwy</button>');
+document.querySelector('#inspect-description').insertAdjacentHTML('afterend', '<button class="quiet-button" id="show-head" hidden>Zobacz głowicę</button>');
 document.querySelector('#diff-lesson').insertAdjacentHTML('beforeend', '<label>Rozłóż mechanizm<input id="diff-explode" type="range" min="0" max="100" value="0" aria-label="Rozłożenie mechanizmu różnicowego"></label>');
 
 const $ = selector => document.querySelector(selector);
@@ -233,6 +237,7 @@ function changeView(value) {
   if (value === 'hybrid' && sim.transmission !== 'hybrid') { player.stop(); sim.setTransmission('hybrid'); updateEngineUI(); updatePowertrainConfiguration(); updateConfiguration(); }
   if (value === 'transfer' && !['awd', 'quattro', 'partTime'].includes(sim.driveLayout)) { sim.setDriveLayout('partTime'); updatePowertrainConfiguration(); }
   if (sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(value)) value = 'hybrid';
+  if (value === 'clutch' && sim.transmission === 'manual') setClutchExplosion(manualClutchExplosion, false);
   mode = value;
   scene?.setView(value);
   $$('.view-tab').forEach(button => {
@@ -294,7 +299,8 @@ function inspectSection() {
 function updateReadouts() {
   const relevant = ['clutch', 'gearbox', 'turbo'].includes(mode) || ['drive', 'drive-detail'].includes(mode) && ['clutch','converter','gearbox','planetary','automaticClutches','valveBody','turbo'].includes(scene?.inspection);
   const turbo = mode === 'turbo' || mode === 'drive-detail' && scene?.inspection === 'turbo';
-  const visible = relevant && $('#labels').checked && !readoutMuted;
+  const explodedClutch = mode === 'clutch' && sim.transmission === 'manual' && Number($('#explode').value) > 0;
+  const visible = relevant && $('#labels').checked && !readoutMuted && (!explodedClutch || explodedReadoutRequested);
   $('#mechanism-readout').hidden = !visible || turbo;
   $('#turbo-readout').hidden = !visible || !turbo;
   $('#show-readout').hidden = !relevant || visible;
@@ -304,6 +310,8 @@ function lessonView() {
 }
 function updateLessons() {
   const view = lessonView();
+  $('#show-head').hidden = !['engine', 'timing', 'drive', 'drive-detail'].includes(mode);
+  $('#spread-clutch').hidden = !['clutch'].includes(mode);
   $('#clutch-lesson').hidden = view !== 'clutch' || sim.transmission !== 'manual';
   $('#gear-lesson').hidden = view !== 'gearbox' || sim.transmission !== 'manual';
   $('#dct-lesson').hidden = sim.transmission !== 'dct' || !['clutch', 'gearbox'].includes(view);
@@ -446,10 +454,25 @@ function updateConfiguration() {
   updatePresetUI();
 }
 $('#timing-type').addEventListener('change', event => { player.stop(); sim.timing = event.target.value; updateTimingNote(); updatePresetUI(); });
-$('#assemble-clutch').addEventListener('click', () => {
-  if (scene) { scene.drive.exploded = 0; scene.setView(mode); }
-  $('#explode').value = 0;
-  $('#explode-value').textContent = '0%';
+function setClutchExplosion(value, frame = true) {
+  if (sim.transmission === 'manual') manualClutchExplosion = value;
+  if (scene) {
+    scene.drive.exploded = value;
+    scene.dct.exploded = value;
+    if (frame) scene.setView(mode);
+  }
+  $('#explode').value = Math.round(value * 100);
+  $('#explode-value').textContent = `${Math.round(value * 100)}%`;
+  updateReadouts();
+}
+$('#assemble-clutch').addEventListener('click', () => setClutchExplosion(0));
+$('#spread-clutch').addEventListener('click', () => setClutchExplosion(0.7));
+$('#show-head').addEventListener('click', () => {
+  changeView('engine');
+  $('#inspect-section').value = 'cylinderHead';
+  $('#isolate').checked = true;
+  inspectSection();
+  choosePart('cylinderHead');
 });
 $('#shift-step').addEventListener('click', () => {
   if (sim.shiftTarget === null) return;
@@ -479,8 +502,7 @@ $('#clutch-slip-demo').addEventListener('click', () => {
   player.stop(); stopDifferentialDemo();
   Object.assign(sim, { speed: 0, gear: 1, shiftTarget: null, shiftProgress: 0, throttle: 0.32, clutch: 0.5, brake: 0, rpm: 1800, running: true, stalled: false, inputOmega: 0 });
   sim.traction = evaluateTraction(sim, 0);
-  if (scene) { scene.drive.exploded = 0; scene.drive.group.visible = true; }
-  $('#explode').value = 0; $('#explode-value').textContent = '0%';
+  setClutchExplosion(0);
   pause(false);
   toast('Półsprzęgło: porównaj obroty silnika i tarczy. Zmieniaj pedał; mniejszy docisk ogranicza moment, a poślizg wytwarza ciepło.');
 });
@@ -495,8 +517,8 @@ $('#turbo').addEventListener('change', event => {
 $('#cutaway').addEventListener('change', event => { if (scene) scene.cutaway = event.target.checked; });
 window.matchMedia('(max-width:600px)').addEventListener('change', event => { if (event.matches) readoutMuted = true; updateReadouts(); });
 $('#labels').addEventListener('change', event => { if (scene) scene.labels = event.target.checked; updateReadouts(); });
-$$('.close-readout').forEach(button => button.addEventListener('click', () => { readoutMuted = true; updateReadouts(); }));
-$('#show-readout').addEventListener('click', () => { readoutMuted = false; $('#labels').checked = true; if (scene) scene.labels = true; updateReadouts(); });
+$$('.close-readout').forEach(button => button.addEventListener('click', () => { readoutMuted = true; explodedReadoutRequested = false; updateReadouts(); }));
+$('#show-readout').addEventListener('click', () => { readoutMuted = false; explodedReadoutRequested = true; $('#labels').checked = true; if (scene) scene.labels = true; updateReadouts(); });
 $('#flow').addEventListener('change', event => { if (scene) { [scene.drive, scene.turbo, scene.systems, scene.dct, scene.automatic, scene.hybrid].forEach(model => { model.showFlow = event.target.checked; }); } });
 $('#inspect-section').addEventListener('change', inspectSection);
 $('#isolate').addEventListener('change', inspectSection);
@@ -629,8 +651,7 @@ $$('.engine-buttons [data-engine]').forEach(button => button.addEventListener('c
 }));
 $('#explode').addEventListener('change', () => scene?.setView(mode));
 $('#explode').addEventListener('input', event => {
-  if (scene) { scene.drive.exploded = Number(event.target.value) / 100; scene.dct.exploded = Number(event.target.value) / 100; }
-  $('#explode-value').textContent = `${event.target.value}%`;
+  setClutchExplosion(Number(event.target.value) / 100, false);
 });
 
 let configuredTransmission = null;
@@ -655,7 +676,8 @@ function updatePowertrainConfiguration() {
   $('#dct-auto').checked = sim.dct.automatic;
   $('#automatic-auto-option').hidden = sim.transmission !== 'automatic';
   $('#automatic-auto').checked = sim.automatic.automatic;
-  $('.view-tab[data-view="clutch"]').textContent = sim.transmission === 'automatic' ? 'Konwerter' : 'Sprzęgło';
+  $('.view-tab[data-view="clutch"]').textContent = sim.transmission === 'automatic' ? 'Konwerter' : sim.transmission === 'hybrid' ? 'Podział mocy' : 'Sprzęgło';
+  $('.view-tab[data-view="gearbox"]').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : 'Skrzynia biegów';
   $$('.engine-buttons [data-engine]').forEach(button => { button.disabled = sim.transmission === 'hybrid' && button.dataset.engine !== 'r4'; });
   $('#transfer-mode-option').hidden = sim.driveLayout !== 'partTime';
   $('#transfer-mode').value = sim.driveMode;

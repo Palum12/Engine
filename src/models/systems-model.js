@@ -30,18 +30,19 @@ export class SystemsModel extends ModelGeometry {
     this.timingWheels = [];
     this.timingLoops = [];
     this.engine.group.updateMatrixWorld(true);
-    const crank = { y: 0.8, z: 0, r: 0.32, teeth: 24, speed: 1 };
-    const intermediate = { y: 2.55, z: 0, r: 0.64, teeth: 48, speed: 0.5 };
+    const crank = { y: 0.8, z: 0, r: 0.32, teeth: 24, speed: 1, attachment: vec(side * this.engine.shaftEnd, 0.8, 0) };
+    const intermediate = { y: 2.55, z: 0, r: 0.64, teeth: 48, speed: 0.5, attachment: vec(x, 2.55, 0) };
     if (rear) this.timingLoop(x, [crank, intermediate], 0.32);
     this.engine.heads.forEach((_, head) => {
       const plane = x + side * (rear ? head + 1 : head) * 0.25;
       const cams = this.engine.camshafts.filter(shaft => shaft.userData.head === head).map(shaft => {
-        const p = shaft.getWorldPosition(vec(0, 0, 0));
-        return { y: p.y, z: p.z, r: 0.64, teeth: 48, speed: 0.5 };
+        const endpoint = vec(...shaft.userData.shaftEndpoints[side < 0 ? 0 : 1]);
+        const p = this.engine.group.worldToLocal(shaft.localToWorld(endpoint));
+        return { y: p.y, z: p.z, r: 0.64, teeth: 48, speed: 0.5, attachment: p, shaft };
       });
       this.timingLoop(plane, [rear ? intermediate : crank, ...cams], 0.32);
-      this.anchor(`Głowica ${head + 1} · dolot / wydech · ½ obrotów`, this.timing,
-        [plane, cams[0].y + 0.95, (cams[0].z + cams[1].z) / 2], 'timing', ['timing']);
+      this.anchor(`Wałki głowicy ${head + 1} · ½ obrotów`, this.timing,
+        [plane, cams[0].y + 0.95, (cams[0].z + cams[1].z) / 2], 'timing', ['timing']).userData.timingSummary = true;
     });
     this.anchor('Wał korbowy · 1×', this.timing, [x, 0.15, 0.6], 'timing', ['timing', 'drive-detail']);
     this.anchor('Pasek / łańcuch · wał → wałki', this.timing, [x, 2.8, -0.72], 'timing', ['engine', 'timing', 'drive-detail']);
@@ -51,10 +52,13 @@ export class SystemsModel extends ModelGeometry {
   timingLoop(x, centers, travel) {
     centers.forEach(c => {
       const wheel = this.gear(c.teeth, c.r, 0.13, c.speed === 1 ? 'fuel' : 'intake', this.timing, [x, c.y, c.z], 'timing');
-      const shaftX = Math.sign(x) * this.engine.shaftEnd;
-      this.cylinder(0.075, Math.abs(x - shaftX), 'steel', this.timing, [(x + shaftX) / 2, c.y, c.z], 'x', 'timing');
+      const attachment = c.attachment;
+      const length = Math.abs(x - attachment.x);
+      const connector = length > 1e-8 ? this.cylinder(0.075, length, 'steel', this.timing,
+        [(x + attachment.x) / 2, c.y, c.z], 'x', 'timing') : null;
+      if (connector) connector.userData.lodEssential = true;
       this.box(0.025, c.r * 0.7, 0.065, 'white', wheel, [Math.sign(x) * 0.09, c.r * 0.5, 0], 'timing');
-      this.timingWheels.push({ wheel, speed: c.speed });
+      this.timingWheels.push({ wheel, speed: c.speed, connector, attachment, shaft: c.shaft });
     });
     const points = centers.flatMap(c => Array.from({ length: 64 }, (_, n) => {
       const a = n * Math.PI / 32;

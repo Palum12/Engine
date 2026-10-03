@@ -21,3 +21,40 @@
 Obrazy pełnego przebiegu są w `artifacts/browser/`, a końcowej kontroli nowych mechanizmów w `artifacts/browser-final/`. Obejrzano konfigurację, głowicę, pasek/łańcuch, półsprzęgło, wysprzęglanie, parę drugiego biegu, synchronizację, Ibizę, przedni dyferencjał i układ telefonu. Głowica mieści się w kadrze, a satelity są widoczne między niebieskim i złotym kołem bocznym.
 
 To kontrola renderowania programowego, bez oceny wydajności GPU ani fizycznych gestów touchpada użytkownika. Modele pozostają dydaktyczne; pokaz ciepła nie oblicza temperatury sprzęgła, a preset nie kalibruje fabrycznych osiągów Ibizy.
+
+## Kolejna korekta proporcji i czytelności
+
+- Dyferencjał w pojeździe ma mniejszy mechanizm centralny, ale półosie nadal
+  dochodzą do piast. Widok stołowy zachowuje powiększenie do nauki. Obniżenie
+  poprzecznego zespołu napędowego zmniejsza również koła przekładni głównej;
+  przełożenie oraz zależności prędkości pozostają wspólne z symulacją.
+- Przedłużenia wałków rozrządu kończą się na rzeczywistych końcach ich geometrii,
+  a nie na dłuższym końcu wału korbowego. Dotyczy to wszystkich architektur.
+- Ciągły odlew głowicy ma osobny kolor i jasną krawędź przekroju. Etykieta
+  w całym aucie i przycisk „Zobacz głowicę” prowadzą do jej budowy i działania.
+- Sprzęgło ma większe odstępy inspekcyjne oraz „Pokaż warstwy” / „Złóż części”.
+  Rozłożenie jest umowne; fizyczny docisk, poślizg i otwarcie szczeliny nadal
+  wynikają z pedału. Wybrane rozłożenie wraca po zmianie zakładki.
+- W rozłożeniu długie połączenia metalowe zastępują dyskretne kreskowane linie
+  złożenia, żeby nie zasłaniać warstw. Po złożeniu wracają palce oraz taśmy.
+  Odczyty na płótnie można włączyć przyciskiem „Pokaż parametry”.
+- Skrócono zbiorcze etykiety rozrządu i pokazano je tylko przy izolacji.
+  Zakładki Corolli nazywają się „Podział mocy” i „e-CVT”.
+- Nowe testy porównują rzeczywiste obwiednie części, ciągłość połączeń,
+  zazębienie kompaktowej przekładni i położenie końców półosi.
+
+Kontrola wizualna obejmuje dodatkowo silnik, głowicę, sprzęgło i skrzynię w
+Ibizie, A4, 911, 508 EAT8, Corolli hybrid i Veyronie. Kadry mechanizmów są
+zapisywane jako cały panel, tak aby pełny canvas mieścił się na obrazie.
+
+Końcowa kontrola logiki, geometrii i rzeczywistego interfejsu: **168/168**.
+Budowa produkcyjna przeszła. Renderowanie i obrazy są sprawdzane lokalnym
+Chromium z WebGL przez SwiftShader; nie oznacza to pomiaru wydajności GPU.
+
+Końcowy przebieg przeglądarkowy: **10/10** — wszystkie zakładki, 15 presetów,
+inspekcje 8AT, telefon, pokaz FWD oraz osobne konfiguracje sześciu samochodów.
+Obejrzano m.in. końcowy przekrój i rozłożenie sprzęgła Ibizy, otwarty dyferencjał,
+DCT A4, konwerter 508 oraz głowice i rozrząd 911/W16. Końcowe obrazy są w
+`artifacts/browser-final/`. Pierwszy przebieg przerwała aktualizacja źródła
+podczas testu, a zbiorczy test sześciu aut wyczerpał limit czasu; powtórzenie
+na zamrożonych źródłach i osobne przypadki dla aut przeszły w całości.
