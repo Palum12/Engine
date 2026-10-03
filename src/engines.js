@@ -11,6 +11,11 @@ const defineEngine = (id, name, cylinders, bankAngle, firingOrder, displacement,
 };
 
 export const ENGINES = Object.freeze({
+  r3: defineEngine('r3', 'R3 · 1.0 MPI', 3, 0, [1, 2, 3], '1.0 l', 95, 0.18, {
+    mountOrientations: Object.freeze(['longitudinal', 'transverse']),
+    architecture: 'R3 · 1 głowica · 2 wałki · 12 zaworów',
+    note: 'Trzycylindrowy wolnossący DOHC inspirowany 1.0 MPI EA211. Wtrysk do kanałów dolotowych, pasek zębaty i zapłony co 240°. Geometria oraz numeracja są dydaktyczne; osiągi nie stanowią kalibracji konkretnego auta.'
+  }),
   r4: defineEngine('r4', 'R4', 4, 0, [1, 3, 4, 2], '2.0 l', 170, 0.24, {
     mountOrientations: Object.freeze(['longitudinal', 'transverse'])
   }),

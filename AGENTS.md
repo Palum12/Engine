@@ -27,7 +27,10 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   torque splitting, engine mounting compatibility and transmission constants.
 - `src/automatic.js`: torque converter, stator, lock-up, shifts and the educational
   eight-speed planetary transmission. `src/hybrid.js`: e-CVT/DC energy balance.
-- `src/engines.js`: nine cylinder architectures, firing offsets and crank layout.
+- `src/engines.js`: ten cylinder architectures, including R3 for Ibiza 1.0 MPI,
+  firing offsets and crank layout.
+- `src/manual-clutch.js`: shared progressive clamp/capacity/release state for
+  manual physics, geometry and UI. Force falls before a visible plate gap opens.
 - `src/car-presets.js`: concrete car years/variants, factory data and primary links.
   `src/car-configuration.js` applies presets through simulation setters and resets
   old shift/slip/traction state. These are architecture presets, not OEM performance
@@ -62,3 +65,11 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   camera distance. Mouse wheel zoom and touch dragging retain their own behavior.
 - Tests importing the actual main.js strip CSS with a CRLF-compatible expression.
   Do not introduce Node-only imports into browser modules.
+- Mounting/drive/transmission controls live in `#mount-settings` above the canvas.
+  Refresh automatic compatibility changes in all controls and preset indicators.
+- `refreshClutchState()` initializes and clears manual torque/force/heat telemetry
+  on reset and engine/transmission changes. The 85% pedal threshold only interlocks
+  starting/shifting; use `manualClutchState().contact` for clutch connection status.
+- FWD differential inspections select `vehicle.front`; RWD selects `vehicle.rear`.
+  The bench demo is visual and independent of vehicle physics. Stop it on pedals,
+  view/configuration/preset changes. Straight travel naturally has equal speeds.

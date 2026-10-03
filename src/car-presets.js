@@ -12,6 +12,14 @@ const automaticNote = 'Wspólny model automatu hydrokinetycznego ma 8 biegów, a
 
 export const CAR_PRESETS = Object.freeze([
   definePreset({
+    id: 'ibiza-mpi-2016', name: 'SEAT Ibiza 1.0 MPI', year: 2016, variant: 'IV / 6P · 1.0 MPI 75 KM · manual · Europa',
+    engineId: 'r3', engineOrientation: 'transverse', enginePlacement: 'front', transmission: 'manual', driveLayout: 'fwd',
+    turbo: false, injection: 'mpi', timing: 'belt', factoryDisplacement: '999 cm³', factoryTransmission: '5-biegowa manualna', factoryGears: 5,
+    summary: 'Twój samochód · R3 poprzecznie z przodu · FWD · MPI bez turbo · pasek rozrządu.',
+    note: 'Wybrano europejską Ibizę 1.0 MPI 75 KM z 2016 r.; poziom wyposażenia i nadwozie pozostają nieokreślone. Model pokazuje trzy cylindry, 12 zaworów, dwa wałki i otwarty przedni dyferencjał. Przełożenia, masa, geometria i osiągi symulacji są dydaktyczne.',
+    sources: [source('SEAT — katalog i specyfikacja Ibiza 2016, s. 20 (kopia katalogu producenta)', 'https://vag-antares.net/wp-content/uploads/2021/08/CatalogueIbiza_Tarifs_N_110_05.08.16.pdf'), source('Volkswagen — 1.0 MPI EA211, głowica i pasek', 'https://www.volkswagen-newsroom.com/en/up-driving-presentation-3071/up-technologies-3086')]
+  }),
+  definePreset({
     id: 'corolla-hybrid-2025', name: 'Toyota Corolla 1.8 Hybrid', year: 2025, variant: 'E210 hatchback · 1.8 Hybrid 140 · Europa',
     engineId: 'r4', engineOrientation: 'transverse', enginePlacement: 'front', transmission: 'hybrid', driveLayout: 'fwd',
     turbo: false, injection: 'mpi', timing: 'chain', factoryDisplacement: '1.8 l', factoryTransmission: 'Toyota e-CVT', factoryGears: null,

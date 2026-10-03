@@ -6,6 +6,7 @@ Weryfikacja: 3 października 2026. Aplikacja jest ruchomym schematem edukacyjnym
 
 | Konfiguracja | Rzędy / głowice / wałki | Rozrząd w modelu |
 | --- | --- | --- |
+| R3 1.0 MPI | 1 / 1 / 2 | DOHC EA211, 12 zaworów, pasek zębaty; zapłony co 240°, numeracja dydaktyczna |
 | R4 | 1 / 1 / 2 | Przykładowy DOHC, pasek |
 | Inline 6 (R6) | 1 / 1 / 2 | Przykładowy DOHC, łańcuch; nie każda rzędowa szóstka ma taki rozrząd |
 | V6 60° | 2 / 2 / 4 | Przykładowy DOHC, osobna gałąź na głowicę |
@@ -19,6 +20,8 @@ Weryfikacja: 3 października 2026. Aplikacja jest ruchomym schematem edukacyjnym
 W każdej konfiguracji pokazano cztery zawory na cylinder oraz jeden obrót wałka na dwa obroty wału. Przełącznik paska/łańcucha jest eksperymentem dydaktycznym; UI oznacza odstępstwo od wybranego wariantu. Nie oznacza to, że producent oferował obie wersje.
 
 ## Materiały producentów
+
+- [Volkswagen — 1.0 MPI, rodzina EA211](https://www.volkswagen-newsroom.com/en/up-driving-presentation-3071/up-technologies-3086): trzy cylindry, dwa wałki i napęd paskiem zębatym. [Broszura SEAT Ibiza 2016, s. 20](https://vag-antares.net/wp-content/uploads/2021/08/CatalogueIbiza_Tarifs_N_110_05.08.16.pdf) potwierdza dla 1.0 MPI 75 KM montaż poprzeczny, 999 cm³, 3 cylindry, 12 zaworów, 95 Nm i skrzynię pięciobiegową. To publikacja SEAT dostępna w archiwum; preset nie odtwarza dokładnych przełożeń ani osiągów.
 
 - [Volkswagen, SSP 248 — The W Engine Concept](https://www.volkspage.net/technik/ssp/ssp/SSP_248.pdf), s. 5–7: porównanie R, V, VR i W, jedna głowica VR6 i kąt 15°. S. 23–28: głowice rodziny W, wałki i rozdział napędu łańcuchowego przez wałek pośredni. To dokument Volkswagen udostępniony na serwerze archiwalnym. Opis szczegółowy dotyczy W8/W12: **nie potwierdza fabrycznej trasy łańcuchów W16**. W16 w aplikacji wykorzystuje schemat funkcjonalny tej rodziny, bez deklaracji zgodności wszystkich kół i prowadnic z Bugatti.
 - [Volkswagen, SSP 246 — Variable Valve Timing](https://www.volkspage.net/technik/ssp/ssp/SSP_246.pdf), s. 4–7: osobne wałki dolotowy i wydechowy, regulacja ich faz i różnice między stanami pracy. Dokument pokazuje także, dlaczego rzeczywistych faz zaworowych nie należy utożsamiać z równymi granicami czterech suwów.

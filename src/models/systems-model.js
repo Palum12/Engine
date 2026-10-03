@@ -44,6 +44,7 @@ export class SystemsModel extends ModelGeometry {
         [plane, cams[0].y + 0.95, (cams[0].z + cams[1].z) / 2], 'timing', ['timing']);
     });
     this.anchor('Wał korbowy · 1×', this.timing, [x, 0.15, 0.6], 'timing', ['timing', 'drive-detail']);
+    this.anchor('Pasek / łańcuch · wał → wałki', this.timing, [x, 2.8, -0.72], 'timing', ['engine', 'timing', 'drive-detail']);
     if (rear) this.anchor('Wałek pośredni · rozdział napędu', this.timing, [x, 2.55, 0.85], 'timing', ['timing']);
   }
 
@@ -71,12 +72,30 @@ export class SystemsModel extends ModelGeometry {
       const q = outline[(i + 1) % outline.length];
       curve.add(new THREE.LineCurve3(vec(x, p.y, p.z), vec(x, q.y, q.z)));
     });
-    const belt = this.mesh(new THREE.TubeGeometry(curve, 180, 0.04, 6, true), 'black', this.timing, [0, 0, 0], 'timing');
+    const band = new THREE.Shape();
+    const center = outline.reduce((p, q) => ({ y: p.y + q.y / outline.length, z: p.z + q.z / outline.length }), { y: 0, z: 0 });
+    const edge = (target, offset, reverse = false) => {
+      const points = reverse ? [...outline].reverse() : outline;
+      points.forEach((p, i) => {
+        const length = Math.hypot(p.y - center.y, p.z - center.z);
+        const y = p.y + offset * (p.y - center.y) / length;
+        const z = p.z + offset * (p.z - center.z) / length;
+        if (i === 0) target.moveTo(-z, y); else target.lineTo(-z, y);
+      });
+      target.closePath();
+    };
+    edge(band, 0.03);
+    const hole = new THREE.Path(); edge(hole, -0.025, true); band.holes.push(hole);
+    const bandGeometry = new THREE.ExtrudeGeometry(band, { depth: 0.19, bevelEnabled: false });
+    bandGeometry.translate(0, 0, -0.095); bandGeometry.rotateY(Math.PI / 2);
+    const belt = this.mesh(bandGeometry, this.material({ color: 0x424f59, metalness: 0, roughness: 0.95 }), this.timing, [x, 0, 0], 'timing');
+    belt.userData.lodEssential = true;
     const count = Math.ceil(curve.getLength() / 0.11);
-    const links = new THREE.InstancedMesh(this.geometry('timingLink', () => new THREE.BoxGeometry(0.14, 0.085, 0.06)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), count);
+    const links = new THREE.InstancedMesh(this.geometry('timingLink', () => new THREE.BoxGeometry(0.21, 0.085, 0.09)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), count);
     links.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     links.frustumCulled = false;
     links.userData.part = 'timing';
+    links.userData.lodEssential = true;
     this.timing.add(links);
     const p = curve.getPoint(0.2);
     const tangent = curve.getTangent(0.2);
@@ -181,7 +200,9 @@ export class SystemsModel extends ModelGeometry {
     this.timingWheels.forEach(({wheel,speed}) => { wheel.rotation.x = a * speed; });
     this.timingLoops.forEach(({ curve, belt, links, travel }) => {
       belt.visible = sim.timing === 'belt';
-      links.material.color.setHex(sim.timing === 'chain' ? 0xb4c5d1 : 0x687581);
+      links.material.color.setHex(sim.timing === 'chain' ? 0xb4c5d1 : 0x43515b);
+      links.material.metalness = sim.timing === 'chain' ? 0.65 : 0;
+      links.material.roughness = sim.timing === 'chain' ? 0.4 : 0.95;
       const length = curve.getLength();
       for (let n = 0; n < links.count; n++) {
         const t = ((n / links.count + a * travel / length) % 1 + 1) % 1;

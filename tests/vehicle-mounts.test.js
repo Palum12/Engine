@@ -45,6 +45,60 @@ function fixture(run) {
   }
 }
 
+test('the belt survives whole-vehicle overview detail and isolated head visibility restores the full engine', () => {
+  fixture(({ vehicle, models, sim }) => {
+    const camera = { position: vec(30, 30, 30), userData: { target: vec() } };
+    vehicle.configure(sim);
+    models.systems.update(sim);
+    vehicle.update(sim, true, 0.02, camera);
+    assert.equal(models.systems.timing.visible, true);
+    assert.ok(models.systems.timingLoops.every(loop => loop.belt.visible && !loop.belt.userData.lodHidden));
+    models.engine.setView('engine', 0);
+    models.engine.setHeadView(true);
+    models.engine.update(sim, true);
+    for (const c of models.engine.cylinders) {
+      assert.equal(c.headCasting.group.visible, true);
+      assert.equal(c.headCasting.front.visible, false);
+      assert.equal(c.piston.visible, false);
+      assert.equal(c.blockSupports.visible, false);
+      assert.equal(c.charge.visible, false);
+      const parts = new Set(); c.headCasting.group.traverse(object => parts.add(object.userData.part));
+      for (const part of ['cylinderHead', 'headGasket', 'valveSeat', 'valveGuide', 'coolantJacket']) assert.ok(parts.has(part));
+    }
+    assert.equal(models.engine.crankshaft.visible, false);
+    const bounds = models.engine.bounds('cylinderHead');
+    assert.ok(!bounds.isEmpty() && bounds.min.toArray().every(Number.isFinite) && bounds.max.toArray().every(Number.isFinite));
+    models.engine.setView('engine', 0);
+    models.engine.update(sim, true);
+    assert.equal(models.engine.crankshaft.visible, true);
+    assert.ok(models.engine.cylinders.every(c => c.piston.visible && c.headCasting.group.visible && c.blockSupports.visible));
+  });
+});
+
+test('FWD cornering demo drives its front differential independently and preserves mean halfshaft speed', () => {
+  fixture(({ vehicle, sim }) => {
+    sim.setDriveLayout('fwd'); sim.setEngineOrientation('transverse'); sim.turn = 1;
+    vehicle.configure(sim, 'differential', true);
+    vehicle.front.demo = vehicle.front.openCarrier = true;
+    const camera = { position: vec(-4, 3, 5), userData: { target: vec(-7, 0, 0) } };
+    for (let i = 0; i < 10; i++) vehicle.update(sim, true, 0.1, camera);
+    assert.ok(vehicle.front.leftSpeed < vehicle.front.rightSpeed);
+    assert.ok(Math.abs((vehicle.front.leftSpeed + vehicle.front.rightSpeed) / 2 - vehicle.front.carrierSpeed) < 1e-8);
+    assert.notEqual(vehicle.front.planets[0].planet.rotation.y, 0);
+    assert.equal(vehicle.rear.group.visible, false);
+    assert.equal(vehicle.front.crown.visible, false);
+    for (let side = 0; side < 2; side++) assert.equal(vehicle.wheels[side].wheel.rotation.z, vehicle.front.axles[side].rotation.z);
+    sim.turn = 0; vehicle.update(sim, true, 0.1, camera);
+    assert.equal(vehicle.front.leftSpeed, vehicle.front.rightSpeed);
+    sim.turn = 1; sim.frontLock = true; vehicle.update(sim, true, 0.1, camera);
+    assert.equal(vehicle.front.leftSpeed, vehicle.front.rightSpeed);
+    sim.paused = true;
+    const before = vehicle.front.axles.map(axle => axle.rotation.z);
+    vehicle.update(sim, true, 0.1, camera);
+    assert.deepEqual(vehicle.front.axles.map(axle => axle.rotation.z), before);
+  });
+});
+
 test('all architectures keep their crankshaft connected to each transmission across supported mounting arrangements', () => {
   fixture(({ vehicle, models, sim, rebuildEngine }) => {
     for (const id of Object.keys(ENGINES)) {

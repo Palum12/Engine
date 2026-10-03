@@ -17,3 +17,13 @@
 - Avoid tests that duplicate implementation constants without testing behavior.
   Favor dirty-state preset transitions, disconnected torque paths, energy limits,
   finite camera bounds, paused motion, mounting alignment and real interaction.
+
+- `manual-detail.test.js` checks progressive clamp before a gap opens, friction
+  heat, independent disc rotation, bearings, cones and dog/sleeve indexing. Keep
+  connection readouts consistent with contact, not the shift interlock threshold.
+- A selected gear inspection may show a free gear while another gear is active.
+  Check its own free-wheel RPM and explanation; do not label it as connected.
+- Keep the timing belt visible under vehicle LOD and verify isolated heads restore
+  the full engine. Inspect the screenshots for head/camshaft clipping after a fit.
+- FWD differential tests must exercise `vehicle.front`, mean halfshaft speed,
+  cornering satellites, locks, pause and stopping the visual bench demo.

@@ -27,10 +27,10 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
     const input = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('input', { bubbles: true })); };
     const run = seconds => { app.sim.paused = false; for (let time = 0; time < seconds; time += 0.02) app.sim.update(0.02); app.updateUI(); };
-    await t.test('default whole vehicle, all nine engines and manual clutch toggle remain available', () => {
+    await t.test('default whole vehicle, all ten engines and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
-      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 9);
+      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 10);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 1);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 0);
     });
@@ -70,6 +70,43 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal($('#energy-battery').dataset.direction, 'forward');
       select('#hybrid-range', 'P'); assert.equal(app.sim.hybrid.range, 'D');
     });
+    await t.test('custom mounting is visible above the model and configuration updates remain consistent', () => {
+      select('#transmission-type', 'manual');
+      assert.equal($('#mount-settings').contains($('#drive-layout')), true);
+      assert.equal($('#mount-settings').contains($('#engine-orientation')), true);
+      assert.equal($('#mount-settings').hidden, false);
+      select('#engine-orientation', 'transverse');
+      assert.equal(app.sim.driveLayout, 'fwd');
+      assert.equal($('#drive-layout').value, 'fwd');
+      select('#drive-layout', 'rwd');
+      assert.equal(app.sim.engineOrientation, 'longitudinal');
+      assert.equal($('#engine-orientation').value, 'longitudinal');
+    });
+    await t.test('head inspection and a partial-clutch launch explain force, slip and disconnection', () => {
+      select('#transmission-type', 'manual');
+      $('.view-tab[data-view="engine"]').click();
+      assert.ok([...$('#inspect-section').options].some(option => option.value === 'cylinderHead'));
+      select('#inspect-section', 'cylinderHead');
+      $('#inspect-description').click();
+      assert.match($('#part-description').textContent, /zawor|kanał/);
+      $('.view-tab[data-view="clutch"]').click();
+      assert.equal($('#isolate-option').hidden, false);
+      $('#clutch-slip-demo').click(); run(0.08);
+      assert.equal(app.sim.gear, 1);
+      assert.equal(app.sim.clutch, 0.5);
+      assert.ok(app.sim.clutchSlip > 60);
+      assert.ok(app.sim.slipPower > 0);
+      assert.match($('#contact-detail').textContent, /Docisk.*poślizg.*ciepło/i);
+      input('#quick-clutch', '80'); run(0.08);
+      assert.equal(app.sim.transmittedTorque, 0);
+      assert.match($('#drive-status').textContent, /rozłączone/);
+      assert.match($('#mechanism-state').textContent, /brak docisku/);
+      $('.view-tab[data-view="gearbox"]').click();
+      select('#inspect-section', 'gear2'); app.updateUI();
+      assert.match($('#shift-detail').textContent, /Koło biegu 2 obraca się swobodnie.*Bieg 1 jest włączony/);
+      assert.equal($('[data-shift-stage="idle"]').classList.contains('active'), false);
+      $('#reset').click();
+    });
     await t.test('8AT hides the clutch, exposes eight gears and converter inspections', () => {
       $('.view-tab[data-view="hybrid"]').click();
       select('#transmission-type', 'automatic');
@@ -101,6 +138,22 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal(app.sim.transmission, 'hybrid');
       assert.equal(app.sim.engineOrientation, 'transverse');
       assert.equal(app.sim.engineId, 'r4');
+    });
+    await t.test('Ibiza preset and whole FWD differential expose cornering controls', () => {
+      select('#car-preset', 'ibiza-mpi-2016');
+      assert.equal(app.sim.engineId, 'r3');
+      assert.equal(app.sim.transmission, 'manual');
+      assert.equal(app.sim.driveLayout, 'fwd');
+      select('#inspect-section', 'differential');
+      assert.equal($('#diff-lesson').hidden, false);
+      assert.equal($('#diff-demo').hidden, false);
+      assert.match($('.scene-legend').textContent, /Lewa półoś.*Prawa półoś.*Satelity/);
+      $('[data-turn="1"]').click();
+      assert.equal(app.sim.turn, 1);
+      assert.match($('#diff-detail').textContent, /mechanicznie.*satelity.*jedna półoś/s);
+      $('[data-turn="0"]').click();
+      assert.match($('#diff-detail').textContent, /bez obrotu na własnych osiach/);
+      select('#car-preset', 'corolla-hybrid-2025');
     });
     await t.test('regeneration reverses the battery arrow and its guided scenario reaches the full-battery step', () => {
       select('#scenario-select', 'regen'); $('#scenario-start').click();

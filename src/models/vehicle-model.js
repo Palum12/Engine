@@ -196,6 +196,7 @@ export class VehicleModel extends ModelGeometry {
     drive.group.visible = sim.transmission === 'manual' && ['all', 'clutch', 'gearbox'].includes(section);
     drive.clutch.visible = section !== 'gearbox';
     drive.gearbox.visible = section !== 'clutch';
+    drive.setSection(section, this.isolate);
     dct.group.visible = sim.transmission === 'dct' && ['all', 'clutch', 'gearbox', 'mechatronics'].includes(section);
     dct.setSection(section, this.isolate);
     if (automatic) {
@@ -205,19 +206,19 @@ export class VehicleModel extends ModelGeometry {
     hybrid.group.visible = sim.transmission === 'hybrid' && ['all', 'hybrid', 'psd', 'mg1', 'mg2', 'battery', 'inverter'].includes(section);
     hybrid.setSection(section === 'hybrid' ? 'all' : section, this.isolate);
     hybrid.electrical.visible = hybrid.electrical.visible && (this.layer === 'electric' || this.section !== 'all');
-    this.front.group.visible = sim.driveLayout !== 'rwd' && ['all', 'frontAxle', 'finalDrive'].includes(section);
-    this.rear.group.visible = sim.driveLayout !== 'fwd' && ['all', 'rearAxle', 'finalDrive'].includes(section);
+    this.front.group.visible = sim.driveLayout !== 'rwd' && ['all', 'frontAxle', 'finalDrive', ...(sim.driveLayout === 'fwd' ? ['differential'] : [])].includes(section);
+    this.rear.group.visible = sim.driveLayout !== 'fwd' && ['all', 'rearAxle', 'finalDrive', 'differential'].includes(section);
     this.front.input.visible = sim.driveLayout !== 'rwd' && this.spurAxle !== 0;
     this.rear.input.visible = sim.driveLayout !== 'fwd' && this.spurAxle !== 1;
-    this.front.crown.visible = this.spurAxle !== 0;
-    this.rear.crown.visible = this.spurAxle !== 1;
+    this.front.crown.visible = this.spurAxle !== 0 && !this.front.openCarrier;
+    this.rear.crown.visible = this.spurAxle !== 1 && !this.rear.openCarrier;
     this.front.carrier.visible = sim.driveLayout !== 'rwd';
     this.rear.carrier.visible = sim.driveLayout !== 'fwd';
-    if (this.axleSpur) this.axleSpur.visible = true;
+    if (this.axleSpur) this.axleSpur.visible = !(this.spurAxle ? this.rear : this.front).openCarrier;
     this.front.housing.visible = this.rear.housing.visible = false;
     transfer.group.visible = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout) && ['all', 'transfer'].includes(section);
     systems.group.visible = ['all', 'engine', 'timing', 'oil', 'fuel'].includes(section);
-    systems.timing.visible = section === 'timing' || this.section === 'engine' || this.detail === 'service' && section === 'all';
+    systems.timing.visible = section === 'timing' || this.section === 'engine' || section === 'all';
     systems.oil.visible = section === 'oil' || this.layer === 'oil' && section === 'all';
     systems.fuel.visible = section === 'fuel' || this.layer === 'fuel' && section === 'all';
     turbo.group.visible = section === 'turbo' || this.layer === 'gases' && section === 'all' && sim.turbo;
@@ -237,6 +238,10 @@ export class VehicleModel extends ModelGeometry {
       const front = section === 'frontAxle' || section === 'finalDrive' && this.sim.driveLayout === 'fwd';
       return new THREE.Box3(vec(front ? -8.5 : 5.5, -1.5, -3.3), vec(front ? -5.5 : 8.5, 1.7, 3.3));
     }
+    if (section === 'differential') {
+      const x = this.sim.driveLayout === 'fwd' ? -7 : 7;
+      return new THREE.Box3(vec(x - 0.95, -1.05, -1.15), vec(x + 0.95, 1.15, 1.15));
+    }
     if (section === 'transfer') return transfer.bounds();
     if (['oil', 'fuel', 'timing'].includes(section)) return systems.bounds(section);
     if (section === 'turbo') return turbo.bounds();
@@ -252,7 +257,8 @@ export class VehicleModel extends ModelGeometry {
     this.rear.wheels.forEach(wheel => { wheel.visible = false; });
     this.wheels.forEach(({ wheel, steering, surface, axle, side }, i) => {
       steering.rotation.y = axle ? 0 : sim.turn * (side ? 0.24 : 0.29);
-      wheel.rotation.z = -sim.wheelAngles[i];
+      const diff = axle ? this.rear : this.front;
+      wheel.rotation.z = diff.demo ? diff.axles[side].rotation.z : -sim.wheelAngles[i];
       surface.material.color.setHex({ asphalt: 0x394548, wet: 0x375d78, ice: 0x9fcbd6, air: 0x18232b }[sim.surfaces[i]]);
       surface.visible = sim.surfaces[i] !== 'air' && steering.visible;
     });
@@ -272,7 +278,7 @@ export class VehicleModel extends ModelGeometry {
         object.geometry.computeBoundingBox();
         const size = object.geometry.boundingBox.getSize(vec());
         const s = object.getWorldScale(vec()).x;
-        const hide = threshold > 0 && Math.max(size.x, size.y, size.z) * s < threshold;
+        const hide = !object.userData.lodEssential && threshold > 0 && Math.max(size.x, size.y, size.z) * s < threshold;
         if (object.userData.lodHidden && !hide) object.visible = true;
         object.userData.lodHidden = hide;
       });
