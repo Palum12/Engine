@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Window } from 'happy-dom';
 
-test('the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios', async t => {
+for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios (${lineEnding})`, async t => {
   const window = new Window({ url: 'http://localhost/Engine/' });
   const saved = new Map();
   for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame']) {
@@ -18,6 +18,7 @@ test('the actual application UI switches transmissions, retains four strokes and
   console.error = () => {};
   try {
     const source = (await readFile(new URL('../src/main.js', import.meta.url), 'utf8'))
+      .replace(/\r?\n/g, newline)
       .replace(/^import ['"].*\.css['"];\r?\n/gm, '')
       .replace(/from '(\.\/[^']+)'/g, (_, path) => `from '${new URL(path, new URL('../src/main.js', import.meta.url)).href}'`);
     app = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { sim, player, updateUI, toastTimer };').toString('base64')}`);

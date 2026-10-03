@@ -1,6 +1,6 @@
 import { ENGINES, getEngine } from './engines.js';
 import { DCT_RATIOS, AUTOMATIC_RATIOS, FINAL_RATIO, WHEEL_RADIUS, VEHICLE_MASS, evaluateTraction, dctSelection, dctEngagement, DRIVE_LAYOUTS } from './powertrain.js';
-import { createHybridState, integrateHybrid } from './hybrid.js';
+import { createHybridState, integrateHybrid, hybridWheelTorque } from './hybrid.js';
 import { createAutomaticState, integrateAutomatic } from './automatic.js';
 
 export const GEAR_RATIOS = [0, 3.5, 2.1, 1.4, 1.05, 0.82];
@@ -195,7 +195,7 @@ export class Simulation {
   integrate(dt) {
     if (this.transmission === 'hybrid') {
       const torque = integrateHybrid(this, dt, getEngine(this.engineId));
-      this.move(torque * FINAL_RATIO * 0.96, dt, true);
+      this.move(hybridWheelTorque(torque), dt, true);
       if (this.hybrid.range === 'P') this.speed = 0;
       return;
     }
