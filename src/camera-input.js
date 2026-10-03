@@ -53,7 +53,7 @@ export class CameraInput {
     if (device === 'touchpad') {
       if (!this.controls.enablePan) return;
       this.onInteract();
-      this.controls.pan(x, y);
+      this.controls.pan(x, -y);
     } else this.zoom(Math.exp(Math.max(-240, Math.min(240, y)) * 0.0025));
   }
 

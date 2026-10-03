@@ -1,8 +1,8 @@
 # Engine / Lab
 
-Interaktywna aplikacja edukacyjna po polsku: silniki R4, R6, V6, VR6, V12, W16 i Boxer 4; manual, mokra DCT i hybryda planetarna e-CVT; RWD, FWD, 4WD i mechaniczne quattro. Do tego turbo, rozrząd, smarowanie i zasilanie paliwem. JavaScript + Three.js + Vite, bez backendu.
+Interaktywna aplikacja edukacyjna po polsku: silniki R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 4/6; manual, mokra DCT, automat hydrokinetyczny 8AT i hybryda planetarna e-CVT; RWD, FWD, 4WD i mechaniczne quattro. Orientacja silnika (wzdłużna/poprzeczna) i położenie (przód/centralnie/tył) są osobnymi ustawieniami. Do tego 14 presetów znanych samochodów, turbo, rozrząd, smarowanie i zasilanie paliwem. JavaScript + Three.js + Vite, bez backendu.
 
-Wersja sprzed rozbudowy z 02.10.2026 jest zachowana na branchu [`backup/021026-przed-rozbudowa-napedu`](https://github.com/Palum12/Engine/tree/backup/021026-przed-rozbudowa-napedu), commit `1dd0db6aa2394dec14b43625d549cc7c1be5ddc6`. Nowe funkcje rozwijane są na `main`.
+Wersja sprzed rozbudowy z 02.10.2026 jest zachowana na branchu [`backup/021026-przed-rozbudowa-napedu`](https://github.com/Palum12/Engine/tree/backup/021026-przed-rozbudowa-napedu), commit `1dd0db6aa2394dec14b43625d549cc7c1be5ddc6`.
 
 ## Uruchomienie
 
@@ -23,6 +23,25 @@ npm run build
 npm run preview
 ```
 
+Testy w rzeczywistym Chromium z WebGL:
+
+```bash
+npm run browser:install
+npm run test:browser
+```
+
+Przeglądarka i pliki tymczasowe trafiają do `.cache/`, zrzuty kontrolne do `artifacts/browser/`. Testy przechodzą przez wszystkie zakładki i presety, zbliżenia automatu oraz układ telefonu. Nie modyfikuj źródeł w trakcie testu — HMR Vite resetuje stan aplikacji.
+
+## Samochody i montaż silnika
+
+Lista **Samochód** nad modelem zawiera Corollę Hybrid 2025, Audi A4 B8 quattro S tronic, Porsche 911 Carrera S 2025, Bugatti Veyron, Golf GTI i R32, Peugeot 508 EAT8, Mazdę MX-5, BMW 330i i 340i, Subaru WRX, Jeepa Wranglera oraz Ferrari 458 i 812. Każda pozycja wskazuje rocznik i wersję. Preset resetuje poprzednie ruszanie/zmianę biegu i ustawia architekturę; własna zmiana konfiguracji usuwa oznaczenie wybranego presetu.
+
+R4 można montować wzdłużnie lub poprzecznie. FWD obsługuje również montaż wzdłużny. Silnik centralny znajduje się przed tylną osią, tylny za nią. Wybór niezgodnej konfiguracji dopasowuje napęd; e-CVT pozostaje R4 z przodu, poprzecznie i FWD. Presety opisują architekturę auta, a wspólne modele mają umowne osiągi, geometrię i przełożenia — manual 5-biegowy, DCT 6-biegowe, hydrokinetyczny automat 8-biegowy. Opisy podają różnice względem fabryki.
+
+**Automat hydrokinetyczny** ma osobny widok **Konwerter**: pompę, turbinę, kierownicę i lock-up. Włącz bieg 1, aby obserwować pełzanie, dodaj gazu i porównaj poślizg z blokadą podczas jazdy. Automatyczne zmiany można wyłączyć i wybierać 1–8 ręcznie. **Skrzynia biegów** pokazuje planetarne człony, pakiety i sterowanie hydrauliczne. To schemat inspirowany Aisin, z dydaktyczną topologią i przełożeniami.
+
+Źródła i ograniczenia: [presety samochodów](docs/CAR_PRESET_REFERENCES.md), [automat hydrokinetyczny](docs/automatic-reference.md). Wskazówki dla kolejnych modeli są w `AGENTS.md`, `src/AGENTS.md`, `src/models/AGENTS.md` i `tests/AGENTS.md`.
+
 `dist/` zawiera wynikową stronę statyczną. Względne ścieżki zasobów umożliwiają publikację w `/Engine/` oraz innych podkatalogach. Fonty i biblioteki są dołączone do kompilacji; aplikacja nie potrzebuje zewnętrznych CDN.
 
 ## GitHub Pages
@@ -42,7 +61,7 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 
 ## Sterowanie
 
-- Aplikacja otwiera **Napęd szczegółowy**: zarys pojazdu, przednia i tylna oś oraz cztery koła. Przyciski pod listą widoków przybliżają silnik, skrzynię, rozdział napędu, osie i baterię. **Odizoluj** pozwala obejrzeć mechanizm osobno. FWD i hybryda mają zespół poprzeczny; pozostałe układy są wzdłużne.
+- Aplikacja otwiera **Napęd szczegółowy**: zarys pojazdu, przednia i tylna oś oraz cztery koła. Przyciski pod listą widoków przybliżają silnik, skrzynię, rozdział napędu, osie i baterię. **Odizoluj** pozwala obejrzeć mechanizm osobno. Orientację i położenie zespołu wybiera się osobno; hybryda pozostaje z przodu i poprzecznie.
 - W bocznym panelu wybierz **Zespół napędowy / skrzynia** i **Napęd kół**. Warstwa pokazuje mechanikę, prąd/energię, gazy, olej albo paliwo. Szczegółowość można dobrać automatycznie do odległości lub ustawić ręcznie; etykiety są ograniczone, aby nie zasłaniały modelu.
 - **DCT**: K1 obsługuje 1/3/5, K2 2/4/6. Obejrzyj współosiowe wały, pakiety tarcz, przesuwki, mechatronikę i układ oleju. Podświetlenie rozróżnia bieg przenoszący moment i przygotowany. **Następny etap** pokazuje preselektowanie, przejmowanie momentu i ustalenie docisku. Możesz włączyć automatyczną zmianę biegów. Nie ma pedału sprzęgła.
 - **4WD**: 2H napędza tył, 4H łączy osie sztywno, 4L dodaje redukcję 2,5:1. Reduktor przełączaj na postoju. **AWD** ma otwarty centralny dyferencjał i opcjonalną blokadę; **quattro** przedstawia mechaniczny wariant bazowo 40:60, odrębny od quattro ultra.
@@ -55,16 +74,16 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Przycisk **Przesuwanie** zmienia przeciąganie w przesuwanie kamery; ponowne kliknięcie przywraca obrót.
 - **Gesty**: Auto rozpoznaje typ przewijania. Ponieważ przeglądarka nie podaje rodzaju urządzenia, w razie pomyłki wybierz jawnie Touchpad lub Mysz.
 - Kółko myszy / przyciski + i −: przybliżanie. Gesty nad sceną nie zmieniają powiększenia interfejsu; poza sceną zoom przeglądarki pozostaje dostępny.
-- Wybór silnika w nagłówku: R4, R6, V6, VR6, V12, W16 lub Boxer 4.
-- Widoki: cały silnik, cylinder, napęd, **Napęd szczegółowy**, sprzęgło, skrzynia, dyferencjał, rozrząd, olej, paliwo / gaźnik, turbo, 4WD i hybryda e-CVT.
+- Wybór silnika w nagłówku: R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 4/6.
+- Widoki: cały silnik, cylinder, napęd, **Napęd szczegółowy**, sprzęgło / konwerter, skrzynia, dyferencjał, rozrząd, olej, paliwo / gaźnik, turbo, 4WD i hybryda e-CVT.
 - **Napęd szczegółowy**: wybierz podzespół z listy, aby ustawić kamerę. **Odizoluj** ukrywa pozostałe zespoły, a **Opis podzespołu** wyjaśnia jego działanie. Dostępne są silnik, rozbieralne sprzęgło, skrzynia, przekładnia główna z półosiami, turbo, rozrząd, olej i zasilanie paliwem.
 - **Turbo**: lista przybliżeń prowadzi przez turbinę, wałek z łożyskami, sprężarkę, wastegate i intercooler. Każdą grupę można odizolować. Włącz turbo przyciskiem przy modelu, wznów animację i zwiększ gaz.
 - Przycisk **×** zamyka panel parametrów. **Pokaż parametry** przywraca go; wyłączenie **Opisów** ukrywa również panel. Na telefonie parametry są domyślnie zwinięte.
 - **Przepływ** włącza i wyłącza strzałki: momentu w napędzie oraz gazów w turbo. Strzałki są symbolami, nie częściami mechanizmu.
-- Na pełnym ekranie pozostają dostępne gaz, sprzęgło i bieg dla manuala albo gaz, hamulec i bieg/wybierak dla DCT/hybrydy.
+- Na pełnym ekranie pozostają dostępne gaz, sprzęgło i bieg dla manuala albo gaz, hamulec i bieg/wybierak dla DCT, automatu i hybrydy.
 - Widok **Sprzęgło**: suwak **Widok rozstrzelony** oddziela tarczę, docisk, sprężynę talerzową i łożysko, aby można było prześledzić ich działanie.
 - **Sprzęgło** uruchamia się z częściami złożonymi. Zielone powierzchnie wskazują styk cierny; schemat obok pokazuje, kiedy napęd zostaje przerwany. Przycisk **Złóż części** usuwa umowne odstępy montażowe. W trakcie częściowego wciskania spada siła docisku, a widoczna szczelina powstaje po rozłączeniu.
-- **Skrzynia biegów**: lista przybliża przesuwkę wybranego biegu. Zmiana trwa dydaktyczne 2,4 s: rozłączenie, synchronizacja, zazębienie przesuwki. **Następny etap** zatrzymuje animację i wykonuje kolejny etap wraz z odpowiadającym mu krokiem symulacji. Wznów animację przyciskiem odtwarzania.
+- **Skrzynia biegów**: w manualu lista przybliża przesuwkę wybranego biegu. Zmiana trwa dydaktyczne 2,4 s: rozłączenie, synchronizacja, zazębienie przesuwki. DCT pokazuje przejęcie momentu między pakietami, automat człony planetarne i hydraulikę. **Następny etap** zatrzymuje animację i wykonuje kolejny etap wraz z odpowiadającym mu krokiem symulacji. Wznów animację przyciskiem odtwarzania.
 - **Dyferencjał**: wybierz zakręt w lewo / na wprost / zakręt w prawo. **Uruchom pokaz stołowy** animuje sam mechanizm niezależnie od prędkości samochodu, z wyraźnym oznaczeniem trybu. **Odsłoń satelity** ukrywa koło talerzowe i ramę kosza. Zbliżenie satelitów ukrywa koła jezdne. Niebieski oznacza lewą półoś, złoty prawą, miedziany satelity.
 - **Rozrząd**: wybierz pasek zębaty lub łańcuch w konfiguracji. Koło 24-zębne napędza koło 48-zębne; znaczniki ułatwiają obserwację przełożenia 2:1.
 - **Olej**: prześledź smok, pompę, filtr, magistralę, łożyska oraz spływ do miski. Jasnozielone strzałki oznaczają dopływ, ciemnozielone powrót.
@@ -75,11 +94,11 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Suwak gazu: otwarcie przepustnicy w uproszczonym modelu.
 - Suwak sprzęgła: 0% oznacza zwolniony pedał, 100% oznacza rozłączenie napędu.
 - Przycisk sprzęgła: przełącza skrajne położenia. Do płynnego ruszania używaj suwaka.
-- Zmiana biegu manuala: wciśnij sprzęgło przynajmniej do 85%, wybierz N lub 1–5 i poczekaj na zakończenie etapów zmiany. DCT wybiera N lub 1–6 automatycznym dociskiem pakietów.
+- Zmiana biegu manuala: wciśnij sprzęgło przynajmniej do 85%, wybierz N lub 1–5 i poczekaj na zakończenie etapów zmiany. DCT wybiera N lub 1–6 automatycznym dociskiem pakietów, a automat hydrokinetyczny N lub 1–8 przez zmianę załączonych członów planetarnych.
 - Hamulec: przełącza hamowanie.
 - Pauza zatrzymuje całą symulację. Suwak kąta i wybór suwu pozwalają analizować cykl ręcznie.
 - Tempo animacji zmienia tylko prędkość przedstawienia ruchu, nie fizykę ani wskazania obrotów.
-- Spacja: pauza. Przytrzymany Shift: sprzęgło manuala. Strzałki góra/dół: gaz. N, 1–5/6: bieg manuala/DCT. Skróty są wyłączone przy aktywnych polach i przyciskach.
+- Spacja: pauza. Przytrzymany Shift: sprzęgło manuala. Strzałki góra/dół: gaz. N oraz cyfry: bieg do 5 dla manuala, do 6 dla DCT lub do 8 dla automatu. Skróty są wyłączone przy aktywnych polach i przyciskach.
 
 ### Pierwszy eksperyment
 
@@ -99,7 +118,7 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Idealizowane otwarcie zaworów; wałek rozrządu obraca się z połową prędkości wału korbowego.
 - Wtrysk MPI przed zaworem dolotowym i GDI w cylindrze. Pokazany GDI podczas sprężania jest jednym wariantem; rzeczywiste układy stosują także wtrysk podczas ssania i wielokrotny.
 - Uproszczona krzywa momentu, regulator biegu jałowego, bezwładność, tarcie, sprzęgło cierne z poślizgiem, opory ruchu, hamowanie i zgaśnięcie silnika.
-- Przełożenia skrzyni: 3,50 / 2,10 / 1,40 / 1,05 / 0,82. Przekładnia główna: 3,9; masa: 1250 kg; promień koła: 0,31 m.
+- Przełożenia manuala: 3,50 / 2,10 / 1,40 / 1,05 / 0,82. Przekładnia główna: 3,9; masa: 1250 kg; promień koła: 0,31 m.
 - Sprzęgło: koło zamachowe, okładziny tarczy, piasta z wielowypustem, sprężyny tłumiące, docisk, sprężyna talerzowa, łożysko i widełki. Wciśnięcie pedału odsuwa docisk; obroty tarczy zależą od wału wejściowego, a koła zamachowego od silnika. Rozsunięcie części jest wyłącznie zabiegiem ilustracyjnym.
 - Skrzynia z dwiema osiami i pięcioma parami stale zazębionych kół. Liczby zębów odpowiadają zadanym przełożeniom; koła współpracujące obracają się przeciwnie. Wybrana para jest podświetlana, a przesuwka łączy koło z wałem wyjściowym. Na luzie koła na wale wyjściowym obracają się swobodnie.
 - Każda para ma osobną przesuwkę dla czytelności. Pokazano fazę tarciową pierścienia na stożku i uproszczone wyrównywanie obrotów wejścia. Podczas zmiany skrzynia przechodzi przez luz, nie przenosi momentu od silnika i blokuje drugą równoległą zmianę. Nie obliczamy temperatury ani zużycia synchronizatora. Profile zębów, rozmiary i odstępy są ilustracyjne, nie wymiarowe.
@@ -119,7 +138,8 @@ To pomoc do nauki zasad działania, a nie narzędzie obliczeniowe lub instrukcja
 ## Pliki
 
 - `src/simulation.js` — niezależna symulacja mechaniki.
-- `src/powertrain.js`, `src/hybrid.js` — przyczepność, rozdział napędu, DCT i bilans energii hybrydy.
+- `src/powertrain.js`, `src/automatic.js`, `src/hybrid.js` — przyczepność, rozdział napędu, DCT, automat hydrokinetyczny i bilans energii hybrydy.
+- `src/car-presets.js`, `src/car-configuration.js` — warianty samochodów, źródła i bezpieczne przełączanie konfiguracji.
 - `src/scenarios.js` — doświadczenia krok po kroku.
 - `src/scene.js` — scena 3D, kamera, etykiety i wybór części.
 - `src/engines.js` — konfiguracje i geometria układów cylindrów.
@@ -139,7 +159,7 @@ Podstawy zasilania i mechanizmu różnicowego: [Bosch — układ GDI i dwa stopn
 
 ### Układy cylindrów i ciągły cykl
 
-Dostępne są R4, Inline 6 (R6), V6, VR6 24V, V12, W16 inspirowany Bugatti i Boxer 4 DOHC. Modele zmieniają liczbę rzędów, ich kąty, wspólne głowice, wałki, dźwigienki oraz rozdział napędu rozrządu. VR6 ma jedną głowicę i dwa wałki, W16 dwie głowice i cztery wałki. Bokser ma osobne czopy dla przeciwległych tłoków.
+Dostępne są R4, Inline 6 (R6), V6, VR6 24V, V8 z płaskim wałem, V12, W16 inspirowany Bugatti oraz Boxer 4/6 DOHC. Modele zmieniają liczbę rzędów, ich kąty, wspólne głowice, wałki, dźwigienki oraz rozdział napędu rozrządu. VR6 ma jedną głowicę i dwa wałki, W16 dwie głowice i cztery wałki. Bokser ma osobne czopy dla przeciwległych tłoków.
 
 Ładunek płynnie przechodzi ze ssania do sprężania, następnie przez front spalania do rozprężania i wydechu. Jasne znaczniki spalin nie oznaczają czarnego dymu. Przycisk suwu przeprowadza animację do wskazanej fazy; suwak pozwala bezpośrednio ustawić kąt. Przy włączonym ograniczeniu animacji w systemie przyciski również zmieniają kąt bez przejścia.
 

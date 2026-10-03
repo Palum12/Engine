@@ -7,6 +7,7 @@ import { EngineScene } from '../src/scene.js';
 import { EngineModel } from '../src/models/engine-model.js';
 import { DrivetrainModel } from '../src/models/drivetrain-model.js';
 import { DctModel } from '../src/models/dct-model.js';
+import { AutomaticModel } from '../src/models/automatic-model.js';
 import { HybridModel } from '../src/models/hybrid-model.js';
 import { TransferModel } from '../src/models/transfer-model.js';
 import { TurboModel } from '../src/models/turbo-model.js';
@@ -27,13 +28,14 @@ function fixture(run) {
   scene.engine = new EngineModel(m);
   scene.drive = new DrivetrainModel(m);
   scene.dct = new DctModel(m);
+  scene.automatic = new AutomaticModel(m);
   scene.hybrid = new HybridModel(m);
   scene.transfer = new TransferModel(m);
   scene.turbo = new TurboModel(m);
   scene.systems = new SystemsModel(m, scene.engine);
   scene.finalDrive = new FinalDriveModel(m);
   scene.connections = new ModelGeometry(m);
-  const models = Object.fromEntries(['engine', 'drive', 'dct', 'hybrid', 'transfer', 'turbo', 'systems', 'connections'].map(key => [key, scene[key]]));
+  const models = Object.fromEntries(['engine', 'drive', 'dct', 'automatic', 'hybrid', 'transfer', 'turbo', 'systems', 'connections'].map(key => [key, scene[key]]));
   scene.vehicle = new VehicleModel(m, models);
   scene.root.add(...Object.values(models).map(model => model.group), scene.finalDrive.group, scene.vehicle.group);
   scene.camera.position.set(8, 15, 25);
@@ -43,7 +45,7 @@ function fixture(run) {
 
 test('all drive configurations and inspections have finite camera bounds and reversible whole/bench layouts', () => {
   fixture((scene, sim) => {
-    for (const type of ['manual', 'dct', 'hybrid']) for (const layout of type === 'hybrid' ? ['fwd'] : ['rwd', 'fwd', 'partTime', 'awd', 'quattro']) {
+    for (const type of ['manual', 'dct', 'automatic', 'hybrid']) for (const layout of type === 'hybrid' ? ['fwd'] : ['rwd', 'fwd', 'partTime', 'awd', 'quattro']) {
       sim.setTransmission(type); sim.setDriveLayout(layout);
       for (const view of ['drive', 'drive-detail', 'clutch', 'gearbox', 'differential', 'transfer', 'hybrid', 'engine', 'timing', 'oil', 'fuel']) {
         if (view === 'hybrid' && type !== 'hybrid' || view === 'transfer' && ['rwd', 'fwd'].includes(layout)) continue;
@@ -67,7 +69,7 @@ test('all drive configurations and inspections have finite camera bounds and rev
   });
 });
 
-test('whole-vehicle packaging accommodates all seven engine architectures without stale routing', () => {
+test('whole-vehicle packaging accommodates all engine architectures without stale routing', () => {
   fixture((scene, sim) => {
     for (const id of Object.keys(ENGINES)) {
       scene.engine.dispose(); scene.systems.dispose();
@@ -76,7 +78,9 @@ test('whole-vehicle packaging accommodates all seven engine architectures withou
       Object.assign(scene.vehicle.models, { engine: scene.engine, systems: scene.systems });
       sim.setEngine(id);
       for (const layout of ['rwd', 'fwd', 'quattro']) {
-        sim.setDriveLayout(layout); scene.setView('drive-detail', true);
+        sim.setDriveLayout(layout);
+        sim.setEngineOrientation(layout === 'fwd' && ENGINES[id].mountOrientations?.includes('transverse') ? 'transverse' : 'longitudinal');
+        scene.setView('drive-detail', true);
         scene.vehicle.update(sim, true, 0.02, scene.camera);
         const end = scene.engine.group.localToWorld(vec(scene.engine.shaftEnd, 0.8, 0));
         const input = scene.drive.group.getWorldPosition(vec());

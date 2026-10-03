@@ -60,3 +60,14 @@ test('unknown engine configurations do not change the active model', () => {
   assert.equal(sim.setEngine('v99'), false);
   assert.equal(sim.engineId, 'v12');
 });
+
+test('the educational flat-plane V8 shares paired pins and keeps all pins in one plane', () => {
+  const angle = 37;
+  const reference = crankPin(angle, 'v8', 0);
+  for (let i = 0; i < ENGINES.v8.cylinders; i += 2) {
+    const a = crankPin(angle, 'v8', i), b = crankPin(angle, 'v8', i + 1);
+    assert.ok(Math.hypot(a.y - b.y, a.z - b.z) < 1e-9);
+    // Their radial vectors must be parallel or antiparallel, as on a flat-plane crank.
+    assert.ok(Math.abs((reference.y - 0.8) * a.z - reference.z * (a.y - 0.8)) < 1e-9);
+  }
+});

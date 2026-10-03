@@ -1,11 +1,11 @@
 import { FINAL_RATIO, WHEEL_RADIUS, evaluateTraction } from './powertrain.js';
 
 export const SCENARIOS = {
-  launch: { name: 'Ruszanie', types: ['manual', 'dct'] },
-  shift: { name: 'Zmiana 1 → 2', types: ['manual', 'dct'] },
-  corner: { name: 'Zakręt i różne obroty kół', types: ['manual', 'dct', 'hybrid'] },
-  slip: { name: 'Jedno koło na lodzie', types: ['manual', 'dct', 'hybrid'] },
-  transfer: { name: '2H → 4H → reduktor 4L', types: ['manual', 'dct'] },
+  launch: { name: 'Ruszanie', types: ['manual', 'dct', 'automatic'] },
+  shift: { name: 'Zmiana 1 → 2', types: ['manual', 'dct', 'automatic'] },
+  corner: { name: 'Zakręt i różne obroty kół', types: ['manual', 'dct', 'automatic', 'hybrid'] },
+  slip: { name: 'Jedno koło na lodzie', types: ['manual', 'dct', 'automatic', 'hybrid'] },
+  transfer: { name: '2H → 4H → reduktor 4L', types: ['manual', 'dct', 'automatic'] },
   ev: { name: 'EV · bateria napędza koła', types: ['hybrid'] },
   assist: { name: 'Podział mocy · silnik + MG2', types: ['hybrid'] },
   regen: { name: 'Rekuperacja i pełna bateria', types: ['hybrid'] },
@@ -31,11 +31,15 @@ export class ScenarioPlayer {
   start(id) {
     if (!SCENARIOS[id]?.types.includes(this.sim.transmission)) return false;
     const s = this.sim;
-    const config = { transmission: s.transmission, driveLayout: s.driveLayout, engineId: s.engineId, injection: s.injection, timing: s.timing, turbo: s.turbo, animationScale: s.animationScale };
+    const config = { transmission: s.transmission, driveLayout: s.driveLayout, engineId: s.engineId, engineOrientation: s.engineOrientation, enginePlacement: s.enginePlacement, injection: s.injection, timing: s.timing, turbo: s.turbo, animationScale: s.animationScale };
     s.reset();
     s.setTransmission(config.transmission);
     s.setDriveLayout(config.driveLayout);
     s.setEngine(config.engineId);
+    s.setEnginePlacement(config.enginePlacement);
+    s.setEngineOrientation(config.engineOrientation);
+    s.setDriveLayout(config.driveLayout);
+    if (s.transmission === 'automatic') s.automatic.automatic = false;
     Object.assign(s, { injection: config.injection, timing: config.timing, turbo: config.transmission === 'hybrid' ? false : config.turbo, animationScale: config.animationScale });
     this.id = id;
     const step = (text, duration, enter = () => {}, animate) => ({ text, duration, enter, animate });
@@ -47,6 +51,11 @@ export class ScenarioPlayer {
       step('Dodajemy gaz. Tarcza nadal nie przenosi momentu, bo pedał jest wciśnięty.', 2, () => { s.throttle = 0.25; }),
       step('Płynnie zwalniamy pedał. Tarcie wyrównuje obroty, a koła zaczynają napędzać pojazd.', 4, () => {}, p => { s.clutch = 1 - p; }),
       step('Pedał zwolniony: poślizg maleje. Droga napędu prowadzi przez wybraną parę kół.', 4, () => { s.clutch = 0; })
+    ] : s.transmission === 'automatic' ? [
+      step('Automat na N: pompa konwertera obraca się, wyjście skrzyni jest odłączone.', 1.5),
+      step('Włączamy jedynkę. Pompa rozpędza olej, turbina odbiera moment; nie ma pedału sprzęgła.', 1.3, () => s.shift(1)),
+      step('Bez gazu pojawia się pełzanie. Kierownica kieruje olej z powrotem na pompę.', 3),
+      step('Dodajemy gaz. Poślizg maleje, a podczas jazdy sterownik może załączyć lock-up.', 5, () => { s.throttle = 0.3; })
     ] : [
       step('DCT na N: żaden pakiet nie przekazuje momentu na koła.', 1.5),
       step('Wybieramy jedynkę. K1 stopniowo dociska tarcze; dwójka czeka na gałęzi K2.', 1.8, () => s.shift(1)),
@@ -61,6 +70,11 @@ export class ScenarioPlayer {
         step('Wybieramy dwójkę. Luz → tarcie stożka → zazębienie przesuwki.', 2.5, () => s.shift(2)),
         step('Zwalniamy sprzęgło. Nowe przełożenie daje inne obroty silnika przy tej samej prędkości.', 2.5, () => { s.throttle = 0.25; }, p => { s.clutch = 1 - p; }),
         step('Dwójka jest połączona i przenosi moment.', 3, () => { s.clutch = 0; })
+      ] : s.transmission === 'automatic' ? [
+        step('Jedynka napędza koła przez konwerter i przekładnie planetarne.', 2),
+        step('Sterownik zwalnia lock-up i zmienia docisk pakietów sprzęgieł oraz hamulców.', 1.2, () => s.shift(2)),
+        step('Dwójka jest załączona. Człony planetarne mają nową zależność prędkości.', 3),
+        step('Przy ustalonych warunkach lock-up ogranicza poślizg pompy i turbiny.', 3)
       ] : [
         step('K1 przenosi moment na jedynce. Dwójka jest przygotowana, ale K2 jest otwarte.', 2),
         step('Sterownik potwierdza wybranie dwójki na gałęzi K2.', 0.32, () => s.shift(2)),

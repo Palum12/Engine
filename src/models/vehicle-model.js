@@ -62,25 +62,31 @@ export class VehicleModel extends ModelGeometry {
     this.sim = sim;
     this.section = section;
     this.isolate = isolate;
-    const { engine, drive, dct, hybrid, transfer, systems, turbo, connections } = this.models;
-    const transverse = sim.driveLayout === 'fwd';
-    const engineScale = Math.min(0.42, 3.5 / (engine.length + 1));
+    const { engine, drive, dct, automatic, hybrid, transfer, systems, turbo, connections } = this.models;
+    const transverse = sim.engineOrientation === 'transverse';
+    const placement = sim.enginePlacement || 'front';
+    const axle = placement === 'front' ? 0 : 1;
+    const engineScale = Math.min(0.42, (transverse ? 2.45 : 3.5) / (engine.length + 1));
     const shaftY = 0.9 + 0.8 * engineScale;
-    const enginePosition = transverse ? [-6.8, 0.9, 0.15 - engine.shaftEnd * engineScale] : [-4.6 - engine.shaftEnd * engineScale, 0.9, 0];
-    const rotation = transverse ? -Math.PI / 2 : 0;
+    const rotation = transverse ? -Math.PI / 2 : placement === 'front' ? 0 : Math.PI;
+    const drivetrainPosition = transverse ? [placement === 'rear' ? 8 : placement === 'mid' ? 6 : -6.8, shaftY, -0.15] : [placement === 'rear' ? 6.3 : placement === 'mid' ? 3.5 : -4.6, shaftY, 0];
+    // The crankshaft ends at local (shaftEnd, 0.8, 0); keep that point on
+    // the transmission input for every mounting orientation and placement.
+    const enginePosition = vec(...drivetrainPosition).sub(vec(engine.shaftEnd, 0.8, 0).multiplyScalar(engineScale).applyAxisAngle(vec(0, 1, 0), rotation)).toArray();
     const pose = (model, p, scale, angle = rotation) => { model.group.position.set(...p); model.group.scale.setScalar(scale); model.group.rotation.set(0, angle, 0); };
     pose(engine, enginePosition, engineScale);
     pose(systems, enginePosition, engineScale);
     pose(connections, enginePosition, engineScale);
     engine.setView('drive-detail', 0);
-    const drivetrainPosition = transverse ? [-6.8, shaftY, 0.15] : [-4.6, shaftY, 0];
-    const gearboxScale = transverse ? 0.18 : 0.33;
+    const gearboxScale = sim.transmission === 'hybrid' ? 0.28 : sim.transmission === 'automatic' ? transverse ? 0.25 : 0.4 : transverse ? 0.18 : 0.33;
     pose(drive, drivetrainPosition, gearboxScale);
     drive.setView('drive-detail');
     drive.exploded = 0;
     drive.wheel.visible = false;
     pose(dct, drivetrainPosition, gearboxScale);
+    dct.exploded = 0;
     dct.setSection('all');
+    if (automatic) { pose(automatic, drivetrainPosition, gearboxScale); automatic.exploded = 0; automatic.setSection('all'); }
     pose(hybrid, drivetrainPosition, 0.28);
     hybrid.setLayout(true, 0.28, ...drivetrainPosition);
     hybrid.setSection('all');
@@ -90,66 +96,88 @@ export class VehicleModel extends ModelGeometry {
     turbo.group.rotation.copy(engine.group.rotation);
     turbo.group.scale.setScalar(engineScale);
     turbo.setSection('all');
-    const key = `${sim.transmission}:${sim.driveLayout}:${engine.id}`;
+    const key = `${sim.transmission}:${sim.driveLayout}:${engine.id}:${placement}:${sim.engineOrientation}`;
     if (key !== this.key) {
       this.key = key;
-      this.buildRouting(sim, drivetrainPosition, gearboxScale);
+      this.buildRouting(sim, drivetrainPosition, gearboxScale, rotation);
     }
-    this.front.group.rotation.z = transverse ? 0 : Math.PI;
-    this.front.input.visible = !transverse && !['rwd'].includes(sim.driveLayout);
-    this.front.crown.visible = !transverse;
-    this.frontDriveSpur?.removeFromParent();
-    if (transverse) {
-      this.frontDriveSpur = this.frontSpur;
-      this.front.carrier.add(this.frontSpur);
-      this.frontSpur.position.set(0, 0, 2.1);
+    this.front.group.rotation.z = Math.PI;
+    this.rear.group.rotation.z = 0;
+    if (this.axleSpur) {
+      const finalDrive = axle ? this.rear : this.front;
+      finalDrive.carrier.add(this.axleSpur);
+      this.axleSpur.position.set(0, 0, 2.1);
     }
     this.front.wheels.forEach(wheel => { wheel.visible = false; });
     this.rear.wheels.forEach(wheel => { wheel.visible = false; });
     this.front.housing.visible = this.rear.housing.visible = false;
     this.engineAnchor.position.copy(engine.group.position).add(vec(0, 2.6, 0));
-    this.transmissionAnchor.position.copy(vec(...drivetrainPosition)).add(transverse ? vec(0.8, 1.1, 1) : vec(2.1, 1.1, 0));
-    this.transmissionAnchor.userData.label = sim.transmission === 'hybrid' ? 'e-CVT · MG1 / planeta / MG2' : sim.transmission === 'dct' ? 'DCT · sprzęgła K1 / K2' : 'Manual · sprzęgło i skrzynia';
+    this.transmissionAnchor.position.copy(vec(...drivetrainPosition)).add(vec(2.1, 1.1, 0).applyAxisAngle(vec(0, 1, 0), rotation));
+    this.transmissionAnchor.userData.label = sim.transmission === 'hybrid' ? 'e-CVT · MG1 / planeta / MG2' : sim.transmission === 'dct' ? 'DCT · sprzęgła K1 / K2' : sim.transmission === 'automatic' ? 'Automat 8AT · konwerter i przekładnie planetarne' : 'Manual · sprzęgło i skrzynia';
     this.applyVisibility(sim);
   }
 
-  buildRouting(sim, position, scale) {
-    this.frontSpur?.removeFromParent();
+  buildRouting(sim, position, scale, rotation) {
+    this.axleSpur?.removeFromParent();
     this.routing.dispose();
     this.routing = new ModelGeometry(this.materials);
     this.group.add(this.routing.group);
     const g = this.routing;
-    const transverse = sim.driveLayout === 'fwd';
-    const output = transverse ? vec(position[0], position[1] - (sim.transmission === 'manual' ? 1.8 * scale : 0), position[2] + (sim.transmission === 'hybrid' ? 6.3 * 0.28 : 12 * scale)) : vec(position[0] + 12 * scale, position[1] - (sim.transmission === 'manual' ? 1.8 * scale : 0), 0);
+    const transverse = sim.engineOrientation === 'transverse';
+    const axle = (sim.enginePlacement || 'front') === 'front' ? 0 : 1;
+    const localOutput = sim.transmission === 'automatic' ? this.models.automatic?.outputPosition || vec(8.3, 0, 0) : sim.transmission === 'hybrid' ? vec(6.25, 0, 0) : sim.transmission === 'dct' ? vec(12.85, 0, 0) : vec(12.1, -1.8, 0);
+    const output = (Array.isArray(localOutput) ? vec(...localOutput) : localOutput.clone()).multiplyScalar(scale).applyAxisAngle(vec(0, 1, 0), rotation).add(vec(...position));
+    const both = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout);
+    const drivenAxles = [sim.driveLayout !== 'rwd', sim.driveLayout !== 'fwd'];
+    const center = vec(0.8, 0.65, 0);
+    const input = [vec(-3.25, 0, -1.02), vec(3.25, 0, -1.02)];
     this.paths = [];
-    const path = (points, key, color = 0xffc35a) => this.paths.push({ path: makeFlow(g, points, color, g.group, 'propShaft', 7, 0.032), key });
+    // Flow cones only describe the shafts between assemblies. Each transmission
+    // owns its internal torque path, so there is no duplicate line through it.
+    const path = (points, key, color = 0xffc35a, count = 3) => this.paths.push({ path: makeFlow(g, points, color, g.group, 'propShaft', count, 0.024), key });
+    this.axleSpur = this.axlePinion = this.axlePinionRotor = null;
+    this.spurAxle = transverse ? axle : null;
     if (transverse) {
-      const distance = Math.hypot(position[0] + 7, output.y);
-      this.frontSpur = g.subgroup(g.group, [0, 0, 0], 'finalDrive');
-      const gear = g.gear(39, distance * 3.9 / 4.9, 0.15, 'brass', this.frontSpur, [0, 0, 0], 'finalDrive', 0.13);
+      const axleX = axle ? 7 : -7;
+      const distance = Math.hypot(position[0] - axleX, output.y);
+      this.axleSpur = g.subgroup(g.group, [0, 0, 0], 'finalDrive');
+      const gear = g.gear(39, distance * 3.9 / 4.9, 0.15, 'brass', this.axleSpur, [0, 0, 0], 'finalDrive', 0.13);
       gear.rotation.y = -Math.PI / 2;
-      const cup = g.annulus(0.23, 0.13, 1.65, 'steel', this.frontSpur, [0, 0, -0.95], 'finalDrive');
+      const cup = g.annulus(0.23, 0.13, 1.65, 'steel', this.axleSpur, [0, 0, -0.95], 'finalDrive');
       cup.rotation.y = -Math.PI / 2;
-      this.frontPinion = g.subgroup(g.group, [output.x, output.y, 2.1], 'finalDrive');
-      this.frontPinion.rotation.y = -Math.PI / 2;
-      this.frontPinionRotor = g.gear(10, distance / 4.9, 0.15, 'intake', this.frontPinion, [0, 0, 0], 'finalDrive', 0.055);
-      const stub = g.cylinder(0.055, Math.max(0.15, output.z - 2.1), 'steel', g.group, [output.x, output.y, (output.z + 2.1) / 2], 'z', 'outputShaft');
-      stub.userData.ignorePick = false;
-      path([[position[0], position[1], position[2]], [output.x, output.y + 0.18, 1.2], [output.x, output.y, 2.1], [-7, 0.4, 2.1]], 'input');
-    } else {
-      this.frontPinion = null;
-      const both = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout);
-      const center = vec(0.8, 0.65, 0);
-      this.shaft(g, output, both ? center.clone().add(vec(-1.05, 0, 0)) : vec(3.25, 0, -1.02));
-      path([output.toArray(), [0.3, output.y + 0.3, 0], [3.1, 0.4, -0.95], [6.2, 0.4, -0.95]], 'rear');
+      this.axlePinion = g.subgroup(g.group, [output.x, output.y, 2.1], 'finalDrive');
+      this.axlePinion.rotation.y = -Math.PI / 2;
+      this.axlePinionRotor = g.gear(10, distance / 4.9, 0.15, 'intake', this.axlePinion, [0, 0, 0], 'finalDrive', 0.055);
+      const finalInput = vec(output.x, output.y, 2.1);
+      this.shaft(g, output, finalInput);
+      path([output.toArray(), finalInput.toArray(), [axleX, 0.25, 2.1]], axle ? 'rear' : 'front', 0xffc35a, 2);
       if (both) {
-        this.shaft(g, center.clone().add(vec(1.05, 0, 0)), vec(3.25, 0, -1.02));
-        this.shaft(g, center.clone().add(vec(-1.05, 0, -0.9)), vec(-3.25, 0, 1.02));
-        path([[0.6, 0.8, -0.9], [-2.1, 0.4, 0.95], [-6.2, 0.4, 0.95]], 'front', 0x68c9ed);
+        const branch = vec(axleX, 0.3, 1.35);
+        const other = axle ? 0 : 1;
+        const entry = center.clone().add(vec(axle ? 1.05 : -1.05, 0, 0));
+        const exit = center.clone().add(vec(other ? 1.05 : -1.05, 0, 0));
+        this.shaft(g, branch, entry);
+        path([branch.toArray(), [axle ? 3.2 : -3.2, 0.45, 1.15], entry.toArray()], 'input', 0x68c9ed);
+        this.shaft(g, exit, input[other]);
+        path([exit.toArray(), input[other].toArray(), [other ? 6.2 : -6.2, 0.25, input[other].z]], other ? 'rear' : 'front');
       }
-      path([[position[0], position[1] + 0.18, 0.7], [output.x, output.y + 0.3, 0.7]], 'input');
+    } else {
+      if (both) {
+        const source = center.clone().add(vec((sim.enginePlacement || 'front') === 'front' ? -1.05 : 1.05, 0, 0));
+        this.shaft(g, output, source);
+        path([output.toArray(), source.toArray()], 'input', 0xffc35a, 2);
+        for (let i = 0; i < 2; i++) {
+          const from = center.clone().add(vec(i ? 1.05 : -1.05, 0, !i && sim.driveLayout === 'partTime' ? -0.9 : 0));
+          this.shaft(g, from, input[i]);
+          path([from.toArray(), input[i].toArray(), [i ? 6.2 : -6.2, 0.25, input[i].z]], i ? 'rear' : 'front', i ? 0xffc35a : 0x68c9ed);
+        }
+      } else {
+        const i = drivenAxles[0] ? 0 : 1;
+        this.shaft(g, output, input[i]);
+        path([output.toArray(), input[i].toArray(), [i ? 6.2 : -6.2, 0.25, input[i].z]], i ? 'rear' : 'front');
+      }
     }
-    for (let axle = 0; axle < 2; axle++) for (const side of [-1, 1]) path([[(axle ? 7 : -7), 0.27, side * 0.75], [(axle ? 7 : -7), 0.27, side * 2.75]], axle ? 'rear' : 'front', side < 0 ? 0x68c9ed : 0xf5be4f);
+    for (let i = 0; i < 2; i++) if (drivenAxles[i]) for (const side of [-1, 1]) path([[(i ? 7 : -7), 0.27, side * 0.75], [(i ? 7 : -7), 0.27, side * 2.75]], i ? 'rear' : 'front', side < 0 ? 0x68c9ed : 0xf5be4f, 2);
   }
 
   shaft(g, from, to) {
@@ -163,24 +191,30 @@ export class VehicleModel extends ModelGeometry {
 
   applyVisibility(sim) {
     const section = this.isolate ? this.section : 'all';
-    const { engine, drive, dct, hybrid, systems, turbo, connections, transfer } = this.models;
+    const { engine, drive, dct, automatic, hybrid, systems, turbo, connections, transfer } = this.models;
     engine.group.visible = ['all', 'engine', 'timing', 'oil', 'fuel', 'turbo'].includes(section);
     drive.group.visible = sim.transmission === 'manual' && ['all', 'clutch', 'gearbox'].includes(section);
     drive.clutch.visible = section !== 'gearbox';
     drive.gearbox.visible = section !== 'clutch';
     dct.group.visible = sim.transmission === 'dct' && ['all', 'clutch', 'gearbox', 'mechatronics'].includes(section);
     dct.setSection(section, this.isolate);
+    if (automatic) {
+      automatic.group.visible = sim.transmission === 'automatic' && ['all', 'clutch', 'gearbox', 'mechatronics', 'converter', 'pump', 'turbine', 'converterTurbine', 'stator', 'lockup', 'planetary', 'automaticClutches', 'valveBody', 'automaticOil'].includes(section);
+      automatic.setSection(section, this.isolate);
+    }
     hybrid.group.visible = sim.transmission === 'hybrid' && ['all', 'hybrid', 'psd', 'mg1', 'mg2', 'battery', 'inverter'].includes(section);
     hybrid.setSection(section === 'hybrid' ? 'all' : section, this.isolate);
     hybrid.electrical.visible = hybrid.electrical.visible && (this.layer === 'electric' || this.section !== 'all');
     this.front.group.visible = sim.driveLayout !== 'rwd' && ['all', 'frontAxle', 'finalDrive'].includes(section);
     this.rear.group.visible = sim.driveLayout !== 'fwd' && ['all', 'rearAxle', 'finalDrive'].includes(section);
-    this.front.input.visible = !['fwd', 'rwd'].includes(sim.driveLayout);
-    this.rear.input.visible = sim.driveLayout !== 'fwd';
-    this.front.crown.visible = sim.driveLayout !== 'fwd';
+    this.front.input.visible = sim.driveLayout !== 'rwd' && this.spurAxle !== 0;
+    this.rear.input.visible = sim.driveLayout !== 'fwd' && this.spurAxle !== 1;
+    this.front.crown.visible = this.spurAxle !== 0;
+    this.rear.crown.visible = this.spurAxle !== 1;
     this.front.carrier.visible = sim.driveLayout !== 'rwd';
     this.rear.carrier.visible = sim.driveLayout !== 'fwd';
-    if (this.frontSpur) this.frontSpur.visible = sim.driveLayout === 'fwd';
+    if (this.axleSpur) this.axleSpur.visible = true;
+    this.front.housing.visible = this.rear.housing.visible = false;
     transfer.group.visible = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout) && ['all', 'transfer'].includes(section);
     systems.group.visible = ['all', 'engine', 'timing', 'oil', 'fuel'].includes(section);
     systems.timing.visible = section === 'timing' || this.section === 'engine' || this.detail === 'service' && section === 'all';
@@ -194,10 +228,10 @@ export class VehicleModel extends ModelGeometry {
   }
 
   bounds(section = this.section) {
-    const { engine, drive, dct, hybrid, systems, turbo, transfer } = this.models;
+    const { engine, drive, dct, automatic, hybrid, systems, turbo, transfer } = this.models;
     this.group.updateMatrixWorld(true);
     if (section === 'engine') return new THREE.Box3().setFromObject(engine.group).expandByScalar(0.25);
-    if (['clutch', 'gearbox', 'mechatronics'].includes(section)) return this.sim.transmission === 'dct' ? dct.bounds(section) : drive.bounds(section);
+    if (['clutch', 'gearbox', 'mechatronics', 'converter', 'pump', 'turbine', 'converterTurbine', 'stator', 'lockup', 'planetary', 'automaticClutches', 'valveBody', 'automaticOil'].includes(section)) return this.sim.transmission === 'automatic' && automatic ? automatic.bounds(section) : this.sim.transmission === 'dct' ? dct.bounds(section) : drive.bounds(section);
     if (['hybrid', 'psd', 'mg1', 'mg2', 'battery', 'inverter'].includes(section)) return hybrid.bounds(section === 'hybrid' ? 'psd' : section);
     if (['frontAxle', 'rearAxle', 'finalDrive'].includes(section)) {
       const front = section === 'frontAxle' || section === 'finalDrive' && this.sim.driveLayout === 'fwd';
@@ -214,7 +248,6 @@ export class VehicleModel extends ModelGeometry {
     if (!sim.paused) this.clock += dt;
     this.front.update(sim, cutaway, dt, 0);
     this.rear.update(sim, cutaway, dt, 1);
-    this.front.crown.visible = sim.driveLayout !== 'fwd';
     this.front.wheels.forEach(wheel => { wheel.visible = false; });
     this.rear.wheels.forEach(wheel => { wheel.visible = false; });
     this.wheels.forEach(({ wheel, steering, surface, axle, side }, i) => {
@@ -223,9 +256,12 @@ export class VehicleModel extends ModelGeometry {
       surface.material.color.setHex({ asphalt: 0x394548, wet: 0x375d78, ice: 0x9fcbd6, air: 0x18232b }[sim.surfaces[i]]);
       surface.visible = sim.surfaces[i] !== 'air' && steering.visible;
     });
-    if (this.frontPinion) this.frontPinionRotor.rotation.x = sim.transmission === 'hybrid' ? sim.hybrid.mg2Angle : sim.outputAngle;
+    if (this.axlePinion) this.axlePinionRotor.rotation.x = sim.transmission === 'hybrid' ? sim.hybrid.mg2Angle : sim.outputAngle;
     const flow = this.layer === 'mechanical' && this.models.drive.showFlow;
     this.paths.forEach(({ path, key }) => updateFlow(path, key === 'input' ? sim.transmittedTorque : sim.traction.axleTorques[key === 'front' ? 0 : 1], this.clock, flow));
+    // An overview shows the external drive path; the internal manual overlay
+    // appears when inspecting the clutch or gearbox, where it remains legible.
+    this.models.drive.flow.visible &&= flow && ['clutch', 'gearbox'].includes(this.section);
     this.applyVisibility(sim);
     const level = this.detail === 'auto' ? camera.position.distanceTo(camera.userData.target || vec()) > 18 && this.section === 'all' ? 'overview' : 'mechanics' : this.detail;
     const threshold = level === 'overview' ? 0.16 : level === 'mechanics' ? 0.07 : 0;
@@ -249,5 +285,5 @@ export class VehicleModel extends ModelGeometry {
     this.lodLevel = null;
   }
 
-  dispose() { this.frontSpur?.removeFromParent(); this.front.dispose(); this.rear.dispose(); this.routing.dispose(); super.dispose(); }
+  dispose() { this.axleSpur?.removeFromParent(); this.front.dispose(); this.rear.dispose(); this.routing.dispose(); super.dispose(); }
 }
