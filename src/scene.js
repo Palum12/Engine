@@ -8,6 +8,7 @@ import { ModelGeometry, vec } from './models/geometry.js';
 import { SystemsModel } from './models/systems-model.js';
 import { FinalDriveModel } from './models/final-drive-model.js';
 import { DctModel } from './models/dct-model.js';
+import { AutomaticModel } from './models/automatic-model.js';
 import { HybridModel } from './models/hybrid-model.js';
 import { TransferModel } from './models/transfer-model.js';
 import { VehicleModel } from './models/vehicle-model.js';
@@ -75,12 +76,13 @@ export class EngineScene {
     this.turbo = new TurboModel(this.materials);
     this.finalDrive = new FinalDriveModel(this.materials);
     this.dct = new DctModel(this.materials);
+    this.automatic = new AutomaticModel(this.materials);
     this.hybrid = new HybridModel(this.materials);
     this.transfer = new TransferModel(this.materials);
     this.systems = new SystemsModel(this.materials, this.engine);
-    this.root.add(this.engine.group, this.drive.group, this.turbo.group, this.finalDrive.group, this.systems.group, this.dct.group, this.hybrid.group, this.transfer.group);
+    this.root.add(this.engine.group, this.drive.group, this.turbo.group, this.finalDrive.group, this.systems.group, this.dct.group, this.automatic.group, this.hybrid.group, this.transfer.group);
     this.buildConnections();
-    this.vehicle = new VehicleModel(this.materials, { engine: this.engine, drive: this.drive, dct: this.dct, hybrid: this.hybrid, transfer: this.transfer, systems: this.systems, turbo: this.turbo, connections: this.connections });
+    this.vehicle = new VehicleModel(this.materials, { engine: this.engine, drive: this.drive, dct: this.dct, automatic: this.automatic, hybrid: this.hybrid, transfer: this.transfer, systems: this.systems, turbo: this.turbo, connections: this.connections });
     this.root.add(this.vehicle.group);
     this.vehicle.group.visible = false;
     this.leaders = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -144,6 +146,7 @@ export class EngineScene {
       ...this.systems.anchors.map(data => Object.assign(data, { assembly: data.views.includes('timing') ? 'timing' : data.views.includes('oil') ? 'oil' : 'fuel' })),
       ...this.finalDrive.anchors.map(data => Object.assign(data, { assembly: 'finalDrive' })),
       ...this.dct.anchors.map(data => Object.assign(data, { assembly: ['k1', 'k2'].includes(data.part) ? 'clutch' : data.part === 'mechatronics' ? 'mechatronics' : 'gearbox' })),
+      ...this.automatic.anchors.map(data => Object.assign(data, { assembly: ['converter', 'pump', 'converterTurbine', 'stator', 'lockup'].includes(data.part) ? 'converter' : 'gearbox' })),
       ...this.hybrid.anchors.map(data => Object.assign(data, { assembly: data.part })),
       ...this.transfer.anchors.map(data => Object.assign(data, { assembly: 'transfer' })),
       ...this.vehicle.anchors.map(data => Object.assign(data, { assembly: 'vehicle' }))
@@ -190,6 +193,8 @@ export class EngineScene {
     this.container.dataset.cylinders = this.engine.config.cylinders;
     this.container.dataset.transmission = this.sim.transmission;
     this.container.dataset.drive = this.sim.driveLayout;
+    this.container.dataset.engineOrientation = this.sim.engineOrientation;
+    this.container.dataset.enginePlacement = this.sim.enginePlacement;
     const whole = ['drive', 'drive-detail'].includes(mode);
     if (whole) {
       this.vehicle.restoreDetail();
@@ -212,6 +217,9 @@ export class EngineScene {
     }
     this.dct.group.visible = this.sim.transmission === 'dct' && ['clutch', 'gearbox'].includes(mode);
     this.dct.setSection(mode === 'clutch' ? 'clutch' : this.inspection === 'all' ? 'all' : this.inspection, mode === 'clutch' || this.isolate);
+    this.automatic.group.visible = this.sim.transmission === 'automatic' && ['clutch', 'gearbox'].includes(mode);
+    this.automatic.group.position.set(0, 0.8, 0);
+    this.automatic.setSection(mode === 'clutch' ? this.inspection === 'all' ? 'converter' : this.inspection : this.inspection, mode === 'clutch' || this.isolate);
     this.hybrid.group.visible = mode === 'hybrid';
     this.hybrid.group.position.set(0, 1, 0);
     this.hybrid.setLayout(false);
@@ -281,6 +289,7 @@ export class EngineScene {
     else if (mode === 'hybrid') bounds = this.hybrid.bounds(section);
     else if (mode === 'transfer') bounds = this.transfer.bounds();
     else if (this.sim.transmission === 'dct' && ['clutch', 'gearbox'].includes(mode)) bounds = this.dct.bounds(mode === 'clutch' ? 'clutch' : section);
+    else if (this.sim.transmission === 'automatic' && ['clutch', 'gearbox'].includes(mode)) bounds = this.automatic.bounds(mode === 'clutch' && section === 'all' ? 'converter' : section);
     else if (['timing','oil','fuel'].includes(mode)) {
       bounds = mode === 'fuel' && ['carburetor','highPressurePump'].includes(section) ? new THREE.Box3().setFromObject(section === 'carburetor' ? this.systems.carb : this.systems.highPump).expandByScalar(0.4) : this.systems.bounds(mode);
       if (!this.isolate && !['carburetor','highPressurePump'].includes(section)) bounds.union(this.engine.bounds('engine', 0));
@@ -304,9 +313,9 @@ export class EngineScene {
       if (mode === 'engine') bounds.union(this.systems.bounds('timing'));
     }
     const directions = {
-      timing: vec(['vr6','w16'].includes(this.engine.id) ? 1.8 : -1.8, this.engine.id === 'boxer4' ? 0.8 : 0.25, 0.8), oil: vec(0.5,0.45,1.7), fuel: vec(-0.55,0.4,1.7), differential: vec(0.9,0.55,1.7),
-      engine: this.engine.id === 'boxer4' ? vec(0.8, 1.8, 0.9) : this.engine.config.bankAngle ? vec(0.75, 0.75, 1.3) : vec(0.65, 0.36, 1.5),
-      cylinder: vec(0.6, 0.15, this.engine.id === 'boxer4' && this.engine.cylinders[this.selectedCylinder].layout.bankRadians > 0 ? -1.7 : 1.7).applyAxisAngle(vec(1,0,0), this.engine.cylinders[this.selectedCylinder].layout.bankRadians),
+      timing: vec(['vr6','w16'].includes(this.engine.id) ? 1.8 : -1.8, this.engine.config.bankAngle === 180 ? 0.8 : 0.25, 0.8), oil: vec(0.5,0.45,1.7), fuel: vec(-0.55,0.4,1.7), differential: vec(0.9,0.55,1.7),
+      engine: this.engine.config.bankAngle === 180 ? vec(0.8, 1.8, 0.9) : this.engine.config.bankAngle ? vec(0.75, 0.75, 1.3) : vec(0.65, 0.36, 1.5),
+      cylinder: vec(0.6, 0.15, this.engine.config.bankAngle === 180 && this.engine.cylinders[this.selectedCylinder].layout.bankRadians > 0 ? -1.7 : 1.7).applyAxisAngle(vec(1,0,0), this.engine.cylinders[this.selectedCylinder].layout.bankRadians),
       'drive-detail': vec(0.35, 1, 1.5), drive: vec(0.35, 1, 1.5), frontAxle: vec(0.7, 0.55, 1.5), rearAxle: vec(0.7, 0.55, 1.5), finalDrive: vec(1.25, 0.75, 1.5),
       hybrid: vec(0.75, 0.55, 1.7), psd: vec(1.3, 0.35, 1.5), mg1: vec(1.3, 0.45, 1.6), mg2: vec(1.3, 0.45, 1.6), battery: vec(0.4, 1.3, 1.1), inverter: vec(0.6, 1.2, 1.4), transfer: vec(1.1, 0.55, 1.5),
       clutch: vec(1.2, 0.45, 1.5), gearbox: vec(0.6, 0.46, 1.8), turbo: vec(0.8, 0.42, 1.7)
@@ -383,6 +392,7 @@ export class EngineScene {
     this.drive.update(sim, this.cutaway);
     this.turbo.update(sim, dt, this.cutaway);
     this.dct.update(sim, this.cutaway, dt);
+    this.automatic.update(sim, this.cutaway, dt);
     this.hybrid.update(sim, this.cutaway, dt);
     this.transfer.update(sim, this.cutaway);
     this.positionDetailedDrive();
@@ -408,13 +418,14 @@ export class EngineScene {
       const parentVisible = object => !object || object.visible && parentVisible(object.parent);
       const whole = ['drive', 'drive-detail'].includes(this.mode);
       const overview = data.assembly === 'vehicle' || ['battery', 'transfer'].includes(data.assembly);
-      const detailLabel = !whole || (this.inspection === 'all' ? overview : data.assembly === this.inspection || this.inspection === 'engine' && data.assembly === 'engine' || ['frontAxle', 'rearAxle', 'finalDrive'].includes(this.inspection) && data.assembly === 'vehicle');
+      const detailLabel = !whole || (this.inspection === 'all' ? overview : data.assembly === this.inspection || data.part === this.inspection || this.inspection === 'engine' && data.assembly === 'engine' || ['frontAxle', 'rearAxle', 'finalDrive'].includes(this.inspection) && data.assembly === 'vehicle');
       const turboLabel = this.mode !== 'turbo' || this.inspection === 'all' || data.part === this.inspection || this.inspection === 'turboBearing' && ['turboOil', 'turboShaft'].includes(data.part) || this.inspection === 'turbine' && data.part === 'exhaust' || this.inspection === 'intercooler' && data.part === 'throttleBody';
       const gearLabel = this.mode !== 'gearbox' || !this.inspection.startsWith('gear') || data.part !== 'gearPair' || data.anchor.userData.gear === Number(this.inspection.slice(4));
       const fuelLabel = this.mode !== 'fuel' || !['carburetor','highPressurePump'].includes(this.inspection) || data.part === this.inspection;
       const diffLabel = this.mode !== 'differential' || this.inspection !== 'core' || ['differential','finalDrive'].includes(data.part);
+      const automaticLabel = this.sim.transmission !== 'automatic' || !this.isolate || !['planetary', 'automaticClutches', 'valveBody'].includes(this.inspection) || data.part === this.inspection;
       const labelLimit = whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
-      const show = occupied.length < labelLimit && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
+      const show = occupied.length < labelLimit && automaticLabel && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
       element.hidden = !show;
       line.style.display = show ? '' : 'none';
       if (!show) return;
@@ -456,6 +467,7 @@ export class EngineScene {
     this.turbo.dispose();
     this.finalDrive.dispose();
     this.dct.dispose();
+    this.automatic.dispose();
     this.hybrid.dispose();
     this.transfer.dispose();
     this.vehicle.dispose();

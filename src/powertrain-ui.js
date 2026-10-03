@@ -4,8 +4,11 @@ export const POWERTRAIN_CONTROLS = `
   <div class="powertrain-config">
     <label>Zespół napędowy / skrzynia<select id="transmission-type">${Object.entries(TRANSMISSIONS).map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('')}</select></label>
     <label>Napęd kół<select id="drive-layout">${Object.entries(DRIVE_LAYOUTS).map(([id, d]) => `<option value="${id}">${d.name}</option>`).join('')}</select></label>
+    <label>Orientacja silnika<select id="engine-orientation"><option value="longitudinal">Wzdłużnie</option><option value="transverse">Poprzecznie</option></select></label>
+    <label>Położenie silnika<select id="engine-placement"><option value="front">Z przodu</option><option value="mid">Centralnie · przed tylną osią</option><option value="rear">Z tyłu · za tylną osią</option></select></label>
     <p id="powertrain-note" class="control-hint"></p>
     <label id="dct-auto-option" hidden><input id="dct-auto" type="checkbox">Automatyczne zmiany biegów</label>
+    <label id="automatic-auto-option" hidden><input id="automatic-auto" type="checkbox" checked>Automatyczne zmiany · 8AT</label>
     <label id="transfer-mode-option" hidden>Tryb 4WD<select id="transfer-mode"><option>2H</option><option>4H</option><option>4L</option></select></label>
   </div>
   <div class="hybrid-controls" id="hybrid-controls" hidden>
@@ -64,6 +67,15 @@ export const SCENARIO_TOOLS = `
 `;
 
 export const POWERTRAIN_PARTS = {
+  automatic: ['Automat hydrokinetyczny · 8 biegów', 'Pompa konwertera jest połączona z silnikiem, turbina napędza przekładnię, a kierownica zmienia kierunek powrotu oleju. Przy ruszaniu możliwe jest zwiększenie momentu. Blokada lock-up ogranicza poślizg podczas jazdy. Sprzęgła i hamulce wybierają przełożenia planetarne. To schemat dydaktyczny inspirowany Aisin 8AT; geometria, przełożenia i układ sprzęgieł są umowne.'],
+  converter: ['Konwerter hydrokinetyczny', 'Olej przekazuje energię między pompą a turbiną. Na postoju pompa może obracać się przy zatrzymanej turbinie, dlatego nie trzeba wciskać pedału sprzęgła. Po włączeniu biegu auto może pełzać; zatrzymuje je hamulec.'],
+  pump: ['Pompa konwertera · wejście', 'Silnik obraca pompę. Jej łopatki rozpędzają olej, który trafia do turbiny. To inny element niż pompa hydrauliczna zasilająca sterowanie skrzyni.'],
+  converterTurbine: ['Turbina konwertera', 'Odbiera energię z oleju i przekazuje moment na wejście przekładni planetarnej. Różnica prędkości pompy i turbiny stanowi poślizg konwertera.'],
+  stator: ['Kierownica i sprzęgło jednokierunkowe', 'Przy dużym poślizgu kierownica jest podparta sprzęgłem jednokierunkowym i kieruje olej z powrotem na pompę, zwiększając moment na turbinie. Gdy prędkości się zbliżają, może swobodnie się obracać.'],
+  lockup: ['Blokada lock-up', 'Sprzęgło cierne spina pompę z turbiną i ogranicza straty poślizgu. Sterownik zwalnia blokadę przy ruszaniu i zmianie przełożenia. Stopień docisku oraz straty pokazuje odczyt przy modelu.'],
+  planetary: ['Przekładnie planetarne · osiem przełożeń', 'Słońce, satelity, jarzmo i wieniec pozostają zazębione. Sprzęgła i hamulce zmieniają połączenia oraz zatrzymują wybrane człony. Cztery moduły modelu dają osiem przełożeń dydaktycznych; ich połączenie nie odwzorowuje fabrycznej topologii Aisin.'],
+  automaticClutches: ['Sprzęgła i hamulce automatu', 'Hydrauliczny docisk pakietów wybiera drogę momentu przez przekładnie planetarne. Podczas zmiany sterownik reguluje ich docisk. Kierowca nie obsługuje pedału sprzęgła.'],
+  valveBody: ['Sterowanie hydrauliczne automatu', 'Sterownik i elektrozawory kierują olej do pakietów sprzęgieł, hamulców i blokady konwertera. Model pokazuje zasadę sterowania; nie oblicza temperatury ani ciśnienia oleju.'],
   vehicle: ['Przekrój pojazdu', 'Obrys pomaga rozróżnić przód, tył i położenie podzespołów. Warstwy oddzielają mechanikę, przepływy płynów i energię elektryczną. Rozmiary, przebieg przewodów i obudowy są dydaktyczne.'],
   driveDetail: ['Cały zespół napędowy', 'Wszystkie mechanizmy korzystają z tego samego stanu symulacji. Przejdź od silnika do wybranej skrzyni, rozdziału napędu i czterech kół. Wybierz część, aby ją przybliżyć, albo uruchom doświadczenie. Obroty, moment i moc są różnymi wielkościami.'],
   dct: ['DCT · dwie drogi napędu', 'K1 obsługuje biegi 1, 3 i 5, K2 biegi 2, 4 i 6. Wały wejściowe są współosiowe, ale obracają się niezależnie. Dwa wały wyjściowe prowadzą do wspólnego wyjścia. Synchronizatory wybierają bieg, a sprzęgła decydują o połączeniu z silnikiem. Schemat inspirowany mokrą DSG 02E, z umownymi przełożeniami i osobną przesuwką na bieg; nie jest repliką fabrycznej skrzyni.'],
@@ -91,5 +103,5 @@ export const POWERTRAIN_PARTS = {
   frontAxle: ['Przednia oś', 'W RWD przednie koła toczą się bez momentu napędowego. W FWD/AWD moment dociera do mechanizmu różnicowego i półosi. Podczas skrętu geometria toru zmienia wymagane prędkości kół.'],
   rearAxle: ['Tylna oś', 'W RWD tylna oś odbiera cały napęd. W AWD współpracuje z przednią osią poprzez mechanizm centralny lub sztywne połączenie. Otwarty dyferencjał pozwala półosiom mieć różne obroty; blokada sprzęga ich prędkości.'],
   differential: ['Otwarty mechanizm różnicowy', 'Koło talerzowe obraca kosz z satelitami. Satelity współpracują z kołami bocznymi połączonymi z półosiami. Średnia obrotów półosi równa się obrotom kosza. W quasi-statycznym modelu otwarty mechanizm ma równy moment na obu wyjściach, ograniczony przyczepnością słabszego koła. Blokada zmienia więzy prędkości i pozwala silniejszej stronie przenieść więcej momentu. Wybierz pokaz stołowy do nauki ruchu albo doświadczenie z lodem do porównania przyczepności.'],
-  finalDrive: ['Przekładnia główna · 3,9:1', 'Przekładnia zmniejsza obroty i zwiększa moment przed mechanizmem różnicowym. W układzie wzdłużnym pokazano parę stożkową 10/39 zębów ze wspólnym wierzchołkiem stożków, zamiast prostopadle ustawionych kół walcowych. W FWD pokazano koła walcowe o równoległych osiach. Profile są schematyczne i nie odwzorowują fabrycznej przekładni hipoidalnej.']
+  finalDrive: ['Przekładnia główna · 3,9:1', 'Przekładnia zmniejsza obroty i zwiększa moment przed mechanizmem różnicowym. W układzie wzdłużnym pokazano parę stożkową 10/39 zębów ze wspólnym wierzchołkiem stożków. Przy silniku poprzecznym pokazano koła walcowe o równoległych osiach. FWD może mieć obie orientacje silnika. Profile są schematyczne i nie odwzorowują fabrycznej przekładni hipoidalnej.']
 };

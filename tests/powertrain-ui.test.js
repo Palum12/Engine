@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Window } from 'happy-dom';
 
-test('the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios', async t => {
+for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios (${lineEnding})`, async t => {
   const window = new Window({ url: 'http://localhost/Engine/' });
   const saved = new Map();
   for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame']) {
@@ -18,7 +18,8 @@ test('the actual application UI switches transmissions, retains four strokes and
   console.error = () => {};
   try {
     const source = (await readFile(new URL('../src/main.js', import.meta.url), 'utf8'))
-      .replace(/^import ['"].*\.css['"];\n/gm, '')
+      .replace(/\r?\n/g, newline)
+      .replace(/^import ['"].*\.css['"];\r?\n/gm, '')
       .replace(/from '(\.\/[^']+)'/g, (_, path) => `from '${new URL(path, new URL('../src/main.js', import.meta.url)).href}'`);
     app = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { sim, player, updateUI, toastTimer };').toString('base64')}`);
     console.error = originalError;
@@ -26,10 +27,10 @@ test('the actual application UI switches transmissions, retains four strokes and
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
     const input = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('input', { bubbles: true })); };
     const run = seconds => { app.sim.paused = false; for (let time = 0; time < seconds; time += 0.02) app.sim.update(0.02); app.updateUI(); };
-    await t.test('default whole vehicle, all seven engines and manual clutch toggle remain available', () => {
+    await t.test('default whole vehicle, all nine engines and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
-      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 7);
+      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 9);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 1);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 0);
     });
@@ -68,6 +69,38 @@ test('the actual application UI switches transmissions, retains four strokes and
       assert.ok(app.sim.hybrid.batteryPower > 0);
       assert.equal($('#energy-battery').dataset.direction, 'forward');
       select('#hybrid-range', 'P'); assert.equal(app.sim.hybrid.range, 'D');
+    });
+    await t.test('8AT hides the clutch, exposes eight gears and converter inspections', () => {
+      $('.view-tab[data-view="hybrid"]').click();
+      select('#transmission-type', 'automatic');
+      assert.equal(app.sim.transmission, 'automatic', 'changing transmission leaves the hybrid-only view');
+      select('#car-preset', '508-eat8-2018');
+      assert.equal(app.sim.transmission, 'automatic');
+      assert.equal(app.sim.engineOrientation, 'transverse');
+      assert.equal(app.sim.driveLayout, 'fwd');
+      assert.equal($('#quick-gear').options.length, 9);
+      assert.equal($('#clutch-control').hidden, true);
+      assert.equal($('#automatic-auto-option').hidden, false);
+      $('.view-tab[data-view="clutch"]').click();
+      assert.match($('.view-tab[data-view="clutch"]').textContent, /Konwerter/);
+      assert.ok([...$('#inspect-section').options].some(option => option.value === 'stator'));
+      $('#automatic-auto').checked = false;
+      $('#automatic-auto').dispatchEvent(new window.Event('change', { bubbles: true }));
+      $('[data-gear="8"]').click(); run(1.3);
+      assert.equal(app.sim.gear, 8);
+      assert.match($('#automatic-state').textContent, /Bieg 8/);
+    });
+    await t.test('911 and Corolla presets keep their real architecture and custom changes clear the preset', () => {
+      select('#car-preset', '911-carrera-s-2025');
+      assert.equal(app.sim.engineId, 'boxer6');
+      assert.equal(app.sim.enginePlacement, 'rear');
+      assert.equal($('#car-preset').value, '911-carrera-s-2025');
+      select('#engine-placement', 'mid');
+      assert.equal($('#car-preset').value, '');
+      select('#car-preset', 'corolla-hybrid-2025');
+      assert.equal(app.sim.transmission, 'hybrid');
+      assert.equal(app.sim.engineOrientation, 'transverse');
+      assert.equal(app.sim.engineId, 'r4');
     });
     await t.test('regeneration reverses the battery arrow and its guided scenario reaches the full-battery step', () => {
       select('#scenario-select', 'regen'); $('#scenario-start').click();

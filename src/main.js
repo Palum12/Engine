@@ -23,6 +23,8 @@ import { POWERTRAIN_CONTROLS, VEHICLE_TOOLS, SCENARIO_TOOLS, POWERTRAIN_PARTS } 
 import { ScenarioPlayer, SCENARIOS } from './scenarios.js';
 import { EngineScene } from './scene.js';
 import { ENGINES, getEngine } from './engines.js';
+import { CAR_PRESETS, getCarPreset } from './car-presets.js';
+import { applyCarPreset } from './car-configuration.js';
 import { Simulation, STROKES, GEAR_RATIOS, cycleDegrees, strokeIndex } from './simulation.js';
 
 const icons = {
@@ -51,6 +53,7 @@ let selectedPart = null;
 let toastTimer;
 let disposed = false;
 let readoutMuted = window.matchMedia('(max-width:600px)').matches;
+let selectedPresetId = '';
 
 const PARTS = {
   timing: ['Rozrząd: pasek lub łańcuch', 'Wał korbowy napędza wałki rozrządu. Koło wałka ma dwa razy więcej zębów, dlatego zawory wykonują jeden cykl na dwa obroty wału. Pasek ma zęby; łańcuch współpracuje z kołami łańcuchowymi i wymaga smarowania. Przełącznik zmienia ilustrację napędu, nie osiągi silnika. Trasa, napinacz i krzywki są schematyczne.'],
@@ -121,6 +124,10 @@ app.innerHTML = `
   </header>
   <main>
     <div class="page-heading"><div><div class="eyebrow">OD SPALANIA DO RUCHU</div><h1>Silnik benzynowy<span class="title-dot">.</span></h1></div><div class="engine-picker"><div class="engine-buttons" role="group" aria-label="Układ cylindrów">${Object.values(ENGINES).map(engine => `<button data-engine="${engine.id}" class="${engine.id === 'r4' ? 'active' : ''}" aria-pressed="${engine.id === 'r4'}">${engine.name}</button>`).join('')}</div><div class="model-spec"><span id="engine-displacement">2.0 l</span><span id="engine-bank-angle">Rzędowy</span></div></div></div>
+    <section class="car-presets" aria-label="Presety samochodów">
+      <label>Samochód<select id="car-preset"><option value="">Własna konfiguracja</option>${CAR_PRESETS.map(car => `<option value="${car.id}">${car.name} · ${car.year} · ${car.variant}</option>`).join('')}</select></label>
+      <div><strong id="car-preset-summary">Zbuduj własny napęd lub wybierz znany samochód.</strong><p id="car-preset-note">Presety ustawiają architekturę napędu. Parametry i mechanizmy symulacji są dydaktyczne.</p></div>
+    </section>
     <div class="workspace">
       <section class="visual-panel" aria-label="Model i cykl silnika">
         <div class="view-toolbar"><div class="view-tabs" role="group" aria-label="Widok modelu">
@@ -185,6 +192,7 @@ document.querySelector('#quick-clutch').closest('label').id = 'quick-clutch-cont
 document.querySelector('#clutch').closest('.pedal-control').id = 'clutch-control';
 document.querySelector('#quick-gear').closest('label').insertAdjacentHTML('beforebegin', '<button id="quick-brake" class="secondary-button" aria-pressed="false" hidden>Hamulec</button>');
 document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="dct-lesson" hidden><span id="dct-k1"></span><span id="dct-k2"></span><strong id="dct-state"></strong><button id="dct-shift-step" class="secondary-button">Następny etap</button></div>');
+document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="automatic-lesson" hidden><span id="automatic-slip"></span><span id="automatic-lockup"></span><strong id="automatic-state"></strong></div>');
 document.querySelector('#diff-lesson').insertAdjacentHTML('beforeend', '<label>Rozłóż mechanizm<input id="diff-explode" type="range" min="0" max="100" value="0" aria-label="Rozłożenie mechanizmu różnicowego"></label>');
 
 const $ = selector => document.querySelector(selector);
@@ -211,7 +219,7 @@ function choosePart(part, cylinder) {
   $('#part-panel').hidden = false;
 }
 function changeView(value) {
-  if (value === 'hybrid' && sim.transmission !== 'hybrid') { player.stop(); sim.setTransmission('hybrid'); updatePowertrainConfiguration(); updateConfiguration(); }
+  if (value === 'hybrid' && sim.transmission !== 'hybrid') { player.stop(); sim.setTransmission('hybrid'); updateEngineUI(); updatePowertrainConfiguration(); updateConfiguration(); }
   if (value === 'transfer' && !['awd', 'quattro', 'partTime'].includes(sim.driveLayout)) { sim.setDriveLayout('partTime'); updatePowertrainConfiguration(); }
   if (sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(value)) value = 'hybrid';
   mode = value;
@@ -221,7 +229,7 @@ function changeView(value) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
-  $('#view-caption').textContent = { engine: `Przekrój ${getEngine(sim.engineId).name} · ${getEngine(sim.engineId).cylinders} cylindrów`, cylinder: 'Komora spalania, zawory i wtryskiwacz', drive: 'Cały pojazd · od silnika do czterech kół', 'drive-detail': 'Cały pojazd · wybierz mechanizm i zbliżenie', clutch: sim.transmission === 'dct' ? 'Mokre pakiety K1 / K2 · sterowanie dociskiem' : 'Tarcza, docisk i mechanizm wysprzęglania', gearbox: sim.transmission === 'dct' ? 'DCT · bieg aktywny i przygotowany' : 'Stałe zazębienie i wybór przełożenia', turbo: 'Energia spalin napędza sprężarkę', differential: 'Dwa koła · różne prędkości · wspólny kosz', timing: 'Dwa obroty wału na jeden obrót wałka', oil: 'Obieg smarowania · kierunki przepływu', fuel: 'Droga paliwa i przygotowanie mieszanki', hybrid: 'e-CVT · mechanika, bateria i prąd', transfer: 'Przednia / tylna oś · reduktor lub dyferencjał' }[value];
+  $('#view-caption').textContent = { engine: `Przekrój ${getEngine(sim.engineId).name} · ${getEngine(sim.engineId).cylinders} cylindrów`, cylinder: 'Komora spalania, zawory i wtryskiwacz', drive: 'Cały pojazd · od silnika do czterech kół', 'drive-detail': 'Cały pojazd · wybierz mechanizm i zbliżenie', clutch: sim.transmission === 'automatic' ? 'Konwerter · pompa, turbina, kierownica i lock-up' : sim.transmission === 'dct' ? 'Mokre pakiety K1 / K2 · sterowanie dociskiem' : 'Tarcza, docisk i mechanizm wysprzęglania', gearbox: sim.transmission === 'automatic' ? 'Automat hydrokinetyczny · osiem przełożeń planetarnych' : sim.transmission === 'dct' ? 'DCT · bieg aktywny i przygotowany' : 'Stałe zazębienie i wybór przełożenia', turbo: 'Energia spalin napędza sprężarkę', differential: 'Dwa koła · różne prędkości · wspólny kosz', timing: 'Dwa obroty wału na jeden obrót wałka', oil: 'Obieg smarowania · kierunki przepływu', fuel: 'Droga paliwa i przygotowanie mieszanki', hybrid: 'e-CVT · mechanika, bateria i prąd', transfer: 'Przednia / tylna oś · reduktor lub dyferencjał' }[value];
   const whole = ['drive', 'drive-detail'].includes(value);
   $('.visual-panel').classList.toggle('vehicle-mode', whole);
   $('#vehicle-tools').hidden = !whole;
@@ -236,7 +244,7 @@ function changeView(value) {
   if (value === 'oil') $('.scene-legend').innerHTML = '<span><i style="--dot:#70edb1"></i>Olej pod ciśnieniem</span><span><i style="--dot:#319b74"></i>Spływ oleju</span>';
   if (value === 'differential') $('.scene-legend').innerHTML = '<span><i style="--dot:#69d5ff"></i>Lewe koło</span><span><i style="--dot:#f7ba55"></i>Prawe koło</span><span><i style="--dot:#e68565"></i>Satelity</span>';
   if (whole || value === 'hybrid') updateVehicleLegend();
-  $('#explode-control').hidden = value !== 'clutch';
+  $('#explode-control').hidden = value !== 'clutch' || sim.transmission === 'automatic';
   $('#next-stroke').hidden = false;
   $('#part-panel').hidden = true;
   selectedPart = null;
@@ -271,7 +279,7 @@ function inspectSection() {
   updateLessons();
 }
 function updateReadouts() {
-  const relevant = ['clutch', 'gearbox', 'turbo'].includes(mode) || ['drive', 'drive-detail'].includes(mode) && ['clutch','gearbox','turbo'].includes(scene?.inspection);
+  const relevant = ['clutch', 'gearbox', 'turbo'].includes(mode) || ['drive', 'drive-detail'].includes(mode) && ['clutch','converter','gearbox','planetary','automaticClutches','valveBody','turbo'].includes(scene?.inspection);
   const turbo = mode === 'turbo' || mode === 'drive-detail' && scene?.inspection === 'turbo';
   const visible = relevant && $('#labels').checked && !readoutMuted;
   $('#mechanism-readout').hidden = !visible || turbo;
@@ -286,6 +294,7 @@ function updateLessons() {
   $('#clutch-lesson').hidden = view !== 'clutch' || sim.transmission !== 'manual';
   $('#gear-lesson').hidden = view !== 'gearbox' || sim.transmission !== 'manual';
   $('#dct-lesson').hidden = sim.transmission !== 'dct' || !['clutch', 'gearbox'].includes(view);
+  $('#automatic-lesson').hidden = sim.transmission !== 'automatic' || !['clutch', 'converter', 'gearbox', 'planetary', 'automaticClutches', 'valveBody', 'pump', 'turbine', 'stator', 'lockup'].includes(view);
   $('#diff-lesson').hidden = !['differential','finalDrive','frontAxle','rearAxle'].includes(view);
   $('#diff-demo').hidden = view !== 'differential';
 }
@@ -386,6 +395,7 @@ $('#quick-gear').addEventListener('change', event => { player.stop(); if (sim.tr
 $('#clutch-toggle').addEventListener('click', () => setPedal('clutch', sim.clutch >= 0.85 ? 0 : 1));
 $$('[data-gear]').forEach(button => button.addEventListener('click', () => shift(Number(button.dataset.gear))));
 $$('[data-injection]').forEach(button => button.addEventListener('click', () => {
+  player.stop();
   sim.injection = button.dataset.injection;
   updateConfiguration();
   if (mode === 'fuel' && ['carburetor','highPressurePump'].includes(scene?.inspection)) {
@@ -404,8 +414,9 @@ function updateConfiguration() {
   $('#turbo').checked = sim.turbo;
   $('#turbo-label').textContent = sim.turbo ? 'Turbosprężarka aktywna' : 'Silnik wolnossący';
   $('#boost-row').hidden = !sim.turbo;
+  updatePresetUI();
 }
-$('#timing-type').addEventListener('change', event => { sim.timing = event.target.value; updateTimingNote(); });
+$('#timing-type').addEventListener('change', event => { player.stop(); sim.timing = event.target.value; updateTimingNote(); updatePresetUI(); });
 $('#assemble-clutch').addEventListener('click', () => {
   if (scene) { scene.drive.exploded = 0; scene.setView(mode); }
   $('#explode').value = 0;
@@ -428,6 +439,7 @@ $('#diff-demo').addEventListener('click', () => {
 $$('[data-turn]').forEach(button => button.addEventListener('click', () => { sim.turn = Number(button.dataset.turn); updateUI(); }));
 $('#diff-open').addEventListener('change', event => { if (scene) [scene.finalDrive, scene.vehicle.front, scene.vehicle.rear].forEach(diff => { diff.openCarrier = event.target.checked; }); });
 $('#turbo').addEventListener('change', event => {
+  player.stop();
   sim.turbo = event.target.checked;
   updateConfiguration();
   if (sim.turbo) toast('Turbo włączone. Dodaj gazu: doładowanie wzrośnie wraz z obrotami.');
@@ -437,11 +449,11 @@ window.matchMedia('(max-width:600px)').addEventListener('change', event => { if 
 $('#labels').addEventListener('change', event => { if (scene) scene.labels = event.target.checked; updateReadouts(); });
 $$('.close-readout').forEach(button => button.addEventListener('click', () => { readoutMuted = true; updateReadouts(); }));
 $('#show-readout').addEventListener('click', () => { readoutMuted = false; $('#labels').checked = true; if (scene) scene.labels = true; updateReadouts(); });
-$('#flow').addEventListener('change', event => { if (scene) { [scene.drive, scene.turbo, scene.systems, scene.dct, scene.hybrid].forEach(model => { model.showFlow = event.target.checked; }); } });
+$('#flow').addEventListener('change', event => { if (scene) { [scene.drive, scene.turbo, scene.systems, scene.dct, scene.automatic, scene.hybrid].forEach(model => { model.showFlow = event.target.checked; }); } });
 $('#inspect-section').addEventListener('change', inspectSection);
 $('#isolate').addEventListener('change', inspectSection);
 $('#inspect-description').addEventListener('click', () => choosePart(getInspections(mode, sim).find(entry => entry.id === $('#inspect-section').value).part));
-$('#turbo-activate').addEventListener('click', () => { sim.turbo = !sim.turbo; updateConfiguration(); updateUI(); });
+$('#turbo-activate').addEventListener('click', () => { player.stop(); sim.turbo = !sim.turbo; updateConfiguration(); updateUI(); });
 $('#zoom-in').addEventListener('click', () => scene?.zoom(0.8));
 $('#zoom-out').addEventListener('click', () => scene?.zoom(1.25));
 function updateCameraInput() {
@@ -517,7 +529,7 @@ window.addEventListener('keydown', event => {
   if (event.key === 'Shift' && !event.repeat && sim.transmission === 'manual') { previousClutch = sim.clutch; setPedal('clutch', 1); }
   if (event.key === 'ArrowUp') { event.preventDefault(); setPedal('throttle', sim.throttle + 0.05); }
   if (event.key === 'ArrowDown') { event.preventDefault(); setPedal('throttle', sim.throttle - 0.05); }
-  if (sim.transmission !== 'hybrid' && (/^[1-6]$/.test(event.key) || event.key.toLowerCase() === 'n')) shift(event.key.toLowerCase() === 'n' ? 0 : Number(event.key));
+  if (sim.transmission !== 'hybrid' && (/^[1-8]$/.test(event.key) && Number(event.key) < sim.ratios.length || event.key.toLowerCase() === 'n')) shift(event.key.toLowerCase() === 'n' ? 0 : Number(event.key));
 });
 function releaseKeyboardClutch() {
   if (previousClutch !== null) { setPedal('clutch', previousClutch); previousClutch = null; }
@@ -534,7 +546,7 @@ function updateEngineUI() {
   cycleTransition = null;
   const engine = getEngine(sim.engineId);
   selectedCylinder = Math.min(selectedCylinder, engine.cylinders - 1);
-  $('#engine-displacement').textContent = engine.displacement;
+  $('#engine-displacement').textContent = `Model · ${engine.displacement}`;
   $('#engine-bank-angle').textContent = engine.architecture;
   $('#firing-interval').textContent = `Zapłon co ${engine.interval}°`;
   $('#engine-summary').textContent = `${engine.architecture}. ${engine.note} Kolejność w modelu: ${engine.firingOrder.join(' → ')}.`;
@@ -559,10 +571,12 @@ function updateEngineUI() {
   lastStroke = -1;
 }
 $$('.engine-buttons [data-engine]').forEach(button => button.addEventListener('click', () => {
+  player.stop();
   sim.setEngine(button.dataset.engine);
   selectedCylinder = 0;
   scene?.setEngine(sim.engineId);
   updateEngineUI();
+  updatePowertrainConfiguration();
   changeView(mode);
 }));
 $('#explode').addEventListener('change', () => scene?.setView(mode));
@@ -574,9 +588,14 @@ $('#explode').addEventListener('input', event => {
 let configuredTransmission = null;
 function updatePowertrainConfiguration() {
   const automatic = sim.transmission !== 'manual';
+  if (scene && scene.engine.id !== sim.engineId) scene.setEngine(sim.engineId);
   $('#transmission-type').value = sim.transmission;
   $('#drive-layout').value = sim.driveLayout;
   [...$('#drive-layout').options].forEach(option => { option.disabled = sim.transmission === 'hybrid' && option.value !== 'fwd'; });
+  $('#engine-orientation').value = sim.engineOrientation;
+  $('#engine-placement').value = sim.enginePlacement;
+  [...$('#engine-orientation').options].forEach(option => { option.disabled = !getEngine(sim.engineId).mountOrientations.includes(option.value) || sim.transmission === 'hybrid' && option.value !== 'transverse'; });
+  [...$('#engine-placement').options].forEach(option => { option.disabled = sim.transmission === 'hybrid' && option.value !== 'front'; });
   $('#powertrain-note').textContent = `${TRANSMISSIONS[sim.transmission].hint} ${DRIVE_LAYOUTS[sim.driveLayout].hint}`;
   $('#clutch-control').hidden = automatic;
   $('#quick-clutch-control').hidden = automatic;
@@ -586,6 +605,10 @@ function updatePowertrainConfiguration() {
   $('#hybrid-controls').hidden = sim.transmission !== 'hybrid';
   $('#dct-auto-option').hidden = sim.transmission !== 'dct';
   $('#dct-auto').checked = sim.dct.automatic;
+  $('#automatic-auto-option').hidden = sim.transmission !== 'automatic';
+  $('#automatic-auto').checked = sim.automatic.automatic;
+  $('.view-tab[data-view="clutch"]').textContent = sim.transmission === 'automatic' ? 'Konwerter' : 'Sprzęgło';
+  $$('.engine-buttons [data-engine]').forEach(button => { button.disabled = sim.transmission === 'hybrid' && button.dataset.engine !== 'r4'; });
   $('#transfer-mode-option').hidden = sim.driveLayout !== 'partTime';
   $('#transfer-mode').value = sim.driveMode;
   $('#center-lock-option').hidden = sim.driveLayout !== 'awd';
@@ -598,7 +621,7 @@ function updatePowertrainConfiguration() {
   $('#focus-transfer').hidden = !['awd', 'partTime', 'quattro'].includes(sim.driveLayout);
   $('#focus-battery').hidden = sim.transmission !== 'hybrid';
   $('#focus-transmission').dataset.focus = sim.transmission === 'hybrid' ? 'psd' : 'gearbox';
-  $('#focus-transmission').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : sim.transmission === 'dct' ? 'DCT' : 'Skrzynia';
+  $('#focus-transmission').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : sim.transmission === 'dct' ? 'DCT' : sim.transmission === 'automatic' ? '8AT' : 'Skrzynia';
   $('#vehicle-layer option[value="electric"]').disabled = sim.transmission !== 'hybrid';
   if (sim.transmission !== 'hybrid' && $('#vehicle-layer').value === 'electric') $('#vehicle-layer').value = 'mechanical';
   if (scene) scene.vehicle.layer = $('#vehicle-layer').value;
@@ -618,6 +641,42 @@ function updatePowertrainConfiguration() {
   const available = Object.entries(SCENARIOS).filter(([, entry]) => entry.types.includes(sim.transmission));
   $('#scenario-select').innerHTML = available.map(([id, entry]) => `<option value="${id}">${entry.name}</option>`).join('');
   $('#scenario-select').value = available.some(([id]) => id === previousScenario) ? previousScenario : sim.transmission === 'hybrid' ? 'ev' : 'launch';
+  updatePresetUI();
+}
+
+function updatePresetUI() {
+  const preset = getCarPreset(selectedPresetId);
+  const fields = ['engineId', 'transmission', 'driveLayout', 'engineOrientation', 'enginePlacement', 'turbo', 'injection', 'timing'];
+  const matches = preset && fields.every(field => preset[field] === sim[field]);
+  if (!matches) selectedPresetId = '';
+  $('#car-preset').value = selectedPresetId;
+  $('#car-preset-summary').textContent = matches ? `${preset.name} · ${preset.year} — ${preset.summary}` : 'Własna konfiguracja napędu';
+  $('#car-preset-note').textContent = matches ? `Auto: ${preset.factoryDisplacement}, ${preset.factoryTransmission}. ${preset.note}` : 'Presety ustawiają architekturę napędu. Parametry i mechanizmy symulacji są dydaktyczne.';
+}
+
+$('#car-preset').addEventListener('change', event => {
+  const id = event.target.value;
+  if (!id) { selectedPresetId = ''; updatePresetUI(); return; }
+  player.stop();
+  if (!applyCarPreset(sim, id)) return;
+  selectedPresetId = id;
+  selectedCylinder = 0;
+  if (scene) { scene.inspection = 'all'; scene.isolate = false; scene.vehicle.restoreDetail(); scene.setEngine(sim.engineId); }
+  updateEngineUI();
+  updateConfiguration();
+  updatePowertrainConfiguration();
+  changeView('drive-detail');
+});
+
+for (const [id, method] of [['engine-orientation', 'setEngineOrientation'], ['engine-placement', 'setEnginePlacement']]) {
+  $(`#${id}`).addEventListener('change', event => {
+    player.stop();
+    sim[method](event.target.value);
+    updatePowertrainConfiguration();
+    scene?.setView(mode);
+    configureInspection(mode);
+    updateUI();
+  });
 }
 
 function focusAssembly(section) {
@@ -664,6 +723,9 @@ function updatePowertrainMetrics() {
   $('#dct-k2').textContent = `K2 · bieg ${sim.dct.selected[1]} · docisk ${Math.round(sim.dct.engagement[1] * 100)}% · ${Math.round(sim.dct.torques[1])} Nm`;
   $('#dct-state').textContent = sim.shiftTarget !== null ? `${sim.shiftFrom || 'N'} → ${sim.shiftTarget || 'N'} · ${sim.shiftStage === 'preselect' ? 'wybór biegu' : sim.shiftStage === 'handover' ? 'przejmowanie momentu z poślizgiem' : 'ustalenie docisku'}` : sim.gear ? `Aktywny ${sim.gear} · przygotowany ${sim.dct.prepared}` : 'N · brak napędu';
   $('#dct-shift-step').disabled = sim.shiftTarget === null;
+  $('#automatic-slip').textContent = `Poślizg · ${Math.round(sim.automatic.slipRpm)} obr./min`;
+  $('#automatic-lockup').textContent = `Lock-up · ${Math.round(sim.automatic.lockup * 100)}%`;
+  $('#automatic-state').textContent = sim.gear ? `Bieg ${sim.gear} · moment turbiny ${Math.round(sim.automatic.turbineTorque)} Nm` : 'N · brak napędu kół';
   const h = sim.hybrid;
   const kw = power => `${(power / 1000).toFixed(1).replace('.', ',')} kW`;
   $('#hybrid-state').textContent = h.state;
@@ -696,12 +758,14 @@ function updatePowertrainMetrics() {
 $('#transmission-type').addEventListener('change', event => {
   player.stop();
   sim.setTransmission(event.target.value);
+  updateEngineUI();
   updatePowertrainConfiguration();
   updateConfiguration();
-  changeView(sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(mode) ? 'hybrid' : mode);
+  changeView(mode === 'hybrid' && sim.transmission !== 'hybrid' ? 'drive-detail' : sim.transmission === 'hybrid' && ['clutch', 'gearbox'].includes(mode) ? 'hybrid' : mode);
 });
 $('#drive-layout').addEventListener('change', event => { player.stop(); sim.setDriveLayout(event.target.value); updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); updateUI(); });
 $('#dct-auto').addEventListener('change', event => { player.stop(); sim.dct.automatic = event.target.checked; });
+$('#automatic-auto').addEventListener('change', event => { player.stop(); sim.automatic.automatic = event.target.checked; });
 $('#transfer-mode').addEventListener('change', event => {
   player.stop();
   if ((event.target.value === '4L' || sim.driveMode === '4L') && (sim.speed > 0.2 || sim.transmission === 'manual' && sim.gear > 0 && sim.clutch < 0.85)) {
@@ -772,7 +836,7 @@ function updateUI() {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
-  $('#drive-status').textContent = sim.transmission === 'dct' ? sim.shiftTarget !== null ? 'Zmiana DCT: sterownik reguluje docisk i poślizg K1 / K2.' : sim.gear ? `Bieg ${sim.gear} aktywny; ${sim.dct.prepared} przygotowany na odłączonej gałęzi.` : 'N: oba sprzęgła nie przenoszą napędu.' : sim.shiftTarget !== null ? 'Zmiana biegu trwa. Obserwuj pierścień i przesuwkę; trzymaj pedał wciśnięty.' : sim.stalled ? 'Silnik zgasł. Wciśnij sprzęgło i uruchom go ponownie.' : sim.gear === 0 ? 'Luz: silnik nie napędza kół.' : sim.clutch >= 0.85 ? 'Sprzęgło rozłączone: silnik nie napędza kół.' : sim.clutch > 0.05 && sim.clutchSlip > 60 ? 'Poślizg sprzęgła: obroty wałów się wyrównują.' : 'Sprzęgło przenosi moment do kół.';
+  $('#drive-status').textContent = sim.transmission === 'automatic' ? sim.shiftTarget !== null ? 'Zmiana automatu: hydraulika przełącza pakiety, konwerter pracuje z poślizgiem.' : sim.gear ? `Bieg ${sim.gear} · ${sim.automatic.lockup > 0.8 ? 'lock-up połączony' : 'napęd przez olej konwertera'}. Bez gazu możliwe pełzanie; użyj hamulca.` : 'N: konwerter obraca się, przekładnia nie napędza kół.' : sim.transmission === 'dct' ? sim.shiftTarget !== null ? 'Zmiana DCT: sterownik reguluje docisk i poślizg K1 / K2.' : sim.gear ? `Bieg ${sim.gear} aktywny; ${sim.dct.prepared} przygotowany na odłączonej gałęzi.` : 'N: oba sprzęgła nie przenoszą napędu.' : sim.shiftTarget !== null ? 'Zmiana biegu trwa. Obserwuj pierścień i przesuwkę; trzymaj pedał wciśnięty.' : sim.stalled ? 'Silnik zgasł. Wciśnij sprzęgło i uruchom go ponownie.' : sim.gear === 0 ? 'Luz: silnik nie napędza kół.' : sim.clutch >= 0.85 ? 'Sprzęgło rozłączone: silnik nie napędza kół.' : sim.clutch > 0.05 && sim.clutchSlip > 60 ? 'Poślizg sprzęgła: obroty wałów się wyrównują.' : 'Sprzęgło przenosi moment do kół.';
   $$('[data-cylinder]').forEach(button => {
     const i = Number(button.dataset.cylinder);
     const phase = strokeIndex(sim.angle, i, sim.engineId);
@@ -794,6 +858,10 @@ function updateUI() {
   if (sim.transmission === 'dct') {
     $('#mechanism-state').textContent = sim.shiftTarget !== null ? 'DCT · przejmowanie napędu między sprzęgłami' : sim.gear ? `K${sim.dct.active + 1} napędza bieg ${sim.gear}` : 'DCT · N · oba pakiety odłączone';
     $('#mechanism-detail').textContent = `K1: ${Math.round(sim.dct.torques[0])} Nm · K2: ${Math.round(sim.dct.torques[1])} Nm. Przygotowany bieg ${sim.dct.prepared} ma otwarte sprzęgło.`;
+  }
+  if (sim.transmission === 'automatic') {
+    $('#mechanism-state').textContent = sim.shiftTarget !== null ? '8AT · zmiana przełożenia planetarnego' : sim.gear ? `8AT · bieg ${sim.gear} · ${sim.automatic.lockup > 0.8 ? 'lock-up' : 'konwerter z poślizgiem'}` : '8AT · N · wyjście odłączone';
+    $('#mechanism-detail').textContent = `Poślizg: ${Math.round(sim.automatic.slipRpm)} obr./min · mnożnik momentu ${sim.automatic.torqueRatio.toFixed(2)} · straty ${(sim.automatic.lossPower / 1000).toFixed(1)} kW. Kierownica: ${sim.automatic.statorLocked ? 'podparta' : 'swobodna'}.`;
   }
   const phase = strokeIndex(sim.angle, selectedCylinder, sim.engineId);
   const visual = cycleVisuals(cycleDegrees(sim.angle, selectedCylinder, sim.engineId));

@@ -1,15 +1,32 @@
 export const DCT_RATIOS = [0, 3.6, 2.2, 1.52, 1.15, 0.9, 0.74];
+// Educational eight-speed train: three selectable reductions and a fixed 2:3
+// overdrive. These are not the ratios or clutch topology of a factory AISIN unit.
+export const AUTOMATIC_PLANETARIES = Object.freeze([
+  { sun: 40, ring: 80, planet: 20, reduction: 3, input: 'sun' },
+  { sun: 56, ring: 80, planet: 12, reduction: 1.7, input: 'ring' },
+  { sun: 24, ring: 80, planet: 28, reduction: 1.3, input: 'ring' },
+  { sun: 40, ring: 80, planet: 20, reduction: 2 / 3, input: 'carrier' }
+]);
+export const AUTOMATIC_GEAR_MODES = Object.freeze([
+  [false, false, false],
+  [true, true, true], [true, true, false], [true, false, true], [true, false, false],
+  [false, true, true], [false, true, false], [false, false, true], [false, false, false]
+]);
+export const AUTOMATIC_RATIOS = Object.freeze(AUTOMATIC_GEAR_MODES.map((modes, gear) => gear
+  ? modes.reduce((ratio, reduced, i) => ratio * (reduced ? AUTOMATIC_PLANETARIES[i].reduction : 1), 2 / 3)
+  : 0));
 export const FINAL_RATIO = 3.9;
 export const WHEEL_RADIUS = 0.31;
 export const VEHICLE_MASS = 1250;
 export const TRANSMISSIONS = {
   manual: { name: 'Manualna · 5 biegów', hint: 'Pedał rozłącza silnik od wejścia skrzyni. Przesuwka wybiera drogę momentu.' },
   dct: { name: 'DCT · 6 biegów · mokre sprzęgła', hint: 'K1: 1/3/5. K2: 2/4/6. Przygotowany bieg zaczyna napędzać koła dopiero po załączeniu swojego sprzęgła.' },
+  automatic: { name: 'Hydrokinetyczna · 8 biegów', hint: 'Schemat inspirowany automatami AISIN: pompa → olej → turbina. Kierownica zwiększa moment przy ruszaniu; lock-up ogranicza poślizg w czasie jazdy. Przekładnie planetarne wybierają osiem przełożeń. Bez pedału sprzęgła.' },
   hybrid: { name: 'Hybryda · planetarna e-CVT', hint: 'Silnik → jarzmo. MG1 → słońce. MG2 i wyjście → wieniec. Obroty MG1 pozwalają zmieniać obroty silnika przy tej samej prędkości auta.' }
 };
 export const DRIVE_LAYOUTS = {
   rwd: { name: 'RWD · tylna oś', hint: 'Silnik wzdłużnie, skrzynia, wał napędowy i tylny dyferencjał.' },
-  fwd: { name: 'FWD · przednia oś', hint: 'Zespół poprzeczny. Przekładnia główna przy skrzyni napędza przednie półosie.' },
+  fwd: { name: 'FWD · przednia oś', hint: 'Silnik z przodu, poprzecznie lub wzdłużnie. Przekładnia główna przy skrzyni napędza przednie półosie.' },
   partTime: { name: '4WD · 2H / 4H / 4L', hint: '2H: tylna oś. 4H: osie połączone sztywno. 4L: dodatkowa redukcja 2,5:1. Sztywne połączenie osi wymusza poślizg opon w zakręcie.' },
   awd: { name: 'AWD · centralny dyferencjał', hint: 'Otwarty centralny dyferencjał pozwala osiom obracać się z różnymi prędkościami. Blokada łączy ich obroty; rozdział momentu zależy wtedy od oporu osi.' },
   quattro: { name: 'quattro · mechaniczne 40:60', hint: 'Schemat planetarnego samoblokującego mechanizmu opisanego przez Audi. Podstawowy podział 40% przód / 60% tył; w tym wariancie zakres 20–60% na przód. Nie jest to quattro ultra.' }

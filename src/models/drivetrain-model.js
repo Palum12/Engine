@@ -14,7 +14,7 @@ export class DrivetrainModel extends ModelGeometry {
     this.buildClutch();
     this.buildGearbox();
     this.showFlow = true;
-    this.flow = this.arrows(20, 0xffc35a, this.group, 0.2);
+    this.flow = this.arrows(8, 0xffc35a, this.group, 0.14);
   }
 
   buildClutch() {
@@ -214,11 +214,11 @@ export class DrivetrainModel extends ModelGeometry {
       const selected = sim.gear ? this.gears[sim.gear - 1] : null;
       const end = this.mode === 'clutch' ? this.bearing.position.x + 0.5 : selected ? this.gearbox.position.x + selected.x : 2.8;
       const points = this.mode === 'clutch' || !selected
-        ? [[0.1, 0, 1.26], [end, 0, 1.26]]
-        : [[this.mode === 'gearbox' ? 3.3 : 0.1, 0, 1.26], [end, 0, 1.26], [end, -1.8, 1.26], [this.gearbox.position.x + 8.1, -1.8, 1.26]];
+        ? [[0.1, 0, 1.8], [end, 0, 1.8]]
+        : [[this.mode === 'gearbox' ? 3.3 : 0.1, 0, 1.8], [end, 0, 1.8], [end, -1.8, 1.8], [this.gearbox.position.x + 8.1, -1.8, 1.8]];
       const lengths = points.slice(1).map((p, i) => vec(...p).distanceTo(vec(...points[i])));
       const total = lengths.reduce((a, b) => a + b, 0);
-      this.flow.count = Math.min(20, Math.max(2, Math.floor(total / 0.8)));
+      this.flow.count = Math.min(8, Math.max(2, Math.floor(total / 1.7)));
       for (let n = 0; n < this.flow.count; n++) {
         const direction = Math.sign(sim.transmittedTorque);
         let distance = (((direction * sim.inputAngle / 3 + n / this.flow.count) % 1 + 1) % 1) * total;

@@ -108,6 +108,54 @@ test('hybrid preserves planetary kinematics, electrical limits and energy at SOC
             }
 });
 
+test('hybrid regeneration recovers only road braking energy with low grip or airborne driven wheels', () => {
+  const cases = [
+    { surfaces: ['air', 'air', 'air', 'air'], recovers: false },
+    { surfaces: ['air', 'air', 'asphalt', 'asphalt'], recovers: false },
+    { surfaces: ['air', 'asphalt', 'asphalt', 'asphalt'], recovers: false },
+    { surfaces: ['ice', 'ice', 'ice', 'ice'], recovers: true },
+    { surfaces: ['ice', 'asphalt', 'asphalt', 'asphalt'], recovers: true },
+    { surfaces: ['air', 'asphalt', 'asphalt', 'asphalt'], frontLock: true, recovers: true },
+    { surfaces: ['asphalt', 'asphalt', 'asphalt', 'asphalt'], turn: 1, recovers: true }
+  ];
+  for (const config of cases) for (const soc of [0.6, 0.849999, 0.85]) {
+    const sim = new Simulation(); sim.setTransmission('hybrid');
+    Object.assign(sim, { speed: 10, brake: 1, frontLock: false, turn: 0 }, config);
+    Object.assign(sim.hybrid, { mode: 'ev', soc });
+    // Reproduce stale traction after changing road contact and residual wheelspin.
+    sim.wheelSlip = [70, 70, 0, 0];
+    const dt = 0.002;
+    sim.integrate(dt);
+    const h = sim.hybrid;
+    const roadBrakingPower = Math.max(0, -sim.traction.force * 10);
+    assert.ok(-h.motorPower <= roadBrakingPower + 1e-7);
+    assert.ok(-h.batteryPower <= roadBrakingPower + 1e-7);
+    near(h.motorPower, h.mg2Torque * h.mg2Omega);
+    near(h.enginePower + h.batteryPower, h.mechanicalPower + h.motorPower + h.lossPower + h.startPower);
+    near((soc - h.soc) * h.capacityKwh * 3.6e6 / dt, h.batteryPower, 0.01);
+    if (!config.recovers || soc === 0.85) {
+      near(h.motorPower, 0); near(h.batteryPower, 0); near(h.soc, soc);
+      near(sim.traction.deliveredTorque, 0);
+    } else {
+      assert.ok(h.motorPower < 0 && h.batteryPower < 0 && h.soc > soc);
+      assert.ok(-h.batteryPower < -h.motorPower);
+    }
+  }
+});
+
+test('hybrid braking does not charge the battery after losing driven wheel contact', () => {
+  const sim = new Simulation(); sim.setTransmission('hybrid');
+  Object.assign(sim, { speed: 10, brake: 1 });
+  sim.hybrid.mode = 'ev';
+  sim.update(0.1);
+  assert.ok(sim.hybrid.batteryPower < 0);
+  sim.surfaces.fill('air');
+  const soc = sim.hybrid.soc;
+  sim.update(0.1);
+  near(sim.hybrid.batteryPower, 0); near(sim.hybrid.motorPower, 0);
+  near(sim.traction.deliveredTorque, 0); near(sim.hybrid.soc, soc);
+});
+
 test('hybrid wheel-side speed follows the actual front carrier and pause freezes every rotating member', () => {
   const sim = new Simulation(); sim.setTransmission('hybrid');
   sim.hybrid.mode = 'ev'; sim.throttle = 0.3; sim.turn = 0.6;

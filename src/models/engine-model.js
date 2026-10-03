@@ -85,7 +85,7 @@ export class EngineModel extends ModelGeometry {
     const unit = this.subgroup(pivot, [0, -0.8, 0]);
     const sleeve = this.mesh(this.geometry('sleeve', () => new THREE.CylinderGeometry(0.67, 0.67, 2.13, 40, 1, true, Math.PI / 2, Math.PI)), 'block', unit, [0, 3.18, 0], 'block');
     const front = this.mesh(this.geometry('sleeveFront', () => new THREE.CylinderGeometry(0.67, 0.67, 2.13, 40, 1, true, -Math.PI / 2, Math.PI)), 'block', unit, [0, 3.18, 0], 'block');
-    if (this.id === 'boxer4' && layout.bankRadians > 0) { sleeve.rotation.y = Math.PI; front.rotation.y = Math.PI; }
+    if (this.config.bankAngle === 180 && layout.bankRadians > 0) { sleeve.rotation.y = Math.PI; front.rotation.y = Math.PI; }
     this.box(1.43, 0.13, 0.42, 'dark', unit, [0, 4.35, -0.45], 'valves');
     [-0.6, 0.6].forEach(x => {
       this.cylinder(0.075, 0.18, 'steel', unit, [x, 4.4, -0.44], 'y');

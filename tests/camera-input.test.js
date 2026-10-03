@@ -58,8 +58,12 @@ test('touchpad scrolling pans both camera and target without changing viewing di
     const distance = camera.position.distanceTo(controls.target);
     wheel(canvas, { deltaX: 15, deltaY: 90 });
     assert.ok(controls.target.distanceTo(targetBefore) > 0.1);
+    assert.ok(controls.target.y < targetBefore.y, 'scrolling down moves the camera down');
     assert.ok(camera.position.clone().sub(cameraBefore).distanceTo(controls.target.clone().sub(targetBefore)) < 1e-8);
     assert.ok(Math.abs(camera.position.distanceTo(controls.target) - distance) < 1e-8);
+    const lowerTarget = controls.target.clone();
+    wheel(canvas, { deltaX: 0, deltaY: -90 });
+    assert.ok(controls.target.y > lowerTarget.y, 'scrolling up moves the camera up');
   });
 });
 

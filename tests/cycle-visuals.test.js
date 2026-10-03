@@ -44,14 +44,14 @@ test('the flame front reaches charge near the spark before more distant charge',
   assert.ok(samples[0].burned > samples.at(-1).burned);
 });
 
-test('opposed boxer pistons move together toward opposite heads on separate crankpins', () => {
+for (const id of ['boxer4', 'boxer6']) test(`${id}: opposed pistons move together toward opposite heads on separate crankpins`, () => {
   for (let a = 0; a < 720; a += 13) {
-    for (let i = 0; i < 4; i += 2) {
-      const left = crankPin(a, 'boxer4', i), right = crankPin(a, 'boxer4', i + 1);
+    for (let i = 0; i < ENGINES[id].cylinders; i += 2) {
+      const left = crankPin(a, id, i), right = crankPin(a, id, i + 1);
       assert.ok(Math.abs(left.z + right.z) < 1e-9);
       assert.ok(Math.abs(left.y + right.y - 1.6) < 1e-9);
       assert.ok(Math.abs(Math.hypot(left.y - right.y, left.z - right.z) - 1.3) < 1e-9);
-      assert.ok(Math.abs(pistonHeight(a + ENGINES.boxer4.offsets[i]) - pistonHeight(a + ENGINES.boxer4.offsets[i + 1])) < 1e-9);
+      assert.ok(Math.abs(pistonHeight(a + ENGINES[id].offsets[i]) - pistonHeight(a + ENGINES[id].offsets[i + 1])) < 1e-9);
     }
   }
 });
@@ -59,7 +59,7 @@ test('opposed boxer pistons move together toward opposite heads on separate cran
 for (const id of Object.keys(ENGINES)) test(`${id}: head layout, valve links, chain branches and visible gas stay coherent`, () => {
   const m = materials(), engine = new EngineModel(m,id), systems = new SystemsModel(m,engine), sim = new Simulation();
   sim.setEngine(id);
-  const expected = { r4:[1,2,1], r6:[1,2,1], v6:[2,4,2], vr6:[1,2,2], v12:[2,4,2], w16:[2,4,3], boxer4:[2,4,2] }[id];
+  const expected = { r4:[1,2,1], r6:[1,2,1], v6:[2,4,2], vr6:[1,2,2], v8:[2,4,2], v12:[2,4,2], w16:[2,4,3], boxer4:[2,4,2], boxer6:[2,4,2] }[id];
   assert.equal(engine.heads.length,expected[0]);
   assert.equal(engine.camshafts.length,expected[1]);
   assert.equal(systems.timingLoops.length,expected[2]);

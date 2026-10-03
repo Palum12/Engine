@@ -44,6 +44,19 @@ export const INSPECTIONS = {
 };
 
 export function getInspections(view, sim) {
+  const converter = [
+    { id: 'converter', label: 'Konwerter · pompa / turbina / kierownica', part: 'converter', hint: 'Olej przekazuje energię. Pompa i turbina mogą mieć różne obroty; konwerter umożliwia pełzanie bez pedału sprzęgła.' },
+    { id: 'pump', label: 'Pompa · wejście od silnika', part: 'pump', hint: 'Pompa obraca się z silnikiem i rozpędza olej.' },
+    { id: 'turbine', label: 'Turbina · wejście przekładni', part: 'converterTurbine', hint: 'Turbina odbiera energię oleju. Jej obroty i moment widać w odczycie.' },
+    { id: 'stator', label: 'Kierownica · zwiększenie momentu', part: 'stator', hint: 'Przy dużym poślizgu kierownica jest podparta; przy zbliżonych obrotach przechodzi na swobodny obrót.' },
+    { id: 'lockup', label: 'Blokada lock-up', part: 'lockup', hint: 'Sprzęgło spina pompę z turbiną, ograniczając poślizg i straty podczas jazdy.' }
+  ];
+  const automaticGearbox = [
+    { id: 'gearbox', label: 'Automat hydrokinetyczny · 8 biegów', part: 'automatic', hint: 'Wybierz 1–8 lub włącz automatyczne zmiany. Schemat inspirowany Aisin, z umownymi przełożeniami.' },
+    { id: 'planetary', label: 'Przekładnie planetarne', part: 'planetary', hint: 'Człony pozostają zazębione. Połączenia sprzęgieł i hamulców wyznaczają przełożenie.' },
+    { id: 'automaticClutches', label: 'Pakiety sprzęgieł i hamulców', part: 'automaticClutches', hint: 'Wybrane pakiety łączą albo zatrzymują człony przekładni. Kierowca nie używa pedału sprzęgła.' },
+    { id: 'valveBody', label: 'Sterowanie hydrauliczne', part: 'valveBody', hint: 'Elektrozawory sterują dociskiem pakietów i blokadą konwertera.' }
+  ];
   if (['drive', 'drive-detail'].includes(view)) {
     const transmission = sim.transmission === 'hybrid' ? [
       { id: 'psd', label: 'Podział mocy · przekładnia planetarna', part: 'psd', hint: 'Jarzmo: silnik. Słońce: MG1. Wieniec: wyjście. Koła pozostają zazębione, a sterownik dobiera obroty maszyn.' },
@@ -51,7 +64,7 @@ export function getInspections(view, sim) {
       { id: 'mg2', label: 'MG2 · napęd / rekuperacja', part: 'mg2', hint: 'MG2 jest połączone z wyjściem. Przy hamowaniu koła napędzają generator.' },
       { id: 'battery', label: 'Bateria · moduły / styczniki / prąd DC', part: 'battery', hint: 'Pomarańczowy przewód: dodatni, jasny: powrotny. Kierunek prądu stałego odwraca się podczas ładowania.' },
       { id: 'inverter', label: 'Falownik · DC ↔ trójfazowe AC', part: 'inverter', hint: 'Prąd fazowy zmienia kierunek. Strzałki na kablach AC przedstawiają średni kierunek przekazywania energii.' }
-    ] : [
+    ] : sim.transmission === 'automatic' ? [converter[0], ...automaticGearbox] : [
       { id: 'clutch', label: sim.transmission === 'dct' ? 'Dwa sprzęgła · K1 / K2' : 'Sprzęgło · tarcza / docisk', part: sim.transmission === 'dct' ? 'dctClutches' : 'clutch', hint: sim.transmission === 'dct' ? 'Docisk pakietu przenosi moment. Bieg przygotowany na drugim wale pozostaje odłączony od silnika.' : 'Wciśnij pedał. Tarcza zwalnia się i silnik może obracać się niezależnie od skrzyni.' },
       { id: 'gearbox', label: sim.transmission === 'dct' ? 'DCT · wały / biegi / przesuwki' : 'Manual · pary kół / synchronizatory', part: sim.transmission === 'dct' ? 'dct' : 'gearbox', hint: 'Stale zazębione pary kół. Przesuwka łączy wybrane koło z wałem; sama obecność zazębienia nie oznacza napędu.' },
       ...(sim.transmission === 'dct' ? [{ id: 'mechatronics', label: 'Mechatronika i hydraulika DCT', part: 'mechatronics', hint: 'Zawory regulują ciśnienie tłoków docisku i sterują wybierakami. Obieg oleju obejmuje pompę, filtr i chłodnicę.' }] : [])
@@ -71,6 +84,8 @@ export function getInspections(view, sim) {
     ...getInspections('drive-detail', { ...sim, transmission: 'hybrid' }).filter(entry => ['psd', 'mg1', 'mg2', 'battery', 'inverter'].includes(entry.id))
   ];
   if (view === 'transfer') return [{ id: 'all', label: 'Rozdział napędu między osiami', part: sim.driveLayout === 'quattro' ? 'quattro' : 'transfer', hint: 'Wybierz 4WD / AWD / quattro w konfiguracji. Blokada wymusza wspólne obroty, a nie stały podział momentu 50:50.' }];
+  if (sim.transmission === 'automatic' && view === 'clutch') return [{ id: 'all', label: 'Cały konwerter hydrokinetyczny', part: 'converter', hint: converter[0].hint }, ...converter.slice(1)];
+  if (sim.transmission === 'automatic' && view === 'gearbox') return [{ id: 'all', label: 'Cały automat · konwerter i 8AT', part: 'automatic', hint: automaticGearbox[0].hint }, ...automaticGearbox.slice(1)];
   if (sim.transmission === 'dct' && view === 'clutch') return [{ id: 'all', label: 'Pakiety K1 / K2', part: 'dctClutches', hint: 'Tarcze wejściowe obraca silnik, tarcze wyjściowe obraca odpowiedni wał. Ciśnienie docisku reguluje moment.' }];
   if (sim.transmission === 'dct' && view === 'gearbox') return [
     { id: 'all', label: 'Cała DCT', part: 'dct', hint: 'Niebieski K1: 1/3/5. Miedziany K2: 2/4/6. Bieg przygotowany ma wybraną przesuwkę i otwarte sprzęgło.' },

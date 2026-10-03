@@ -1,6 +1,7 @@
 import { ENGINES, getEngine } from './engines.js';
-import { DCT_RATIOS, FINAL_RATIO, WHEEL_RADIUS, VEHICLE_MASS, evaluateTraction, dctSelection, dctEngagement, DRIVE_LAYOUTS } from './powertrain.js';
-import { createHybridState, integrateHybrid } from './hybrid.js';
+import { DCT_RATIOS, AUTOMATIC_RATIOS, FINAL_RATIO, WHEEL_RADIUS, VEHICLE_MASS, evaluateTraction, dctSelection, dctEngagement, DRIVE_LAYOUTS } from './powertrain.js';
+import { createHybridState, integrateHybrid, hybridWheelTorque } from './hybrid.js';
+import { createAutomaticState, integrateAutomatic } from './automatic.js';
 
 export const GEAR_RATIOS = [0, 3.5, 2.1, 1.4, 1.05, 0.82];
 export const PHASE_OFFSETS = ENGINES.r4.offsets;
@@ -33,19 +34,20 @@ export class Simulation {
     });
     Object.assign(this, {
       transmission: 'manual', driveLayout: 'rwd', driveMode: '2H', centerLock: false, frontLock: false, rearLock: false,
+      engineOrientation: 'longitudinal', enginePlacement: 'front',
       surfaces: ['asphalt', 'asphalt', 'asphalt', 'asphalt'], wheelAngles: [0, 0, 0, 0], wheelSlip: [0, 0, 0, 0], axleAngles: [0, 0],
       dct: { ...dctSelection(0), engagement: [0, 0], torques: [0, 0], omegas: [0, 0], angles: [0, 0], automatic: false },
-      hybrid: createHybridState(), hybridEnabled: true
+      hybrid: createHybridState(), hybridEnabled: true, automatic: createAutomaticState()
     });
     this.traction = evaluateTraction(this, 0);
   }
 
-  get ratios() { return this.transmission === 'dct' ? DCT_RATIOS : GEAR_RATIOS; }
+  get ratios() { return this.transmission === 'dct' ? DCT_RATIOS : this.transmission === 'automatic' ? AUTOMATIC_RATIOS : GEAR_RATIOS; }
   get transferRatio() { return this.driveLayout === 'partTime' && this.driveMode === '4L' ? 2.5 : 1; }
   get outputOmega() { return this.traction.inputOmega * FINAL_RATIO * this.transferRatio; }
 
   setTransmission(id) {
-    if (!['manual', 'dct', 'hybrid'].includes(id)) return false;
+    if (!['manual', 'dct', 'automatic', 'hybrid'].includes(id)) return false;
     this.transmission = id;
     this.gear = 0;
     this.shiftTarget = null;
@@ -61,7 +63,12 @@ export class Simulation {
     this.transmittedTorque = this.torque = this.clutchSlip = this.boost = 0;
     this.stalled = false;
     this.dct = { ...dctSelection(0), engagement: [0, 0], torques: [0, 0], omegas: [0, 0], angles: [0, 0], automatic: false };
-    if (id === 'hybrid') { this.driveLayout = 'fwd'; this.turbo = false; this.hybrid.range = 'D'; }
+    this.automatic = createAutomaticState();
+    if (id === 'hybrid') {
+      this.driveLayout = 'fwd'; this.engineId = 'r4'; this.timing = ENGINES.r4.timing;
+      this.enginePlacement = 'front'; this.engineOrientation = 'transverse';
+      this.turbo = false; this.hybrid.range = 'D';
+    }
     this.traction = evaluateTraction(this, 0);
     return true;
   }
@@ -69,6 +76,9 @@ export class Simulation {
   setDriveLayout(id) {
     if (!DRIVE_LAYOUTS[id] || this.transmission === 'hybrid' && id !== 'fwd') return false;
     this.driveLayout = id;
+    if (id === 'fwd') this.enginePlacement = 'front';
+    if (id === 'rwd' && this.enginePlacement === 'front') this.engineOrientation = 'longitudinal';
+    if (['partTime', 'quattro'].includes(id)) { this.enginePlacement = 'front'; this.engineOrientation = 'longitudinal'; }
     this.centerLock = false;
     this.frontLock = this.rearLock = false;
     this.driveMode = id === 'partTime' ? '2H' : '4H';
@@ -77,9 +87,40 @@ export class Simulation {
   }
 
   setEngine(id) {
-    if (!ENGINES[id]) return false;
+    if (!ENGINES[id] || this.transmission === 'hybrid' && id !== 'r4') return false;
     this.engineId = id;
     this.timing = ENGINES[id].timing;
+    if (!this.engineOrientations.includes(this.engineOrientation)) this.engineOrientation = 'longitudinal';
+    return true;
+  }
+
+  get engineOrientations() {
+    return ENGINES[this.engineId].mountOrientations ?? (['r4', 'v6', 'vr6'].includes(this.engineId) ? ['longitudinal', 'transverse'] : ['longitudinal']);
+  }
+
+  setEngineOrientation(id) {
+    if (!['longitudinal', 'transverse'].includes(id) || !this.engineOrientations.includes(id) || this.transmission === 'hybrid' && id !== 'transverse') return false;
+    this.engineOrientation = id;
+    if (id === 'transverse' && this.enginePlacement === 'front') {
+      if (this.driveLayout === 'rwd') this.setDriveLayout('fwd');
+      else if (['partTime', 'quattro'].includes(this.driveLayout)) this.setDriveLayout('awd');
+    }
+    return true;
+  }
+
+  setEnginePlacement(id) {
+    if (!['front', 'mid', 'rear'].includes(id) || this.transmission === 'hybrid' && id !== 'front') return false;
+    this.enginePlacement = id;
+    if (id !== 'front' && ['fwd', 'partTime', 'quattro'].includes(this.driveLayout)) this.setDriveLayout(this.driveLayout === 'quattro' ? 'awd' : 'rwd');
+    if (id === 'front' && this.engineOrientation === 'transverse' && this.driveLayout === 'rwd') this.setDriveLayout('fwd');
+    return true;
+  }
+
+  setAutomaticRange(id) {
+    if (this.transmission !== 'automatic' || !['D', 'N', 'P'].includes(id) || this.shiftTarget !== null) return false;
+    if (id === 'P' && this.speed > 0.3) return false;
+    if (!this.shift(id === 'D' ? Math.max(1, this.gear) : 0)) return false;
+    this.automatic.range = id;
     return true;
   }
 
@@ -92,18 +133,23 @@ export class Simulation {
     this.shiftTarget = gear;
     this.shiftProgress = 0;
     if (this.transmission === 'manual') this.gear = 0;
+    if (this.transmission === 'automatic') {
+      this.automatic.range = gear ? 'D' : 'N';
+      this.automatic.shiftCooldown = 1.8;
+    }
     return true;
   }
 
   get shiftStage() {
     if (this.shiftTarget === null) return 'idle';
     if (this.transmission === 'dct') return this.shiftProgress < 0.2 ? 'preselect' : this.shiftProgress < 0.8 ? 'handover' : 'lock';
+    if (this.transmission === 'automatic') return this.shiftProgress < 0.25 ? 'release' : this.shiftProgress < 0.8 ? 'handover' : 'lock';
     return this.shiftProgress < 0.25 ? 'release' : this.shiftProgress < 0.75 ? 'synchronize' : 'engage';
   }
 
   advanceShift(dt) {
     if (this.shiftTarget === null) return;
-    this.shiftProgress = Math.min(1, this.shiftProgress + dt / (this.transmission === 'dct' ? 1.6 : 2.4));
+    this.shiftProgress = Math.min(1, this.shiftProgress + dt / (this.transmission === 'dct' ? 1.6 : this.transmission === 'automatic' ? 1.1 : 2.4));
     if (this.shiftProgress >= 1) {
       this.gear = this.shiftTarget;
       if (this.gear) this.inputOmega = this.outputOmega * this.ratios[this.gear];
@@ -137,16 +183,29 @@ export class Simulation {
     this.hybrid.mg1Angle += this.hybrid.mg1Omega * dt * scale;
     this.hybrid.mg2Angle += this.hybrid.mg2Omega * dt * scale;
     this.hybrid.carrierAngle += this.rpm * Math.PI / 30 * dt * scale;
+    const automatic = this.automatic;
+    automatic.pumpAngle += automatic.pumpOmega * dt * scale;
+    automatic.turbineAngle += automatic.turbineOmega * dt * scale;
+    automatic.statorAngle += automatic.statorOmega * dt * scale;
+    automatic.stageOmegas.forEach((members, i) => {
+      for (const key of Object.keys(members)) automatic.stageAngles[i][key] += members[key] * dt * scale;
+    });
   }
 
   integrate(dt) {
     if (this.transmission === 'hybrid') {
       const torque = integrateHybrid(this, dt, getEngine(this.engineId));
-      this.move(torque * FINAL_RATIO * 0.96, dt, true);
+      this.move(hybridWheelTorque(torque), dt, true);
       if (this.hybrid.range === 'P') this.speed = 0;
       return;
     }
     if (this.transmission === 'dct') { this.integrateDct(dt); return; }
+    if (this.transmission === 'automatic') {
+      const torque = integrateAutomatic(this, dt, getEngine(this.engineId));
+      this.move(torque * FINAL_RATIO * this.transferRatio * 0.94, dt);
+      if (this.automatic.range === 'P') this.speed = 0;
+      return;
+    }
     this.advanceShift(dt);
     let omega = this.rpm * Math.PI / 30;
     const ratio = GEAR_RATIOS[this.gear];

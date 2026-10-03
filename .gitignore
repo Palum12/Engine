@@ -3,3 +3,6 @@ dist/
 .sites-runtime/
 test-results/
 *.log
+/.cache/
+/artifacts/
+/test-results/
