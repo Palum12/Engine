@@ -1,6 +1,6 @@
 # Engine / Lab
 
-Interaktywna aplikacja edukacyjna po polsku: silniki R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 4/6; manual, mokra DCT, automat hydrokinetyczny 8AT i hybryda planetarna e-CVT; RWD, FWD, 4WD i mechaniczne quattro. Orientacja silnika (wzdłużna/poprzeczna) i położenie (przód/centralnie/tył) są osobnymi ustawieniami. Do tego 14 presetów znanych samochodów, turbo, rozrząd, smarowanie i zasilanie paliwem. JavaScript + Three.js + Vite, bez backendu.
+Interaktywna aplikacja edukacyjna po polsku: silniki R3, R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 4/6; manual, mokra DCT, automat hydrokinetyczny 8AT i hybryda planetarna e-CVT; RWD, FWD, 4WD i mechaniczne quattro. Orientacja silnika (wzdłużna/poprzeczna) i położenie (przód/centralnie/tył) są osobnymi ustawieniami. Do tego 15 presetów znanych samochodów, turbo, rozrząd, smarowanie i zasilanie paliwem. JavaScript + Three.js + Vite, bez backendu.
 
 Wersja sprzed rozbudowy z 02.10.2026 jest zachowana na branchu [`backup/021026-przed-rozbudowa-napedu`](https://github.com/Palum12/Engine/tree/backup/021026-przed-rozbudowa-napedu), commit `1dd0db6aa2394dec14b43625d549cc7c1be5ddc6`.
 
@@ -36,7 +36,9 @@ Przeglądarka i pliki tymczasowe trafiają do `.cache/`, zrzuty kontrolne do `ar
 
 Lista **Samochód** nad modelem zawiera Corollę Hybrid 2025, Audi A4 B8 quattro S tronic, Porsche 911 Carrera S 2025, Bugatti Veyron, Golf GTI i R32, Peugeot 508 EAT8, Mazdę MX-5, BMW 330i i 340i, Subaru WRX, Jeepa Wranglera oraz Ferrari 458 i 812. Każda pozycja wskazuje rocznik i wersję. Preset resetuje poprzednie ruszanie/zmianę biegu i ustawia architekturę; własna zmiana konfiguracji usuwa oznaczenie wybranego presetu.
 
-R4 można montować wzdłużnie lub poprzecznie. FWD obsługuje również montaż wzdłużny. Silnik centralny znajduje się przed tylną osią, tylny za nią. Wybór niezgodnej konfiguracji dopasowuje napęd; e-CVT pozostaje R4 z przodu, poprzecznie i FWD. Presety opisują architekturę auta, a wspólne modele mają umowne osiągi, geometrię i przełożenia — manual 5-biegowy, DCT 6-biegowe, hydrokinetyczny automat 8-biegowy. Opisy podają różnice względem fabryki.
+Ustawienia napędu, orientacji i położenia silnika oraz skrzyni są nad modelem, również dla własnej konfiguracji. R3/R4 można montować wzdłużnie lub poprzecznie. FWD obsługuje również montaż wzdłużny. Silnik centralny znajduje się przed tylną osią, tylny za nią. Wybór niezgodnej konfiguracji dopasowuje napęd; e-CVT pozostaje R4 z przodu, poprzecznie i FWD. Presety opisują architekturę auta, a wspólne modele mają umowne osiągi, geometrię i przełożenia — manual 5-biegowy, DCT 6-biegowe, hydrokinetyczny automat 8-biegowy. Opisy podają różnice względem fabryki.
+
+Preset SEAT Ibiza 1.0 MPI 2016 wybiera R3 75 KM, MPI, pasek, przedni montaż poprzeczny, FWD i manual. Widok silnika pozwala odizolować głowicę z gniazdami, prowadnicami, zaworami i kanałami. Pasek/łańcuch pozostaje widoczny w całym pojeździe. Manual pokazuje zmniejszanie docisku przed odsunięciem powierzchni, poślizg i ciepło; przycisk ruszania przygotowuje półsprzęgło. Zbliżenie biegu pokazuje łożysko igiełkowe, stożek, piastę, tuleję i zęby kłowe. W przednim dyferencjale można odsłonić satelity, porównać jazdę na wprost z zakrętem i sprawdzić średnią obrotów półosi.
 
 **Automat hydrokinetyczny** ma osobny widok **Konwerter**: pompę, turbinę, kierownicę i lock-up. Włącz bieg 1, aby obserwować pełzanie, dodaj gazu i porównaj poślizg z blokadą podczas jazdy. Automatyczne zmiany można wyłączyć i wybierać 1–8 ręcznie. **Skrzynia biegów** pokazuje planetarne człony, pakiety i sterowanie hydrauliczne. To schemat inspirowany Aisin, z dydaktyczną topologią i przełożeniami.
 

@@ -71,7 +71,7 @@ test('presets include transverse FWD and longitudinal RWD torque-converter autom
 
 test('presets disclose factory gear counts that differ from shared educational models', () => {
   for (const preset of CAR_PRESETS) {
-    if (preset.transmission === 'manual') assert.match(preset.note, /5-biegowej/);
+    if (preset.transmission === 'manual' && preset.factoryGears !== 5) assert.match(preset.note, /5-biegowej/);
     if (preset.transmission === 'dct') assert.match(preset.note, /6-biegowego/);
   }
   assert.equal(getCarPreset('not-a-car'), null);
@@ -149,4 +149,36 @@ test('unknown car preset leaves the active simulation untouched', () => {
   const before = JSON.stringify(sim);
   assert.equal(applyCarPreset(sim, 'missing-car'), false);
   assert.equal(JSON.stringify(sim), before);
+});
+
+test('Ibiza 1.0 MPI 2016 selects three cylinders, belt timing, a manual and open front axle', () => {
+  const sim = dirtyState('automatic');
+  Object.assign(sim, { clutchCapacity: 10, clutchForce: 200, clutchClamp: 0.1, slipPower: 12000 });
+  assert.equal(applyCarPreset(sim, 'ibiza-mpi-2016'), true);
+  assert.equal(ENGINES[sim.engineId].cylinders, 3);
+  assert.equal(sim.enginePlacement, 'front');
+  assert.equal(sim.engineOrientation, 'transverse');
+  assert.equal(sim.driveLayout, 'fwd');
+  assert.equal(sim.transmission, 'manual');
+  assert.equal(sim.injection, 'mpi');
+  assert.equal(sim.timing, 'belt');
+  assert.equal(sim.turbo, false);
+  assert.equal(sim.frontLock, false);
+  assert.equal(sim.clutchClamp, 1);
+  assert.ok(sim.clutchCapacity > ENGINES.r3.torque);
+  assert.equal(sim.slipPower, 0);
+});
+
+test('changing the engine while paused clears stale torque without changing the mounting or selected gear', () => {
+  const sim = new Simulation();
+  sim.setEngine('v12'); sim.gear = 1; sim.rpm = 3000; sim.integrate(0.002);
+  assert.ok(sim.transmittedTorque > ENGINES.r3.torque);
+  sim.paused = true;
+  sim.setEngine('r3');
+  assert.equal(sim.transmittedTorque, 0);
+  assert.equal(sim.torque, 0);
+  assert.equal(sim.slipPower, 0);
+  assert.equal(sim.gear, 1);
+  assert.equal(sim.engineOrientation, 'longitudinal');
+  assert.equal(sim.paused, true);
 });

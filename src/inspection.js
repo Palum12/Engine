@@ -1,4 +1,9 @@
 export const INSPECTIONS = {
+  engine: [
+    { id: 'all', label: 'Cały silnik · przekrój', part: 'block', hint: 'Blok z cylindrami, głowica z zaworami i połączony napęd rozrządu.' },
+    { id: 'cylinderHead', label: 'Głowica · zawory / kanały / wałki', part: 'cylinderHead', hint: 'Odlew zamyka komory. Krzywki otwierają zawory, a sprężyny zamykają je na gniazdach.' },
+    { id: 'timing', label: 'Pasek / łańcuch · wał → wałki', part: 'timing', hint: 'Wał wykonuje dwa obroty, a wałki jeden. Pasek lub łańcuch łączy ich koła.' }
+  ],
   'drive-detail': [
     { id: 'all', label: 'Cały układ', part: 'driveDetail', hint: 'Od spalania do kół. Wybierz podzespół, aby przybliżyć go bez opuszczania tego widoku.' },
     { id: 'engine', label: '1 · Silnik i kolektory', part: 'crank', hint: 'Tłoki → korbowody → wał korbowy. Kolektory łączą cylindry z dolotem i wydechem.' },
@@ -10,7 +15,14 @@ export const INSPECTIONS = {
     { id: 'fuel', label: '8 · Zasilanie paliwem', part: 'fuelPump', hint: 'Zbiornik, pompa, filtr i wybrany układ przygotowania mieszanki.' },
     { id: 'turbo', label: '5 · Turbo i intercooler', part: 'turbo', hint: 'Oddzielne drogi: spaliny napędzają turbinę, powietrze płynie przez sprężarkę i intercooler.' }
   ],
-  clutch: [{id:'all',label:'Styk tarcz i wał wejściowy',part:'clutch',hint:'Złóż części, zwolnij pedał i obserwuj zielone powierzchnie styku. Przy wciśniętym pedale powstaje szczelina.'}],
+  clutch: [
+    {id:'all',label:'Całe sprzęgło · droga momentu',part:'clutch',hint:'Koło zamachowe → okładziny tarczy → piasta → wejście skrzyni. Docisk maleje przed powstaniem szczeliny.'},
+    {id:'flywheel',label:'1 · Koło zamachowe · silnik',part:'flywheel',hint:'Połączone z wałem silnika. Obraca się również wtedy, gdy tarcza sprzęgła jest odłączona.'},
+    {id:'friction',label:'2 · Tarcza cierna i piasta',part:'friction',hint:'Okładziny odbierają moment przez tarcie. Piasta z wielowypustem napędza wał skrzyni; sprężyny tłumią szarpnięcia.'},
+    {id:'pressurePlate',label:'3 · Docisk i sprężyste taśmy',part:'pressurePlate',hint:'Docisk obraca się z silnikiem i ściska tarczę. Taśmy przenoszą obrót oraz odsuwają docisk po odciążeniu.'},
+    {id:'diaphragm',label:'4 · Sprężyna talerzowa',part:'diaphragm',hint:'Łożysko wciska palce. Sprężyna ugina się i zmniejsza siłę zacisku; tarcza zaczyna się ślizgać pod obciążeniem.'},
+    {id:'releaseBearing',label:'5 · Łożysko i widełki',part:'releaseBearing',hint:'Widełki przesuwają łożysko, które naciska obracającą się sprężynę talerzową.'}
+  ],
   gearbox: [
     { id: 'all', label: 'Cała skrzynia', part: 'gearbox', hint: 'Wciśnij sprzęgło i wybierz bieg. Pomarańczowy pierścień: synchronizacja; złota przesuwka: połączenie z wałem.' },
     ...[1,2,3,4,5].map(n => ({id: `gear${n}`, label: `Bieg ${n} · zbliżenie`, part: 'synchronizer', hint: 'Koło obraca się luźno. Pierścień wyrównuje obroty, potem przesuwka łączy zęby koła z piastą wału.'}))
@@ -21,7 +33,8 @@ export const INSPECTIONS = {
   ],
   timing: [
     {id:'all',label:'Rozrząd przy silniku',part:'timing',hint:'Wałki rozrządu wykonują 1 obrót na 2 obroty wału. Gałęzie napędu zależą od głowic; VR/W mają w schemacie stopień pośredni.'},
-    {id:'timing',label:'Napęd rozrządu',part:'timing',hint:'Wybierz pasek lub łańcuch w konfiguracji. Znaki na kołach pokazują stosunek obrotów 2:1.'}
+    {id:'timing',label:'Napęd rozrządu',part:'timing',hint:'Wybierz pasek lub łańcuch w konfiguracji. Znaki na kołach pokazują stosunek obrotów 2:1.'},
+    {id:'cylinderHead',label:'Głowica i zawory',part:'cylinderHead',hint:'Zawory zamykają komorę w gniazdach. Pasek lub łańcuch napędza wałki, krzywki otwierają zawory.'}
   ],
   oil: [
     {id:'all',label:'Smarowanie silnika',part:'oilPump',hint:'Miska → smok → pompa → filtr → magistrala → łożyska → spływ do miski.'},
@@ -74,6 +87,7 @@ export function getInspections(view, sim) {
       { id: 'engine', label: 'Silnik · tłoki / wał / rozrząd', part: 'crank', hint: 'Zbliżenie zachowuje położenie silnika w pojeździe. „Odizoluj” pozwala ukryć pozostałe zespoły.' },
       ...transmission,
       ...(['awd', 'quattro', 'partTime'].includes(sim.driveLayout) ? [{ id: 'transfer', label: sim.driveLayout === 'partTime' ? 'Skrzynia rozdzielcza i reduktor' : 'Centralny mechanizm różnicowy', part: sim.driveLayout === 'quattro' ? 'quattro' : 'transfer', hint: 'Rozdział napędu między osiami. Porównaj obroty, moment i zachowanie na różnej nawierzchni.' }] : []),
+      { id: 'differential', label: sim.driveLayout === 'fwd' ? 'Dyferencjał FWD · satelity i półosie' : 'Dyferencjał · satelity i półosie', part: 'differential', hint: 'Działa mechanicznie. Uruchom pokaz i porównaj jazdę na wprost z zakrętem; satelity umożliwiają różne obroty półosi.' },
       { id: 'frontAxle', label: 'Przednia oś · dyferencjał / półosie', part: 'frontAxle', hint: 'Przednie koła skręcają. W FWD/AWD są napędzane; w RWD toczą się bez momentu napędowego.' },
       { id: 'rearAxle', label: 'Tylna oś · dyferencjał / półosie', part: 'rearAxle', hint: 'Różnica obrotów półosi wynika z zakrętu lub utraty przyczepności. Moment i obroty są oddzielnymi wielkościami.' },
       ...INSPECTIONS['drive-detail'].filter(entry => ['timing', 'oil', 'fuel', 'turbo'].includes(entry.id))

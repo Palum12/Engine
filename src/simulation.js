@@ -2,6 +2,7 @@ import { ENGINES, getEngine } from './engines.js';
 import { DCT_RATIOS, AUTOMATIC_RATIOS, FINAL_RATIO, WHEEL_RADIUS, VEHICLE_MASS, evaluateTraction, dctSelection, dctEngagement, DRIVE_LAYOUTS } from './powertrain.js';
 import { createHybridState, integrateHybrid } from './hybrid.js';
 import { createAutomaticState, integrateAutomatic } from './automatic.js';
+import { manualClutchState } from './manual-clutch.js';
 
 export const GEAR_RATIOS = [0, 3.5, 2.1, 1.4, 1.05, 0.82];
 export const PHASE_OFFSETS = ENGINES.r4.offsets;
@@ -39,6 +40,7 @@ export class Simulation {
       dct: { ...dctSelection(0), engagement: [0, 0], torques: [0, 0], omegas: [0, 0], angles: [0, 0], automatic: false },
       hybrid: createHybridState(), hybridEnabled: true, automatic: createAutomaticState()
     });
+    this.refreshClutchState();
     this.traction = evaluateTraction(this, 0);
   }
 
@@ -69,6 +71,7 @@ export class Simulation {
       this.enginePlacement = 'front'; this.engineOrientation = 'transverse';
       this.turbo = false; this.hybrid.range = 'D';
     }
+    this.refreshClutchState();
     this.traction = evaluateTraction(this, 0);
     return true;
   }
@@ -91,7 +94,18 @@ export class Simulation {
     this.engineId = id;
     this.timing = ENGINES[id].timing;
     if (!this.engineOrientations.includes(this.engineOrientation)) this.engineOrientation = 'longitudinal';
+    this.transmittedTorque = this.torque = 0;
+    this.clutchSlip = Math.abs(this.rpm - this.inputOmega * 30 / Math.PI);
+    this.refreshClutchState();
     return true;
+  }
+
+  refreshClutchState() {
+    const state = manualClutchState(this.clutch, ENGINES[this.engineId].torque, this.shiftTarget !== null);
+    this.clutchClamp = this.transmission === 'manual' ? state.clampFactor : 0;
+    this.clutchCapacity = this.transmission === 'manual' ? state.capacity : 0;
+    this.clutchForce = this.transmission === 'manual' ? state.force : 0;
+    this.slipPower = 0;
   }
 
   get engineOrientations() {
@@ -219,8 +233,13 @@ export class Simulation {
     const friction = omega > 0 ? (15 + this.rpm * 0.0045) * torqueScale : 0;
     if (ratio) this.inputOmega = this.outputOmega * ratio;
     const slip = omega - this.inputOmega;
-    const capacity = this.shiftTarget !== null ? 0 : 260 * torqueScale * clamp((0.85 - this.clutch) / 0.85, 0, 1) ** 2;
+    const clutchState = manualClutchState(this.clutch, engine.torque, this.shiftTarget !== null);
+    const capacity = clutchState.capacity;
     const clutchTorque = capacity === 0 ? 0 : clamp(slip * 8, -capacity, capacity);
+    this.clutchClamp = clutchState.clampFactor;
+    this.clutchCapacity = capacity;
+    this.clutchForce = clutchState.force;
+    this.slipPower = Math.max(0, clutchTorque * slip);
     this.clutchSlip = Math.abs(slip) * 30 / Math.PI;
     this.transmittedTorque = clutchTorque;
     this.torque = Math.max(0, combustion - friction);

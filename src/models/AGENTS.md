@@ -59,6 +59,16 @@ the exact internals or scale of every real vehicle preset.
 
 ## Verification
 
+- Timing belts/chains must remain visible in vehicle overviews. Meshes marked
+  `userData.lodEssential` are exempt from size-based LOD. Do not hide the whole
+  `systems.timing` group while leaving disconnected camshafts visible.
+- `cylinder-head.js` builds cutaway castings around the valve seats, guides, ports,
+  gasket and combustion chamber. `setHeadView` hides lower engine parts only for
+  an isolated head; `setView` must restore them before other inspections.
+- Manual gears rotate freely on needle bearings until a sleeve joins dog teeth
+  to its splined hub. Cones contact before dog engagement. Clutch geometry uses
+  `manualClutchState`; keep contact, deformation, force and slip explanations in sync.
+
 Run `npm test` and `npm run build` from the project root. The headless geometry
 tests use real Three.js meshes without a WebGL renderer. Focus on attachment
 alignment, finite camera bounds, reversible parenting, independent shaft

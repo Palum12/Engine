@@ -104,3 +104,74 @@ test('phone layout retains car selection, canvas and quick driving controls', as
   await page.screenshot({ path: info.outputPath('phone-911.png') });
   expect(errors).toEqual([]);
 });
+
+test('custom configuration, head, progressive manual clutch and FWD differential are inspectable', async ({ page }, info) => {
+  const errors = await openApp(page);
+  await expect(page.locator('#mount-settings #drive-layout')).toBeVisible();
+  await expect(page.locator('#mount-settings #engine-orientation')).toBeVisible();
+  await page.locator('#engine-orientation').selectOption('transverse');
+  await expect(page.locator('#drive-layout')).toHaveValue('fwd');
+  await page.locator('#drive-layout').selectOption('rwd');
+  await expect(page.locator('#engine-orientation')).toHaveValue('longitudinal');
+  await page.screenshot({ path: info.outputPath('custom-configuration.png') });
+
+  await page.locator('.view-tab[data-view="engine"]').click();
+  await page.locator('#inspect-section').selectOption('cylinderHead');
+  await page.locator('#isolate').check();
+  await page.locator('#inspect-description').click();
+  await expect(page.locator('#part-description')).toContainText('zawor');
+  await page.locator('#close-part').click();
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('isolated-head.png') });
+  await page.locator('#inspect-section').selectOption('timing');
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('isolated-belt.png') });
+  await page.locator('#timing-type').selectOption('chain');
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('isolated-chain.png') });
+  await page.locator('#timing-type').selectOption('belt');
+
+  await page.locator('.view-tab[data-view="clutch"]').click();
+  await page.locator('#clutch-slip-demo').click();
+  await expect(page.locator('#contact-state')).toContainText('POŚLIZGIEM');
+  await expect(page.locator('#contact-detail')).toContainText('ciepło');
+  await page.locator('#pause').click();
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('partial-clutch.png') });
+  await page.locator('#quick-clutch').evaluate(element => { element.value = '80'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await expect(page.locator('#contact-state')).toContainText('ROZŁĄCZONE');
+  await page.locator('#inspect-section').selectOption('releaseBearing');
+  await page.locator('#isolate').check();
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('clutch-release-mechanism.png') });
+
+  await page.locator('.view-tab[data-view="gearbox"]').click();
+  await page.locator('#inspect-section').selectOption('gear2');
+  await expect(page.locator('#shift-detail')).toContainText('Koło biegu 2 obraca się swobodnie');
+  await expect(page.locator('#shift-detail')).toContainText('Bieg 1 jest włączony');
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('manual-second-gear.png') });
+  await page.locator('#quick-clutch').evaluate(element => { element.value = '100'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('[data-gear="2"]').click();
+  await page.locator('#shift-step').click();
+  await expect(page.locator('#shift-detail')).toContainText('wyrównując obroty');
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('manual-synchronization.png') });
+
+  await page.locator('#car-preset').selectOption('ibiza-mpi-2016');
+  await expect(page.locator('#scene')).toHaveAttribute('data-cylinders', '3');
+  await expect(page.locator('#scene')).toHaveAttribute('data-drive', 'fwd');
+  await expect(page.locator('#scene')).toHaveAttribute('data-engine-orientation', 'transverse');
+  await page.locator('[data-camera="top"]').click();
+  await page.waitForTimeout(1000);
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('ibiza-2016.png') });
+  await page.locator('#inspect-section').selectOption('differential');
+  await page.locator('#isolate').check();
+  await expect(page.locator('.scene-legend')).toContainText('Satelity');
+  await page.locator('#diff-demo').click();
+  await expect(page.locator('#diff-demo')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => page.locator('#diff-left').textContent()).not.toBe(await page.locator('#diff-right').textContent());
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('fwd-differential-turn.png') });
+  await page.locator('[data-turn="0"]').click();
+  await expect.poll(async () => (await page.locator('#diff-left').textContent()) === (await page.locator('#diff-right').textContent())).toBe(true);
+  await page.locator('[data-turn="-1"]').click();
+  await expect.poll(async () => Number(await page.locator('#diff-left').textContent()) > Number(await page.locator('#diff-right').textContent())).toBe(true);
+  await page.locator('.view-tab[data-view="engine"]').click();
+  await page.locator('.view-tab[data-view="drive-detail"]').click();
+  await page.locator('#inspect-section').selectOption('differential');
+  await expect(page.locator('#diff-demo')).toHaveAttribute('aria-pressed', 'false');
+  expect(errors).toEqual([]);
+});

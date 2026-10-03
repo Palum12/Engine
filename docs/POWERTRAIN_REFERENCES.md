@@ -1,6 +1,6 @@
 # Zespoły napędowe — źródła i zakres odwzorowania
 
-Aktualizacja: 02.10.2026. Modele wyjaśniają zasady działania. Nie są modelami CAD ani symulatorami fabrycznych sterowników. Proporcje, przewody, pokrywy i odstępy montażowe są dobrane do przekroju edukacyjnego.
+Aktualizacja: 03.10.2026. Modele wyjaśniają zasady działania. Nie są modelami CAD ani symulatorami fabrycznych sterowników. Proporcje, przewody, pokrywy i odstępy montażowe są dobrane do przekroju edukacyjnego.
 
 ## Źródła pierwotne
 
@@ -19,9 +19,19 @@ Aktualizacja: 02.10.2026. Modele wyjaśniają zasady działania. Nie są modelam
 
 Wewnętrzne koła boczne 16-zębowe i satelity 12-zębowe mają komplementarne kąty stożków podziałowych. Obie pary wychodzą ze wspólnego wierzchołka; satelity obracają się na poprzecznej osi, a półosie kończą się przed jej środkiem. Łożyska i koła mają otwory. Korona przekładni głównej jest odsunięta od tyłu koła bocznego. Widok rozstrzelony i odsłanianie kosza ułatwiają rozpoznanie części.
 
-To proste, ilustracyjne zęby stożkowe. Nie odwzorowujemy fabrycznych zębów spiralnych, korekcji profilu, luzów roboczych ani przekładni hipoidalnej. W FWD przekładnia główna jest walcowa i ma osie równoległe do poprzecznej skrzyni.
+To proste, ilustracyjne zęby stożkowe. Nie odwzorowujemy fabrycznych zębów spiralnych, korekcji profilu, luzów roboczych ani przekładni hipoidalnej. Przy montażu poprzecznym przekładnia główna jest walcowa i ma osie równoległe do skrzyni. FWD może być także wzdłużne: wówczas model zachowuje koło talerzowe i zmianę kierunku osi obrotu.
 
 Otwarty dyferencjał ogranicza dostępny moment osi do dwukrotności limitu słabszego koła i dzieli go po równo. Blokada wiąże prędkości półosi; w quasi-statycznym modelu moment rozdziela się według dostępnej przyczepności. Stałe naciski na koła, współczynniki tarcia i narastanie poślizgu są uproszczeniami. Średnia prędkość kół odpowiada koszowi; skręt zwiększa drogę zewnętrznych kół i przedniej osi. Przy spiętych osiach pokazujemy konieczność poślizgu oraz komunikat o naprężeniu, bez wyliczania naprężeń elementów.
+
+## Sprzęgło ręczne i synchronizatory
+
+`manualClutchState` jest wspólne dla fizyki, geometrii i objaśnień. Pedał 0% oznacza pełny docisk. Siła zacisku i limit momentu maleją płynnie przy wciskaniu pedału; w tym modelu osiągają zero przy 72% skoku. Dopiero dalej powstaje widoczna szczelina. Łożysko, palce sprężyny i sprężyste taśmy poruszają się w całym zakresie. Podział skoku, siły i powiększone odległości są dydaktyczne, nie są pomiarami sprzęgła konkretnego auta. Próg 85% pozostaje interlockiem zmiany biegu i rozruchu.
+
+Różnica prędkości silnika i wejścia skrzyni wyznacza poślizg. Przenoszony moment jest ograniczony dociskiem, a moc tarcia wynosi moment razy różnica prędkości kątowej. Odczyt w kW opisuje chwilowe ciepło; model nie liczy temperatury, zużycia okładzin ani ich zależności od nagrzania. Ruszanie przyciskiem przygotowuje półsprzęgło, po czym użytkownik może zmieniać pedał i porównywać obroty.
+
+Koła biegów na wyjściu obracają się swobodnie na łożyskach igiełkowych; piasty są związane z wałem. Stożek i pierścień cierny wyrównują obroty, potem tuleja łączy zęby kłowe koła z piastą. Model pokazuje osobną przesuwkę każdego biegu i powiększone etapy. Drobne końcowe indeksowanie fazy kłów jest wizualne; nie zmienia stanu wałów symulacji.
+
+Pokaz stołowy dyferencjału jest niezależny od jazdy auta i podaje umowne obroty. W FWD używa przedniego mechanizmu. Odsłonięcie satelitów i zakręt pozwalają zobaczyć różnicę obrotów; jazda na wprost naturalnie daje równe prędkości. Otwarty mechanizm działa bez sterownika. Pokaz kończy się przy zmianie widoku, konfiguracji, presetu lub pedałów.
 
 ## DCT
 
@@ -36,7 +46,7 @@ Przełożenia 3,60 / 2,20 / 1,52 / 1,15 / 0,90 / 0,74 i osobne przesuwki każdeg
 | Tryb | Więzy i działanie |
 | --- | --- |
 | RWD | Skrzynia, wał i tylny dyferencjał. Przednie koła toczą się biernie. |
-| FWD | Poprzeczny zespół i walcowa przekładnia główna do przedniej osi. |
+| FWD | Napęd przedniej osi. Poprzeczny zespół używa walcowej przekładni głównej; możliwy jest także montaż wzdłużny. |
 | 2H | Tył. Przesuwka rozłącza drogę do przedniego wału. |
 | 4H | Osie połączone sztywno przez przekładnię łańcuchową; nie ma centralnego dyferencjału. Nie zakładamy równego podziału momentu. |
 | 4L | Spięcie osi jak w 4H, dodatkowy idealny reduktor planetarny 2,5:1. Wymagany postój przy przełączaniu. |

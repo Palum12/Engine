@@ -3,6 +3,7 @@ import { getEngine, cylinderLayout } from '../engines.js';
 import { cycleDegrees, pistonHeight } from '../simulation.js';
 import { cycleVisuals, chargeSample, smooth } from '../cycle-visuals.js';
 import { ModelGeometry, vec, PHASE_COLORS, UP } from './geometry.js';
+import { buildCylinderHead } from './cylinder-head.js';
 
 export class EngineModel extends ModelGeometry {
   constructor(materials, id = 'r4') {
@@ -43,7 +44,7 @@ export class EngineModel extends ModelGeometry {
     for (let i = 0; i < this.config.cylinders; i++) this.buildCylinder(i);
     this.group.updateMatrixWorld(true);
     this.config.headAngles.forEach((angle, head) => {
-      const root = this.subgroup(this.structure, [0, 0.8, 0], 'valves');
+      const root = this.subgroup(this.structure, [0, 0.8, 0], 'cylinderHead');
       root.rotation.x = angle * Math.PI / 180;
       this.heads.push(root);
       [-1.14, 1.14].forEach(z => this.box(this.length, 0.09, 0.08, 'dark', root, [0, 3.94, z], 'banks'));
@@ -69,7 +70,7 @@ export class EngineModel extends ModelGeometry {
         this.camshafts.push(shaft);
         this.anchor(`${head + 1} · wałek ${kind ? 'wydechowy' : 'dolotowy'}`, root, [-this.length / 2, 4.8, shaft.position.z], 'timing', ['timing']);
       }
-      this.anchor(`Głowica ${head + 1}${this.config.angles.length > this.config.headAngles.length ? ' · wspólna dla 2 rzędów' : ''}`, root, [0, 4.8, 0], 'banks', ['engine', 'timing']);
+      this.anchor(`Głowica ${head + 1}${this.config.angles.length > this.config.headAngles.length ? ' · wspólna dla 2 rzędów' : ''}`, root, [0, 4.8, 0], 'cylinderHead', ['engine', 'timing', 'drive-detail']);
     });
     this.pulley = this.gear(36, 0.48, 0.12, 'dark', this.structure, [-this.shaftEnd, 0.8, 0], 'crank');
     this.anchor('1 · Silnik', this.structure, [0, 5.65, 0], 'block', ['drive-detail']);
@@ -87,9 +88,10 @@ export class EngineModel extends ModelGeometry {
     const front = this.mesh(this.geometry('sleeveFront', () => new THREE.CylinderGeometry(0.67, 0.67, 2.13, 40, 1, true, -Math.PI / 2, Math.PI)), 'block', unit, [0, 3.18, 0], 'block');
     if (this.config.bankAngle === 180 && layout.bankRadians > 0) { sleeve.rotation.y = Math.PI; front.rotation.y = Math.PI; }
     this.box(1.43, 0.13, 0.42, 'dark', unit, [0, 4.35, -0.45], 'valves');
+    const blockSupports = this.subgroup(unit, [0, 0, 0], 'block');
     [-0.6, 0.6].forEach(x => {
-      this.cylinder(0.075, 0.18, 'steel', unit, [x, 4.4, -0.44], 'y');
-      this.cylinder(0.046, 2.13, 'steel', unit, [x, 3.19, -0.36], 'y');
+      this.cylinder(0.075, 0.18, 'steel', blockSupports, [x, 4.4, -0.44], 'y');
+      this.cylinder(0.046, 2.13, 'steel', blockSupports, [x, 3.19, -0.36], 'y');
     });
     const piston = this.subgroup(unit, [0, 0, 0], 'piston');
     this.cylinder(0.57, 0.42, 'steel', piston, [0, 0, 0]);
@@ -107,12 +109,20 @@ export class EngineModel extends ModelGeometry {
       this.cylinder(0.32, 0.15, 'dark', crank, [x, -0.18, 0], 'x');
     });
     const valves = [];
+    const headCasting = buildCylinderHead(this, unit);
     [-0.27, 0.27].forEach((x, i) => [-0.21, 0.21].forEach(z => {
       const valve = this.subgroup(unit, [x, 4.22, z], 'valves');
       valve.userData.kind = i;
       this.cylinder(0.14, 0.045, i ? 'exhaust' : 'intake', valve, [0, 0, 0]);
       this.cylinder(0.03, 0.74, 'steel', valve, [0, 0.37, 0]);
-      for (let n = 0; n < 7; n++) this.ring(0.068, 0.012, 'steel', valve, [0, 0.42 + n * 0.035, 0], 'y');
+      const springGeometry = this.geometry('valveSpring', () => {
+        const points = Array.from({ length: 113 }, (_, n) => {
+          const a = n / 112 * Math.PI * 14;
+          return vec(Math.cos(a) * 0.068, n / 112 * 0.24, Math.sin(a) * 0.068);
+        });
+        return new THREE.TubeGeometry(this.curve(points), 112, 0.009, 6, false);
+      });
+      this.mesh(springGeometry, 'steel', valve, [0, 0.42, 0], 'valveSpring');
       this.cylinder(0.1, 0.04, 'steel', valve, [0, 0.7, 0]);
       valves.push(valve);
     }));
@@ -149,7 +159,7 @@ export class EngineModel extends ModelGeometry {
     const injectorAnchor = this.anchor('Wtrysk MPI · przed zaworem', unit, [-0.66, 5.45, 0], 'injection', ['cylinder'], index);
     this.anchor('Świeca', unit, [0.2, 4.74, 0.5], 'spark', ['cylinder'], index);
     this.anchor(String(index + 1), unit, [0, 5.34, 0], 'piston', ['engine', 'drive-detail'], index);
-    this.cylinders.push({ layout, pivot, unit, sleeve, front, piston, rod, cap, valves, spark, chamber, intake, exhaust, mpi, gdi, mpiTip, gdiTip, air, fuel, gas, flames, charge, injectorAnchor });
+    this.cylinders.push({ layout, pivot, unit, sleeve, front, blockSupports, headCasting, piston, rod, cap, valves, spark, chamber, intake, exhaust, mpi, gdi, mpiTip, gdiTip, air, fuel, gas, flames, charge, injectorAnchor });
   }
 
   injector(parent, tip, direction) {
@@ -164,17 +174,36 @@ export class EngineModel extends ModelGeometry {
   }
 
   setView(mode, selected) {
+    this.headOnly = false;
     this.group.visible = ['engine', 'cylinder', 'drive', 'drive-detail', 'timing', 'oil', 'fuel'].includes(mode);
     this.structure.visible = true;
+    this.crankshaft.visible = true;
     this.housing.visible = mode !== 'cylinder';
     this.pulley.visible = mode !== 'cylinder';
     this.heads.forEach(head => { head.visible = mode !== 'cylinder'; });
     this.rockers.forEach(({ rocker }) => { rocker.visible = mode !== 'cylinder'; });
     this.crankshaft.children.forEach(child => { child.visible = mode !== 'cylinder' || Math.abs(child.position.x - this.cylinders[selected].layout.x) < 0.85; });
-    this.cylinders.forEach((c, i) => { c.pivot.visible = mode !== 'cylinder' || i === selected; });
+    this.cylinders.forEach((c, i) => {
+      c.pivot.visible = mode !== 'cylinder' || i === selected;
+      for (const key of ['sleeve', 'piston', 'rod', 'cap', 'chamber', 'blockSupports', 'headCasting']) (c[key].group || c[key]).visible = true;
+    });
+  }
+
+  setHeadView(isolate) {
+    this.headOnly = isolate;
+    this.housing.visible = this.crankshaft.visible = this.pulley.visible = !isolate;
+    this.cylinders.forEach(c => {
+      for (const key of ['sleeve', 'front', 'piston', 'rod', 'cap', 'chamber', 'blockSupports', 'charge', 'flames', 'air', 'fuel', 'gas']) c[key].visible = !isolate;
+    });
   }
 
   bounds(mode, selected) {
+    if (mode === 'cylinderHead') {
+      const box = new THREE.Box3();
+      this.cylinders.forEach(c => box.union(new THREE.Box3().setFromObject(c.headCasting.group)));
+      this.heads.forEach(head => box.union(new THREE.Box3().setFromObject(head)));
+      return box;
+    }
     if (mode === 'cylinder') return new THREE.Box3().setFromObject(this.cylinders[selected].pivot);
     const box = new THREE.Box3(vec(-this.shaftEnd - 0.5, -0.05, -1.25), vec(this.shaftEnd + 0.3, 1.2, 1.25));
     this.cylinders.forEach(c => box.union(new THREE.Box3().setFromObject(c.pivot)));
@@ -198,7 +227,8 @@ export class EngineModel extends ModelGeometry {
       const pin = vec(0, 0.8 + 0.65 * Math.cos(theta), 0.65 * Math.sin(theta));
       this.between(c.rod, pin, vec(0, y, 0));
       c.cap.position.copy(pin);
-      c.front.visible = !cutaway;
+      c.front.visible = !cutaway && !this.headOnly;
+      c.headCasting.front.visible = !cutaway;
       const floor = y + 0.25;
       const height = Math.max(0.025, 4.18 - floor);
       c.chamber.position.y = floor + height / 2;
@@ -207,7 +237,7 @@ export class EngineModel extends ModelGeometry {
       const exhaustColor = new THREE.Color(0xc4d0dc);
       c.chamber.material.color.setHex(0x69cbed).lerp(hot, visual.heat).lerp(exhaustColor, visual.burned * (1 - visual.heat));
       c.chamber.material.opacity = sim.running ? visual.charge * 0.07 + visual.heat * 0.05 : 0.015;
-      c.flames.visible = sim.running && visual.flame > 0;
+      c.flames.visible = !this.headOnly && sim.running && visual.flame > 0;
       c.flames.children.forEach((plume, n) => {
         const spread = smooth(348 + n * 2, 375 + n * 2, degrees);
         const length = height * 0.88 * visual.flame * spread * (0.8 + 0.15 * Math.sin(n * 5 + degrees * 0.18));
@@ -215,7 +245,7 @@ export class EngineModel extends ModelGeometry {
         plume.scale.set(spread * visual.flame * 0.85, Math.max(0.001, length), spread * visual.flame * 0.85);
         plume.position.set(Math.cos(n * 2.4) * radius, 4.15 - length / 2, 0.3 * (1 - spread) + Math.sin(n * 2.4) * radius);
       });
-      c.charge.visible = sim.running;
+      c.charge.visible = !this.headOnly && sim.running;
       const matrix = new THREE.Matrix4();
       const color = new THREE.Color();
       for (let n = 0; n < c.charge.count; n++) {
@@ -237,9 +267,9 @@ export class EngineModel extends ModelGeometry {
       c.spark.scale.setScalar(visual.spark);
       c.mpi.visible = sim.injection === 'mpi';
       c.gdi.visible = sim.injection === 'gdi';
-      c.air.visible = sim.running && visual.intake > 0;
-      c.fuel.visible = sim.running && (sim.injection === 'gdi' ? visual.injection : visual.intake) > 0;
-      c.gas.visible = sim.running && visual.exhaust > 0;
+      c.air.visible = !this.headOnly && sim.running && visual.intake > 0;
+      c.fuel.visible = !this.headOnly && sim.running && (sim.injection === 'gdi' ? visual.injection : visual.intake) > 0;
+      c.gas.visible = !this.headOnly && sim.running && visual.exhaust > 0;
       c.air.material.opacity = visual.intake;
       c.fuel.material.opacity = sim.injection === 'gdi' ? visual.injection : visual.intake;
       c.gas.material.opacity = visual.exhaust * 0.85;

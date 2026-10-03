@@ -59,7 +59,7 @@ for (const id of ['boxer4', 'boxer6']) test(`${id}: opposed pistons move togethe
 for (const id of Object.keys(ENGINES)) test(`${id}: head layout, valve links, chain branches and visible gas stay coherent`, () => {
   const m = materials(), engine = new EngineModel(m,id), systems = new SystemsModel(m,engine), sim = new Simulation();
   sim.setEngine(id);
-  const expected = { r4:[1,2,1], r6:[1,2,1], v6:[2,4,2], vr6:[1,2,2], v8:[2,4,2], v12:[2,4,2], w16:[2,4,3], boxer4:[2,4,2], boxer6:[2,4,2] }[id];
+  const expected = { r3:[1,2,1], r4:[1,2,1], r6:[1,2,1], v6:[2,4,2], vr6:[1,2,2], v8:[2,4,2], v12:[2,4,2], w16:[2,4,3], boxer4:[2,4,2], boxer6:[2,4,2] }[id];
   assert.equal(engine.heads.length,expected[0]);
   assert.equal(engine.camshafts.length,expected[1]);
   assert.equal(systems.timingLoops.length,expected[2]);
