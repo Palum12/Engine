@@ -19,8 +19,12 @@ test('every tab renders and controls work in the local WebGL application', async
     await page.locator(`.view-tab[data-view="${view}"]`).click();
     await expect(page.locator('#scene')).toHaveAttribute('data-view', view);
     await expect(page.locator('#scene canvas')).toBeVisible();
-    await expect(page.locator('#cycle-panel')).toBeVisible();
+    expect((await page.locator('#scene').boundingBox()).height).toBeGreaterThan(200);
+    if (view === 'suspension') await expect(page.locator('#suspension-telemetry')).toBeVisible();
+    else if (['clutch', 'gearbox'].includes(view)) await expect(page.locator('#cycle-panel')).toBeHidden();
+    else await expect(page.locator('#cycle-panel')).toBeVisible();
   }
+  await page.locator('.view-tab[data-view="engine"]').click();
   await page.locator('#transmission-type').selectOption('manual');
   await page.locator('#engine-orientation').selectOption('transverse');
   await expect(page.locator('#drive-layout')).toHaveValue('fwd');
@@ -173,6 +177,97 @@ test('custom configuration, head, progressive manual clutch and FWD differential
   await page.locator('.view-tab[data-view="drive-detail"]').click();
   await page.locator('#inspect-section').selectOption('differential');
   await expect(page.locator('#diff-demo')).toHaveAttribute('aria-pressed', 'false');
+  expect(errors).toEqual([]);
+});
+
+test('clutch, selector, DCT branches and all five suspension layouts are inspectable', async ({ page }, info) => {
+  test.setTimeout(360_000);
+  const errors = await openApp(page);
+  const snapshot = async name => {
+    await page.locator('#inspect-section').dispatchEvent('change');
+    await page.waitForTimeout(300);
+    await page.locator('.visual-panel').screenshot({ path: info.outputPath(`${name}.png`) });
+  };
+  await page.locator('#car-preset').selectOption('ibiza-mpi-2016');
+  await page.locator('.view-tab[data-view="clutch"]').click();
+  await page.locator('#pause').click();
+  await page.locator('#spread-clutch').click();
+  await snapshot('clutch-layers');
+  await page.locator('#assemble-clutch').click();
+  await page.locator('#quick-clutch').evaluate(element => { element.value = '100'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await snapshot('clutch-full-release');
+  for (const part of ['clutchCover', 'diaphragm', 'releaseActuator']) {
+    await page.locator('#inspect-section').selectOption(part);
+    await page.locator('#isolate').check();
+    await snapshot(`clutch-${part}`);
+  }
+  await page.locator('.view-tab[data-view="gearbox"]').click();
+  await page.locator('#inspect-section').selectOption('selector');
+  await expect(page.locator('.model-label:visible').filter({ hasText: 'Stożek' })).toHaveCount(0);
+  await snapshot('manual-selector');
+  await page.locator('#synchronizer-demo').click();
+  await expect(page.locator('#inspect-section')).toHaveValue('synchronizer');
+  await page.locator('#shift-step').click();
+  await expect(page.locator('#shift-detail')).toContainText('wyrównując obroty');
+  await snapshot('synchronizer-cone-contact');
+  await page.locator('#shift-step').click();
+  await snapshot('synchronizer-dog-engagement');
+  await page.locator('#shift-step').click();
+  await expect(page.locator('#shift-detail')).toContainText('Bieg 2');
+
+  await page.locator('#car-preset').selectOption('458-italia-2009');
+  await page.locator('.view-tab[data-view="gearbox"]').click();
+  await expect(page.locator('#dct-layout-note')).toContainText('6 biegów');
+  await page.locator('#quick-throttle').evaluate(element => { element.value = '30'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.locator('[data-gear="1"]').click();
+  await page.locator('#dct-shift-step').evaluate(button => { for (let i = 0; i < 3; i++) button.click(); });
+  await expect(page.locator('#dct-state')).toContainText('przygotowany 2');
+  if (await page.locator('#mechanism-readout').isVisible()) await page.locator('#mechanism-readout .close-readout').click();
+  for (const section of ['all', 'dctOdd', 'dctEven', 'dctSelector']) {
+    await page.locator('#inspect-section').selectOption(section);
+    if (section !== 'all') await page.locator('#isolate').check();
+    await snapshot(`dct-${section}`);
+  }
+  await page.locator('#inspect-section').selectOption('all');
+  await page.locator('#isolate').uncheck();
+  await page.locator('[data-gear="2"]').click();
+  await page.locator('#dct-shift-step').click();
+  await expect(page.locator('#dct-state')).toContainText('przejmowanie momentu');
+  await page.locator('#show-readout').click();
+  await expect(page.locator('#mechanism-detail')).toContainText('Oba pakiety przejmują napęd z poślizgiem');
+  await page.locator('#mechanism-readout .close-readout').click();
+  await snapshot('dct-handover');
+  await page.locator('.view-tab[data-view="suspension"]').click();
+  await expect(page.locator('#suspension-controls')).toBeVisible();
+  expect((await page.locator('#scene').boundingBox()).height).toBeGreaterThan(320);
+  await expect(page.locator('#cycle-panel')).toBeHidden();
+  await expect(page.locator('#mount-settings')).toBeHidden();
+  await page.locator('#suspension-road').selectOption('split');
+  await page.locator('#suspension-amplitude').evaluate(element => { element.value = '12'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+  for (const type of ['macpherson', 'multilink', 'leaf', 'pushrod', 'pullrod']) {
+    await page.locator('#suspension-type').selectOption(type);
+    await page.locator('#suspension-step').evaluate(button => { for (let i = 0; i < 7; i++) button.click(); });
+    await expect(page.locator('#suspension-body-state')).toContainText('3.5 m');
+    await snapshot(`suspension-${type}`);
+  }
+  for (const section of ['suspensionLinks', 'suspensionSpring', 'suspensionDamper', 'suspensionRoad']) {
+    await page.locator('#inspect-section').selectOption(section);
+    await page.locator('#isolate').check();
+    if (['suspensionLinks', 'suspensionSpring', 'suspensionDamper'].includes(section)) {
+      await expect(page.locator('.model-label:visible').filter({ hasText: 'Nawierzchnia' })).toHaveCount(0);
+    }
+    await snapshot(`suspension-${section}`);
+  }
+  await page.locator('#suspension-reset').click();
+  await expect(page.locator('#suspension-body-state')).toContainText('0.0 m');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#inspect-section').selectOption('all');
+  await page.locator('#isolate').uncheck();
+  await snapshot('suspension-phone');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  await page.locator('.view-tab[data-view="drive-detail"]').click();
+  await expect(page.locator('#car-preset')).toHaveValue('458-italia-2009');
+  await expect(page.locator('#quick-gear')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

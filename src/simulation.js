@@ -3,6 +3,7 @@ import { DCT_RATIOS, AUTOMATIC_RATIOS, FINAL_RATIO, WHEEL_RADIUS, VEHICLE_MASS, 
 import { createHybridState, integrateHybrid, hybridWheelTorque } from './hybrid.js';
 import { createAutomaticState, integrateAutomatic } from './automatic.js';
 import { manualClutchState } from './manual-clutch.js';
+import { SuspensionSimulation } from './suspension.js';
 
 export const GEAR_RATIOS = [0, 3.5, 2.1, 1.4, 1.05, 0.82];
 export const PHASE_OFFSETS = ENGINES.r4.offsets;
@@ -25,6 +26,9 @@ export class Simulation {
   constructor() { this.reset(); }
 
   reset() {
+    this.suspension = new SuspensionSimulation();
+    this.suspensionActive = false;
+    this.suspensionTempo = 0.5;
     Object.assign(this, {
       rpm: 900, speed: 0, throttle: 0, clutch: 0, brake: 0,
       gear: 0, running: true, paused: false, turbo: false,
@@ -184,6 +188,10 @@ export class Simulation {
   update(dt) {
     if (this.paused || !Number.isFinite(dt) || dt <= 0) return;
     dt = Math.min(dt, 0.1);
+    if (this.suspensionActive) {
+      this.suspension.update(dt * this.suspensionTempo);
+      return;
+    }
     const steps = Math.ceil(Math.min(dt, 0.1) / 0.002);
     for (let i = 0; i < steps; i++) this.integrate(Math.min(dt, 0.1) / steps);
     const scale = this.animationScale;

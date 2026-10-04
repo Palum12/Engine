@@ -14,6 +14,7 @@ import { TurboModel } from '../src/models/turbo-model.js';
 import { SystemsModel } from '../src/models/systems-model.js';
 import { FinalDriveModel } from '../src/models/final-drive-model.js';
 import { VehicleModel } from '../src/models/vehicle-model.js';
+import { SuspensionModel } from '../src/models/suspension-model.js';
 import { ModelGeometry, vec } from '../src/models/geometry.js';
 import { bevelGearGeometry } from '../src/models/mechanical-geometry.js';
 import { getInspections } from '../src/inspection.js';
@@ -31,16 +32,17 @@ function fixture(run) {
   scene.automatic = new AutomaticModel(m);
   scene.hybrid = new HybridModel(m);
   scene.transfer = new TransferModel(m);
+  scene.suspension = new SuspensionModel(m);
   scene.turbo = new TurboModel(m);
   scene.systems = new SystemsModel(m, scene.engine);
   scene.finalDrive = new FinalDriveModel(m);
   scene.connections = new ModelGeometry(m);
   const models = Object.fromEntries(['engine', 'drive', 'dct', 'automatic', 'hybrid', 'transfer', 'turbo', 'systems', 'connections'].map(key => [key, scene[key]]));
   scene.vehicle = new VehicleModel(m, models);
-  scene.root.add(...Object.values(models).map(model => model.group), scene.finalDrive.group, scene.vehicle.group);
+  scene.root.add(...Object.values(models).map(model => model.group), scene.finalDrive.group, scene.vehicle.group, scene.suspension.group);
   scene.camera.position.set(8, 15, 25);
   try { run(scene, scene.sim); }
-  finally { scene.vehicle.dispose(); scene.finalDrive.dispose(); Object.values(models).forEach(model => model.dispose()); Object.values(m).forEach(material => material.dispose()); }
+  finally { scene.vehicle.dispose(); scene.finalDrive.dispose(); scene.suspension.dispose(); Object.values(models).forEach(model => model.dispose()); Object.values(m).forEach(material => material.dispose()); }
 }
 
 test('all drive configurations and inspections have finite camera bounds and reversible whole/bench layouts', () => {
@@ -66,6 +68,31 @@ test('all drive configurations and inspections have finite camera bounds and rev
       near(scene.engine.group.scale.x, 1);
       near(scene.engine.group.rotation.y, 0);
     }
+  });
+});
+
+test('suspension bench has finite detail cameras and restores the chosen powertrain on exit', () => {
+  fixture((scene, sim) => {
+    sim.setTransmission('dct'); sim.setEngine('boxer6'); sim.setEnginePlacement('rear');
+    scene.setView('drive-detail', true);
+    scene.setView('suspension', true);
+    assert.equal(scene.suspension.group.visible, true);
+    assert.equal(scene.vehicle.group.visible, false);
+    assert.equal(scene.dct.group.visible, false);
+    for (const type of ['macpherson', 'multilink', 'leaf', 'pushrod', 'pullrod']) {
+      sim.suspension.setType(type);
+      for (const entry of getInspections('suspension', sim)) {
+        scene.inspect(entry.id, true);
+        assert.ok(scene.camera.position.toArray().every(Number.isFinite));
+        assert.ok(scene.controls.target.toArray().every(Number.isFinite));
+      }
+    }
+    scene.setView('drive-detail', true);
+    assert.equal(scene.suspension.group.visible, false);
+    assert.equal(scene.engine.group.parent, scene.vehicle.assembly);
+    assert.equal(sim.engineId, 'boxer6');
+    assert.equal(sim.enginePlacement, 'rear');
+    assert.equal(sim.transmission, 'dct');
   });
 });
 

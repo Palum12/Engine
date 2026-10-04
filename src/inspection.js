@@ -1,4 +1,11 @@
 export const INSPECTIONS = {
+  suspension: [
+    { id: 'all', label: 'Cała oś · droga i nadwozie', part: 'suspensionBody', hint: 'Porównaj tor koła z ruchem nadwozia. Zmień nawierzchnię, prędkość i tłumienie w panelu zawieszenia.' },
+    { id: 'suspensionLinks', label: 'Prowadzenie · wahacze / zwrotnica', part: 'suspensionLinks', hint: 'Łączniki ustalają tor koła. W pushrod i pullrod koło prowadzą dwa wahacze; drążek uruchamia sprężynę.' },
+    { id: 'suspensionSpring', label: 'Sprężyna / resor · ugięcie', part: 'suspensionSpring', hint: 'Sprężyna podtrzymuje nadwozie. Spróbuj miękkiej i twardej sprężyny przy tej samej nierówności.' },
+    { id: 'suspensionDamper', label: 'Amortyzator · tłumienie', part: 'suspensionDamper', hint: 'Ustaw tłumienie na 0%, przejedź po nierówności, potem przywróć 100% i porównaj zanikanie drgań.' },
+    { id: 'suspensionRoad', label: 'Koła i nierówna nawierzchnia', part: 'suspensionRoad', hint: 'Różne nierówności pod L / P pokazują przechył nadwozia i połączenie kół w sztywnej osi.' }
+  ],
   engine: [
     { id: 'all', label: 'Cały silnik · przekrój', part: 'block', hint: 'Blok z cylindrami, głowica z zaworami i połączony napęd rozrządu.' },
     { id: 'cylinderHead', label: 'Głowica · zawory / kanały / wałki', part: 'cylinderHead', hint: 'Odlew zamyka komory. Krzywki otwierają zawory, a sprężyny zamykają je na gniazdach.' },
@@ -21,10 +28,14 @@ export const INSPECTIONS = {
     {id:'friction',label:'2 · Tarcza cierna i piasta',part:'friction',hint:'Okładziny odbierają moment przez tarcie. Piasta z wielowypustem napędza wał skrzyni; sprężyny tłumią szarpnięcia.'},
     {id:'pressurePlate',label:'3 · Docisk i sprężyste taśmy',part:'pressurePlate',hint:'Docisk obraca się z silnikiem i ściska tarczę. Taśmy przenoszą obrót oraz odsuwają docisk po odciążeniu.'},
     {id:'diaphragm',label:'4 · Sprężyna talerzowa',part:'diaphragm',hint:'Łożysko wciska palce. Sprężyna ugina się i zmniejsza siłę zacisku; tarcza zaczyna się ślizgać pod obciążeniem.'},
-    {id:'releaseBearing',label:'5 · Łożysko i widełki',part:'releaseBearing',hint:'Widełki przesuwają łożysko, które naciska obracającą się sprężynę talerzową.'}
+    {id:'clutchCover',label:'5 · Obudowa i podparcie sprężyny',part:'clutchCover',hint:'Obudowa obraca się z kołem zamachowym. Podpiera sprężynę i przenosi obrót na docisk przez sprężyste taśmy.'},
+    {id:'releaseBearing',label:'6 · Łożysko wysprzęglające',part:'releaseBearing',hint:'Łożysko naciska palce obracającej się sprężyny. W tym wariancie przesuwa je hydrauliczny wysprzęglik współosiowy.'},
+    {id:'releaseActuator',label:'7 · Wysprzęglik hydrauliczny',part:'releaseActuator',hint:'Nieruchomy cylinder otacza wał wejściowy. Ciśnienie od pedału wysuwa tłok z łożyskiem; nie obraca on tarczy.'}
   ],
   gearbox: [
     { id: 'all', label: 'Cała skrzynia', part: 'gearbox', hint: 'Wciśnij sprzęgło i wybierz bieg. Pomarańczowy pierścień: synchronizacja; złota przesuwka: połączenie z wałem.' },
+    { id: 'selector', label: 'Wybierak → wodzik → widełki', part: 'gearSelector', hint: 'Dźwignia wybiera wodzik. Wodzik przesuwa widełki, a widełki przesuwają tuleję. Nie dociska ona koła zębatego do drugiego koła.' },
+    { id: 'synchronizer', label: 'Synchronizator · stożek i zęby kłowe', part: 'synchronizer', hint: 'Uruchom pokaz zmiany biegu i przechodź przez etapy. Pierścień trze o stożek, zanim tuleja połączy koło z piastą.' },
     ...[1,2,3,4,5].map(n => ({id: `gear${n}`, label: `Bieg ${n} · zbliżenie`, part: 'synchronizer', hint: 'Koło obraca się luźno. Pierścień wyrównuje obroty, potem przesuwka łączy zęby koła z piastą wału.'}))
   ],
   differential: [
@@ -100,10 +111,17 @@ export function getInspections(view, sim) {
   if (view === 'transfer') return [{ id: 'all', label: 'Rozdział napędu między osiami', part: sim.driveLayout === 'quattro' ? 'quattro' : 'transfer', hint: 'Wybierz 4WD / AWD / quattro w konfiguracji. Blokada wymusza wspólne obroty, a nie stały podział momentu 50:50.' }];
   if (sim.transmission === 'automatic' && view === 'clutch') return [{ id: 'all', label: 'Cały konwerter hydrokinetyczny', part: 'converter', hint: converter[0].hint }, ...converter.slice(1)];
   if (sim.transmission === 'automatic' && view === 'gearbox') return [{ id: 'all', label: 'Cały automat · konwerter i 8AT', part: 'automatic', hint: automaticGearbox[0].hint }, ...automaticGearbox.slice(1)];
-  if (sim.transmission === 'dct' && view === 'clutch') return [{ id: 'all', label: 'Pakiety K1 / K2', part: 'dctClutches', hint: 'Tarcze wejściowe obraca silnik, tarcze wyjściowe obraca odpowiedni wał. Ciśnienie docisku reguluje moment.' }];
+  if (sim.transmission === 'dct' && view === 'clutch') return [
+    { id: 'all', label: 'Pakiety K1 / K2', part: 'dctClutches', hint: 'Tarcze wejściowe obraca silnik, tarcze wyjściowe obraca odpowiedni wał. Ciśnienie docisku reguluje moment.' },
+    { id: 'k1', label: 'K1 · tarcze i wewnętrzny wał', part: 'k1', hint: 'Srebrne tarcze są połączone z koszem silnika. Niebieskie tarcze przez piastę napędzają wewnętrzny wał biegów 1 / 3 / 5.' },
+    { id: 'k2', label: 'K2 · tarcze i rurowy wał', part: 'k2', hint: 'Miedziane tarcze napędzają rurowy wał biegów 2 / 4 / 6. Otwarte sprzęgło pozwala przygotowanej gałęzi obracać się niezależnie.' }
+  ];
   if (sim.transmission === 'dct' && view === 'gearbox') return [
     { id: 'all', label: 'Cała DCT', part: 'dct', hint: 'Niebieski K1: 1/3/5. Miedziany K2: 2/4/6. Bieg przygotowany ma wybraną przesuwkę i otwarte sprzęgło.' },
+    { id: 'dctOdd', label: 'Gałąź K1 · biegi 1 / 3 / 5', part: 'dctOdd', hint: 'K1 → wewnętrzny wał → para kół → tuleja → wał wyjściowy. Drugie sprzęgło może mieć przygotowany bieg, lecz pozostaje otwarte.' },
+    { id: 'dctEven', label: 'Gałąź K2 · biegi 2 / 4 / 6', part: 'dctEven', hint: 'Rurowy wał K2 otacza wał K1. Ich obroty są niezależne; docisk K2 decyduje o przenoszeniu momentu.' },
     { id: 'dctShafts', label: 'Dwa współosiowe wały wejściowe', part: 'dctShafts', hint: 'Wewnętrzny wał K1 obraca się niezależnie od rurowego wału K2. Dwa wały wyjściowe przekazują napęd dalej.' },
+    { id: 'dctSelector', label: 'Hydraulika → wodziki → widełki', part: 'dctSelector', hint: 'Sterownik reguluje ciśnienie siłowników. Siłownik przesuwa wodzik i widełki; tuleja wybiera bieg na gałęzi odłączonej od silnika.' },
     { id: 'mechatronics', label: 'Mechatronika i obieg oleju', part: 'mechatronics', hint: 'Elektrozawory sterują dociskiem sprzęgieł i ruchem wybieraków. Olej także smaruje oraz chłodzi.' }
   ];
   return INSPECTIONS[view];

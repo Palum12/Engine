@@ -77,6 +77,18 @@ the exact internals or scale of every real vehicle preset.
 - Manual clutch explosion is an inspection layout, independent of pedal travel.
   Use `explodedGearboxOffset` for attached shaft/bounds spacing. The interface
   remembers the chosen bench layout; whole-car mounting always assembles parts.
+- The clutch now uses a concentric hydraulic release actuator. The rotating
+  bearing face is separate from its fixed cylinder. Keep the released pressure
+  plate clear of the spring support/cover over the full pedal and exploded range.
+  Do not add unexplained phase-marker boxes to physical friction surfaces.
+- Selector rails move forks and sleeves, not the free gears. `synchronizer`
+  crops shafts around one mechanism; returning to `all` must restore all shafts.
+- DCT packs are axially staggered for readability, with connected baskets and
+  concentric shaft tails. Gearbox positions and the output attachment stay fixed
+  when the clutch inspection is exploded. Hydraulic lines end at rail actuators.
+- Suspension uses X for travel and Z for the two wheels, with visual SI scale 4.
+  Stable anchors use `labelHidden` for inactive layouts/far-side duplicates.
+  Bounds traverse visible ancestors and detail sections fit the near-side parts.
 - A continuous casting joins each head's chambers in engine views; the single
   chamber casting is retained for cylinder views. Only the first head anchor has
   `userData.overview`, keeping a discoverable head label in vehicle overviews.

@@ -112,8 +112,8 @@ test('free gears rotate on visible needle bearings independently of the splined 
     assert.equal(gear.needleBearing.parent, gear.bottom);
     assert.equal(gear.gearCone.parent, gear.bottom);
     near(gear.shiftFork.position.x, gear.sleeve.position.x);
-    const slider = gear.shiftFork.localToWorld(new THREE.Vector3(0, 1.25, 1.55));
-    const railPoint = model.gearbox.localToWorld(new THREE.Vector3(gear.shiftFork.position.x, -0.55, 1.55));
+    const slider = gear.forkCollar.getWorldPosition(new THREE.Vector3());
+    const railPoint = gear.shiftRail.localToWorld(new THREE.Vector3(gear.shiftFork.position.x - gear.shiftRail.position.x, 0, 0));
     near(slider.distanceTo(railPoint), 0);
   });
   const gear = model.gears[2]; sim.gear = 3;

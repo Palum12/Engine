@@ -42,7 +42,11 @@ Preset SEAT Ibiza 1.0 MPI 2016 wybiera R3 75 KM, MPI, pasek, przedni montaż pop
 
 **Automat hydrokinetyczny** ma osobny widok **Konwerter**: pompę, turbinę, kierownicę i lock-up. Włącz bieg 1, aby obserwować pełzanie, dodaj gazu i porównaj poślizg z blokadą podczas jazdy. Automatyczne zmiany można wyłączyć i wybierać 1–8 ręcznie. **Skrzynia biegów** pokazuje planetarne człony, pakiety i sterowanie hydrauliczne. To schemat inspirowany Aisin, z dydaktyczną topologią i przełożeniami.
 
-Źródła i ograniczenia: [presety samochodów](docs/CAR_PRESET_REFERENCES.md), [automat hydrokinetyczny](docs/automatic-reference.md). Wskazówki dla kolejnych modeli są w `AGENTS.md`, `src/AGENTS.md`, `src/models/AGENTS.md` i `tests/AGENTS.md`.
+W osobnej zakładce sprzęgła **Pokaż warstwy** oddziela tarczę, docisk, sprężynę, pokrywę, łożysko i wysprzęglik hydrauliczny. **Złóż części** przywraca styk roboczy. W skrzyni wybierz **Wybierak → wodzik → widełki**, a potem **Synchronizator** i **Pokaż zmianę biegu**. Przycisk **Następny etap** zatrzymuje rzeczywistą symulację przy tarciu stożka, zazębieniu i połączeniu. DCT ma osobne zbliżenia gałęzi K1/K2 i hydraulicznych wybieraków; „F1 DCT” w presecie Ferrari jest nazwą skrzyni samochodu drogowego, ze wskazaną różnicą liczby biegów modelu.
+
+Zakładka **Zawieszenie / droga** pokazuje osobne doświadczenie jednej osi z uproszczonym napędem. Porównaj kolumnę MacPhersona, układ wielowahaczowy, sztywną oś na resorach piórowych oraz podwójne wahacze z pushrod lub pullrod. Wybierz garby, dołki, fale albo różne przeszkody pod lewym i prawym kołem. Reguluj prędkość, wysokość nierówności, sztywność sprężyn i tłumienie. Pauza i **Krok 0,1 s** pozwalają obserwować pracę mechanizmu. Tabela pokazuje ugięcia, siły i kontakt opony; wybrany preset auta pozostaje zachowany.
+
+Źródła i ograniczenia: [presety samochodów](docs/CAR_PRESET_REFERENCES.md), [automat hydrokinetyczny](docs/automatic-reference.md), [sprzęgło i synchronizator](docs/MANUAL_MECHANISM_REFERENCES.md), [DCT](docs/DCT_MECHANISMS.md), [zawieszenie](docs/SUSPENSION_REFERENCES.md). Wskazówki dla kolejnych modeli są w `AGENTS.md`, `src/AGENTS.md`, `src/models/AGENTS.md` i `tests/AGENTS.md`.
 
 `dist/` zawiera wynikową stronę statyczną. Względne ścieżki zasobów umożliwiają publikację w `/Engine/` oraz innych podkatalogach. Fonty i biblioteki są dołączone do kompilacji; aplikacja nie potrzebuje zewnętrznych CDN.
 

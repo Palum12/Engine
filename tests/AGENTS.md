@@ -33,3 +33,10 @@
   whole-car, head, clutch and gearbox screenshots before deploying visual changes.
 - FWD differential tests must exercise `vehicle.front`, mean halfshaft speed,
   cornering satellites, locks, pause and stopping the visual bench demo.
+- Suspension tests should compare loaded equilibrium, wheel/body lag, damping
+  decay, asymmetric road roll, rigid axle endpoints and unilateral tyre contact.
+  Use the same road sampling function for visual and physics assertions.
+- The browser lesson test covers clutch release/isolated parts, selector/cone/dog
+  stages, both DCT branches, five suspension types, isolated details and phone UI.
+  A paused capture can use the actual suspension step button to reach an obstacle
+  deterministically; camera fits run through the real inspection selector.

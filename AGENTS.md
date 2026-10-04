@@ -31,6 +31,10 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   firing offsets and crank layout.
 - `src/manual-clutch.js`: shared progressive clamp/capacity/release state for
   manual physics, geometry and UI. Force falls before a visible plate gap opens.
+- `src/suspension.js`: separate axle experiment owned by `Simulation.suspension`.
+  `suspensionActive` switches stepping to this experiment, with its own tempo.
+  `src/suspension-ui.js` supplies controls/descriptions; the procedural model is
+  `src/models/suspension-model.js`. Road heights used by tyres and meshes must agree.
 - `src/car-presets.js`: concrete car years/variants, factory data and primary links.
   `src/car-configuration.js` applies presets through simulation setters and resets
   old shift/slip/traction state. These are architecture presets, not OEM performance
@@ -44,6 +48,9 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   tools, `cycle.css` stroke panel, `powertrain.css` vehicle/presets, `camera.css` gestures.
 - `docs/` records manufacturer references, chosen variants and model simplifications.
   `PROMPT.md` is historical context, not a current specification.
+- `docs/NEXT_SESSION.md` records user feedback and implementation status.
+  Check the linked `docs/MECHANISM_AND_SUSPENSION_QA.md` for verification evidence
+  and limitations; a checked backlog item alone is not proof of a clear view.
 
 ## Conventions and pitfalls
 
@@ -73,3 +80,13 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
 - FWD differential inspections select `vehicle.front`; RWD selects `vehicle.rear`.
   The bench demo is visual and independent of vehicle physics. Stop it on pedals,
   view/configuration/preset changes. Straight travel naturally has equal speeds.
+- Suspension is a standalone one-axle lesson, independent of the car preset.
+  Global pause freezes it; its step button advances 0.1 simulation seconds.
+  Equal wheel spring/damper rates compare layouts without inventing OEM tuning.
+  Pushrod/pullrod actuate inboard springs; double wishbones still guide the wheels.
+  Leaf springs use a rigid axle with heave/roll. Keep unilateral tyre contact.
+- Manual gearbox sections `selector` and `synchronizer` expose the actuation
+  path and one cropped mechanism. Keep `setSynchronizerGear`, `applySection`,
+  section bounds and the actual staged Simulation shift consistent.
+- Ferrari's preset name "F1 DCT" is a road-car dual-clutch transmission. Our
+  shared six-speed educational DCT is not an exact seven-speed Ferrari gearbox.
