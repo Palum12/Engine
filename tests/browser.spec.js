@@ -12,6 +12,148 @@ async function openApp(page) {
   return errors;
 }
 
+test('compact navigation keeps every name and suspension visible at desktop, tablet and phone widths', async ({ page }, info) => {
+  test.setTimeout(540_000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const errors = await openApp(page);
+  await page.locator('#pause').click();
+  const expectedViews = ['engine', 'cylinder', 'drive-detail', 'clutch', 'gearbox', 'differential', 'hybrid', 'suspension'];
+  const inspectLayout = async () => page.evaluate(() => {
+    const tabs = document.querySelector('.view-tabs');
+    const toolbar = document.querySelector('.view-toolbar');
+    const parent = tabs.getBoundingClientRect();
+    const buttons = [...tabs.querySelectorAll('.view-tab')].map(button => {
+      const box = button.getBoundingClientRect();
+      const style = getComputedStyle(button);
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const lines = [...range.getClientRects()];
+      return {
+        view: button.dataset.view, name: button.textContent.trim(),
+        font: parseFloat(style.fontSize), height: box.height,
+        visible: style.visibility !== 'hidden' && style.display !== 'none' && lines.length > 0,
+        insideParent: box.left >= parent.left - 1 && box.right <= parent.right + 1 && box.top >= parent.top - 1 && box.bottom <= parent.bottom + 1,
+        fullName: lines.every(line => line.left >= box.left - 1 && line.right <= box.right + 1 && line.top >= box.top - 1 && line.bottom <= box.bottom + 1)
+      };
+    });
+    const enginePicker = document.querySelector('.engine-picker');
+    const engineContainer = document.querySelector('.engine-buttons');
+    const pickerBox = enginePicker.getBoundingClientRect();
+    const engineBox = engineContainer.getBoundingClientRect();
+    const engineButtons = [...engineContainer.querySelectorAll('[data-engine]')];
+    const engines = engineButtons.map(button => {
+      const box = button.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const lines = [...range.getClientRects()];
+      return {
+        name: button.textContent.trim(), top: Math.round(box.top),
+        visible: getComputedStyle(button).visibility !== 'hidden' && lines.length > 0,
+        insideParent: box.left >= engineBox.left - 1 && box.right <= engineBox.right + 1 && box.top >= engineBox.top - 1 && box.bottom <= engineBox.bottom + 1,
+        fullName: lines.every(line => line.left >= box.left - 1 && line.right <= box.right + 1 && line.top >= box.top - 1 && line.bottom <= box.bottom + 1)
+      };
+    });
+    return {
+      buttons,
+      horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+      tabsOverflow: tabs.scrollWidth > tabs.clientWidth + 1 || tabs.scrollHeight > tabs.clientHeight + 1,
+      toolbarOverflow: toolbar.scrollWidth > toolbar.clientWidth + 1,
+      parentInPage: parent.left >= -1 && parent.right <= innerWidth + 1,
+      engineCount: engineButtons.length,
+      engines,
+      engineRows: new Set(engines.map(button => button.top)).size,
+      enginePickerInPage: pickerBox.left >= -1 && pickerBox.right <= innerWidth + 1,
+      engineContainerInPicker: engineBox.left >= pickerBox.left - 1 && engineBox.right <= pickerBox.right + 1 && engineBox.top >= pickerBox.top - 1 && engineBox.bottom <= pickerBox.bottom + 1,
+      enginePickerOverflow: enginePicker.scrollWidth > enginePicker.clientWidth + 1,
+      engineContainerOverflow: engineContainer.scrollWidth > engineContainer.clientWidth + 1 || engineContainer.scrollHeight > engineContainer.clientHeight + 1,
+      boxer4Button: engineButtons.some(button => button.dataset.engine === 'boxer4')
+    };
+  });
+  const assertReadableTabs = async label => {
+    const layout = await inspectLayout();
+    expect(layout.buttons.map(button => button.view), label).toEqual(expectedViews);
+    expect(layout.horizontalOverflow, `${label}: page horizontal overflow`).toBe(false);
+    expect(layout.tabsOverflow, `${label}: hidden or scrollable tabs`).toBe(false);
+    expect(layout.toolbarOverflow, `${label}: toolbar horizontal overflow`).toBe(false);
+    expect(layout.parentInPage, `${label}: tab container stays inside the page`).toBe(true);
+    for (const button of layout.buttons) {
+      expect(button.visible, `${label}: ${button.name} is visible`).toBe(true);
+      expect(button.insideParent, `${label}: ${button.name} fits without scrolling the tab strip`).toBe(true);
+      expect(button.fullName, `${label}: ${button.name} is not cropped`).toBe(true);
+      expect(button.font, `${label}: ${button.name} text size`).toBeGreaterThanOrEqual(13);
+      expect(button.height, `${label}: ${button.name} button height`).toBeGreaterThanOrEqual(32);
+    }
+    return layout;
+  };
+  for (const viewport of [
+    { width: 1920, height: 1080 }, { width: 1440, height: 900 },
+    { width: 1280, height: 800 }, { width: 1024, height: 768 },
+    { width: 768, height: 1024 }, { width: 390, height: 844 },
+    { width: 360, height: 780 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.locator('.view-tab[data-view="drive-detail"]').click();
+    const label = `${viewport.width}x${viewport.height}`;
+    // Check containment before any locator click or screenshot could scroll a
+    // clipped button into view and conceal the original tab-strip regression.
+    const layout = await assertReadableTabs(label);
+    expect(layout.engineCount, `${label}: compact engine picker`).toBe(9);
+    expect(layout.boxer4Button).toBe(false);
+    expect(layout.enginePickerInPage, `${label}: engine picker stays inside the page`).toBe(true);
+    expect(layout.engineContainerInPicker, `${label}: engine row fits its picker`).toBe(true);
+    expect(layout.enginePickerOverflow, `${label}: engine picker horizontal overflow`).toBe(false);
+    expect(layout.engineContainerOverflow, `${label}: clipped or scrollable engine choices`).toBe(false);
+    for (const engine of layout.engines) {
+      expect(engine.visible, `${label}: ${engine.name} is visible`).toBe(true);
+      expect(engine.insideParent, `${label}: ${engine.name} fits without scrolling the engine picker`).toBe(true);
+      expect(engine.fullName, `${label}: ${engine.name} is not cropped`).toBe(true);
+    }
+    if (viewport.width >= 1024) expect(layout.engineRows, `${label}: all engines in one row`).toBe(1);
+    await page.locator('.page-heading').screenshot({ path: info.outputPath(`heading-${label}.png`) });
+    await page.locator('.view-toolbar').screenshot({ path: info.outputPath(`navigation-${label}.png`) });
+    await page.locator('.view-tab[data-view="suspension"]').click();
+    await expect(page.locator('#scene')).toHaveAttribute('data-view', 'suspension');
+    await expect(page.locator('#suspension-controls')).toBeVisible();
+    await expect(page.locator('#suspension-telemetry')).toBeVisible();
+    await assertReadableTabs(`${label} suspension`);
+    expect((await page.locator('#scene').boundingBox()).height).toBeGreaterThan(320);
+    if ([1440, 390].includes(viewport.width)) {
+      await page.locator('#inspect-section').dispatchEvent('change');
+      await page.locator('.visual-panel').screenshot({ path: info.outputPath(`suspension-${label}.png`) });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator('.view-tab[data-view="drive-detail"]').click();
+  for (const section of ['timing', 'oil', 'fuel', 'turbo']) {
+    await page.locator('#inspect-section').selectOption(section);
+    await page.locator('#isolate').check();
+    await expect(page.locator('#scene canvas')).toBeVisible();
+    await page.locator('#inspect-description').click();
+    await expect(page.locator('#part-panel')).toBeVisible();
+    await expect(page.locator('#part-description')).not.toBeEmpty();
+    await page.locator('#close-part').click();
+  }
+  await page.locator('#inspect-section').selectOption('all');
+  await page.locator('#isolate').uncheck();
+  await page.locator('#car-preset').selectOption('wrx-2024');
+  await expect(page.locator('#scene')).toHaveAttribute('data-engine', 'boxer4');
+  await expect(page.locator('.engine-buttons [data-engine="boxer4"]')).toHaveCount(0);
+  if (await page.evaluate(() => document.fullscreenEnabled)) {
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 768, height: 1024 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      await page.locator('.view-tab[data-view="suspension"]').click();
+      await page.locator('#fullscreen').click();
+      await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+      await assertReadableTabs(`${viewport.width}px fullscreen suspension`);
+      expect((await page.locator('#scene').boundingBox()).height).toBeGreaterThan(160);
+      await page.screenshot({ path: info.outputPath(`suspension-fullscreen-${viewport.width}.png`) });
+      await page.locator('#fullscreen').click();
+      await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
 test('every tab renders and controls work in the local WebGL application', async ({ page }, info) => {
   const errors = await openApp(page);
   const views = await page.locator('.view-tab').evaluateAll(elements => elements.map(element => element.dataset.view));
@@ -295,7 +437,8 @@ for (const id of ['ibiza-mpi-2016', 'a4-quattro-2011', '911-carrera-s-2025', '50
     await page.locator('#isolate').uncheck();
     await page.locator('#inspect-section').selectOption('all');
     await screenshot(`${id}-engine`);
-    await page.locator('.view-tab[data-view="timing"]').click();
+    await page.locator('.view-tab[data-view="drive-detail"]').click();
+    await page.locator('#inspect-section').selectOption('timing');
     if (id === 'ibiza-mpi-2016') await screenshot(`${id}-timing`);
     if (preset.transmission === 'hybrid') {
       await page.locator('.view-tab[data-view="hybrid"]').click();

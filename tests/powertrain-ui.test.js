@@ -27,12 +27,33 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
     const input = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('input', { bubbles: true })); };
     const run = seconds => { app.sim.paused = false; for (let time = 0; time < seconds; time += 0.02) app.sim.update(0.02); app.updateUI(); };
-    await t.test('default whole vehicle, all ten engines and manual clutch toggle remain available', () => {
+    await t.test('default whole vehicle, nine compact engine choices and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
-      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 10);
+      assert.equal(window.document.querySelectorAll('.engine-buttons [data-engine]').length, 9);
+      assert.equal($('.engine-buttons [data-engine="boxer4"]'), null);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 1);
       $('#clutch-toggle').click(); assert.equal(app.sim.clutch, 0);
+    });
+    await t.test('the main navigation exposes suspension and keeps secondary mechanisms in drivetrain inspections', () => {
+      const views = [...window.document.querySelectorAll('.view-tab')].map(button => button.dataset.view);
+      assert.deepEqual(views, ['engine', 'cylinder', 'drive-detail', 'clutch', 'gearbox', 'differential', 'hybrid', 'suspension']);
+      $('.view-tab[data-view="drive-detail"]').click();
+      const sections = [...$('#inspect-section').options].map(option => option.value);
+      for (const section of ['timing', 'oil', 'fuel', 'turbo']) {
+        assert.ok(sections.includes(section), `${section} remains accessible from the complete drivetrain`);
+        select('#inspect-section', section);
+        assert.equal($('.visual-panel').dataset.inspection, section);
+        $('#inspect-description').click();
+        assert.equal($('#part-panel').hidden, false);
+        assert.ok($('#part-description').textContent.trim().length > 20);
+        $('#close-part').click();
+      }
+      select('#inspect-section', 'all');
+      select('#car-preset', 'wrx-2024');
+      assert.equal(app.sim.engineId, 'boxer4', 'the Subaru architecture remains supported by its car preset');
+      assert.equal($('.engine-buttons [data-engine="boxer4"]'), null, 'a preset does not recreate the removed picker button');
+      $('#reset').click();
     });
     await t.test('camera pan toggle and device choice expose their current behavior', () => {
       $('#camera-pan').click();

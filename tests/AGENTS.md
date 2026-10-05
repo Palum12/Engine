@@ -40,3 +40,8 @@
   stages, both DCT branches, five suspension types, isolated details and phone UI.
   A paused capture can use the actual suspension step button to reach an obstacle
   deterministically; camera fits run through the real inspection selector.
+- The compact-navigation browser test checks text-range bounds, not just DOM
+  presence. Keep every view and engine name inside its button before any click
+  or screenshot can scroll it into view. Include phone/tablet/fullscreen layouts;
+  the eight views and nine header engines must remain accessible without a strip
+  scrollbar. Boxer 4 is still tested through the Subaru preset.

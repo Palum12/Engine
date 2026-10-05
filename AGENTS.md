@@ -28,7 +28,8 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
 - `src/automatic.js`: torque converter, stator, lock-up, shifts and the educational
   eight-speed planetary transmission. `src/hybrid.js`: e-CVT/DC energy balance.
 - `src/engines.js`: ten cylinder architectures, including R3 for Ibiza 1.0 MPI,
-  firing offsets and crank layout.
+  firing offsets and crank layout. The header exposes nine choices; Boxer 4
+  is retained internally for the Subaru WRX preset, not as a header button.
 - `src/manual-clutch.js`: shared progressive clamp/capacity/release state for
   manual physics, geometry and UI. Force falls before a visible plate gap opens.
 - `src/suspension.js`: separate axle experiment owned by `Simulation.suspension`.
@@ -74,6 +75,11 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   Do not introduce Node-only imports into browser modules.
 - Mounting/drive/transmission controls live in `#mount-settings` above the canvas.
   Refresh automatic compatibility changes in all controls and preset indicators.
+- Main navigation has eight visible views: engine, cylinder, drive-detail,
+  clutch, gearbox, differential, hybrid and suspension. Oil, fuel, timing, turbo
+  and transfer remain inspections in the full drivetrain. Do not reintroduce
+  horizontal scrolling or fixed tab-row heights; verify narrow and fullscreen
+  layouts, including the suspension button and engine-picker bounds.
 - `refreshClutchState()` initializes and clears manual torque/force/heat telemetry
   on reset and engine/transmission changes. The 85% pedal threshold only interlocks
   starting/shifting; use `manualClutchState().contact` for clutch connection status.

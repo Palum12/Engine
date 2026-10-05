@@ -146,7 +146,7 @@ app.innerHTML = `
     <button class="quiet-button" id="help-button">${icon('info')}<span>Jak to działa</span></button>
   </header>
   <main>
-    <div class="page-heading"><div><div class="eyebrow">OD SPALANIA DO RUCHU</div><h1>Silnik benzynowy<span class="title-dot">.</span></h1></div><div class="engine-picker"><div class="engine-buttons" role="group" aria-label="Układ cylindrów">${Object.values(ENGINES).map(engine => `<button data-engine="${engine.id}" class="${engine.id === 'r4' ? 'active' : ''}" aria-pressed="${engine.id === 'r4'}">${engine.name}</button>`).join('')}</div><div class="model-spec"><span id="engine-displacement">2.0 l</span><span id="engine-bank-angle">Rzędowy</span></div></div></div>
+    <div class="page-heading"><div><div class="eyebrow">OD SPALANIA DO RUCHU</div><h1>Silnik benzynowy<span class="title-dot">.</span></h1></div><div class="engine-picker"><div class="engine-buttons" role="group" aria-label="Układ cylindrów">${Object.values(ENGINES).filter(engine => engine.id !== 'boxer4').map(engine => `<button data-engine="${engine.id}" class="${engine.id === 'r4' ? 'active' : ''}" aria-pressed="${engine.id === 'r4'}" title="${engine.name}">${({r3:'R3', r6:'R6', w16:'W16'})[engine.id] || engine.name}</button>`).join('')}</div><div class="model-spec"><span id="engine-displacement">2.0 l</span><span id="engine-bank-angle">Rzędowy</span></div></div></div>
     <section class="car-presets" aria-label="Presety samochodów">
       <label>Samochód<select id="car-preset"><option value="">Własna konfiguracja</option>${CAR_PRESETS.map(car => `<option value="${car.id}">${car.name} · ${car.year} · ${car.variant}</option>`).join('')}</select></label>
       <div><strong id="car-preset-summary">Zbuduj własny napęd lub wybierz znany samochód.</strong><p id="car-preset-note">Presety ustawiają architekturę napędu. Parametry i mechanizmy symulacji są dydaktyczne.</p></div>
@@ -155,7 +155,7 @@ app.innerHTML = `
     <div class="workspace">
       <section class="visual-panel" aria-label="Model i cykl silnika">
         <div class="view-toolbar"><div class="view-tabs" role="group" aria-label="Widok modelu">
-          <button class="view-tab active" data-view="engine" aria-pressed="true">Cały silnik</button><button class="view-tab" data-view="cylinder" aria-pressed="false">Jeden cylinder</button><button class="view-tab" data-view="drive" aria-pressed="false">Napęd</button><button class="view-tab" data-view="drive-detail" aria-pressed="false">Napęd szczegółowy</button><button class="view-tab" data-view="clutch" aria-pressed="false">Sprzęgło</button><button class="view-tab" data-view="gearbox" aria-pressed="false">Skrzynia biegów</button><button class="view-tab" data-view="differential" aria-pressed="false">Dyferencjał</button><button class="view-tab" data-view="timing" aria-pressed="false">Rozrząd</button><button class="view-tab" data-view="oil" aria-pressed="false">Olej</button><button class="view-tab" data-view="fuel" aria-pressed="false">Paliwo / gaźnik</button><button class="view-tab" data-view="turbo" aria-pressed="false">Turbo</button>
+          <button class="view-tab active" data-view="engine" aria-pressed="true">Silnik</button><button class="view-tab" data-view="cylinder" aria-pressed="false">Cylinder</button><button class="view-tab" data-view="drive-detail" aria-pressed="false">Napęd</button><button class="view-tab" data-view="clutch" aria-pressed="false">Sprzęgło</button><button class="view-tab" data-view="gearbox" aria-pressed="false">Skrzynia</button><button class="view-tab" data-view="differential" aria-pressed="false">Dyferencjał</button>
         </div><button class="icon-button" id="fullscreen" aria-label="Pełny ekran modelu" title="Pełny ekran">${icon('expand')}</button></div>
         <div class="inspection-toolbar" id="inspection-toolbar" hidden><label>Przybliż podzespół<select id="inspect-section"></select></label><label class="isolate-option" id="isolate-option"><input id="isolate" type="checkbox">Odizoluj</label><button id="inspect-description" class="quiet-button">Opis podzespołu</button><span id="inspection-note"></span>
           <div class="lesson-tools" id="clutch-lesson" hidden><svg class="clutch-diagram" viewBox="0 0 270 52" role="img" aria-label="Przekrój styku koła zamachowego, tarczy i docisku"><path d="M0 26H80M180 26H270" stroke="#6ac5e9" stroke-width="5"/><rect x="70" y="4" width="20" height="44" fill="#a3b3c0"/><rect id="diagram-disc" x="90" y="7" width="12" height="38" fill="#e0b354"/><rect id="diagram-pressure" x="102" y="4" width="16" height="44" fill="#a3b3c0"/><path id="diagram-torque" d="M10 26H240m-10-7 10 7-10 7" fill="none" stroke="#78edab" stroke-width="3"/></svg><div><strong id="contact-state"></strong><small id="contact-detail"></small></div><button class="secondary-button" id="assemble-clutch">Złóż części</button></div>
@@ -211,7 +211,7 @@ document.querySelector('#mount-settings').append(controlsTemplate.content.queryS
 document.querySelector('.gear-control').after(controlsTemplate.content.querySelector('.hybrid-controls'), controlsTemplate.content.querySelector('.traction-settings'));
 document.querySelector('#scene').insertAdjacentHTML('beforebegin', VEHICLE_TOOLS);
 document.querySelector('.playback').insertAdjacentHTML('beforebegin', SCENARIO_TOOLS);
-document.querySelector('.view-tabs').insertAdjacentHTML('beforeend', '<button class="view-tab" data-view="transfer" aria-pressed="false">4WD / AWD</button><button class="view-tab" data-view="hybrid" aria-pressed="false">Hybryda / bateria</button><button class="view-tab" data-view="suspension" aria-pressed="false">Zawieszenie / droga</button>');
+document.querySelector('.view-tabs').insertAdjacentHTML('beforeend', '<button class="view-tab" data-view="hybrid" aria-pressed="false">Hybryda</button><button class="view-tab" data-view="suspension" aria-pressed="false">Zawieszenie</button>');
 document.querySelector('.workspace').insertAdjacentHTML('beforeend', SUSPENSION_CONTROLS);
 document.querySelector('#cycle-panel').insertAdjacentHTML('afterend', SUSPENSION_TELEMETRY);
 document.querySelector('#quick-clutch').closest('label').id = 'quick-clutch-control';
@@ -447,7 +447,7 @@ try {
 }
 $('#scene').addEventListener('renderlost', () => { pause(true); toast('Utracono kontekst grafiki. Odśwież stronę, aby przywrócić model.'); });
 $$('.view-tab[data-view]').forEach(button => button.addEventListener('click', () => changeView(button.dataset.view)));
-$('#try-drive').addEventListener('click', () => { changeView('drive'); $('.visual-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('#try-drive').addEventListener('click', () => { changeView('drive-detail'); $('.visual-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 $$('[data-stroke]').forEach(button => button.addEventListener('click', () => setCycle(Number(button.dataset.stroke) * 180 + 90, true)));
 $('#cycle-angle').addEventListener('input', event => setCycle(Number(event.target.value)));
 $('#cylinder-number').addEventListener('change', event => {
@@ -756,7 +756,7 @@ function updatePowertrainConfiguration() {
   $('#automatic-auto-option').hidden = sim.transmission !== 'automatic';
   $('#automatic-auto').checked = sim.automatic.automatic;
   $('.view-tab[data-view="clutch"]').textContent = sim.transmission === 'automatic' ? 'Konwerter' : sim.transmission === 'hybrid' ? 'Podział mocy' : 'Sprzęgło';
-  $('.view-tab[data-view="gearbox"]').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : 'Skrzynia biegów';
+  $('.view-tab[data-view="gearbox"]').textContent = sim.transmission === 'hybrid' ? 'e-CVT' : 'Skrzynia';
   $$('.engine-buttons [data-engine]').forEach(button => { button.disabled = sim.transmission === 'hybrid' && button.dataset.engine !== 'r4'; });
   $('#transfer-mode-option').hidden = sim.driveLayout !== 'partTime';
   $('#transfer-mode').value = sim.driveMode;

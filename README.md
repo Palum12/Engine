@@ -67,7 +67,7 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 
 ## Sterowanie
 
-- Aplikacja otwiera **Napęd szczegółowy**: zarys pojazdu, przednia i tylna oś oraz cztery koła. Przyciski pod listą widoków przybliżają silnik, skrzynię, rozdział napędu, osie i baterię. **Odizoluj** pozwala obejrzeć mechanizm osobno. Orientację i położenie zespołu wybiera się osobno; hybryda pozostaje z przodu i poprzecznie.
+- Aplikacja otwiera **Napęd**: zarys pojazdu, przednia i tylna oś oraz cztery koła. Przyciski pod listą widoków przybliżają silnik, skrzynię, rozdział napędu, osie i baterię. **Odizoluj** pozwala obejrzeć mechanizm osobno. Orientację i położenie zespołu wybiera się osobno; hybryda pozostaje z przodu i poprzecznie.
 - W bocznym panelu wybierz **Zespół napędowy / skrzynia** i **Napęd kół**. Warstwa pokazuje mechanikę, prąd/energię, gazy, olej albo paliwo. Szczegółowość można dobrać automatycznie do odległości lub ustawić ręcznie; etykiety są ograniczone, aby nie zasłaniały modelu.
 - **DCT**: K1 obsługuje 1/3/5, K2 2/4/6. Obejrzyj współosiowe wały, pakiety tarcz, przesuwki, mechatronikę i układ oleju. Podświetlenie rozróżnia bieg przenoszący moment i przygotowany. **Następny etap** pokazuje preselektowanie, przejmowanie momentu i ustalenie docisku. Możesz włączyć automatyczną zmianę biegów. Nie ma pedału sprzęgła.
 - **4WD**: 2H napędza tył, 4H łączy osie sztywno, 4L dodaje redukcję 2,5:1. Reduktor przełączaj na postoju. **AWD** ma otwarty centralny dyferencjał i opcjonalną blokadę; **quattro** przedstawia mechaniczny wariant bazowo 40:60, odrębny od quattro ultra.
@@ -80,10 +80,10 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - Przycisk **Przesuwanie** zmienia przeciąganie w przesuwanie kamery; ponowne kliknięcie przywraca obrót.
 - **Gesty**: Auto rozpoznaje typ przewijania. Ponieważ przeglądarka nie podaje rodzaju urządzenia, w razie pomyłki wybierz jawnie Touchpad lub Mysz.
 - Kółko myszy / przyciski + i −: przybliżanie. Gesty nad sceną nie zmieniają powiększenia interfejsu; poza sceną zoom przeglądarki pozostaje dostępny.
-- Wybór silnika w nagłówku: R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 4/6.
-- Widoki: cały silnik, cylinder, napęd, **Napęd szczegółowy**, sprzęgło / konwerter, skrzynia, dyferencjał, rozrząd, olej, paliwo / gaźnik, turbo, 4WD i hybryda e-CVT.
-- **Napęd szczegółowy**: wybierz podzespół z listy, aby ustawić kamerę. **Odizoluj** ukrywa pozostałe zespoły, a **Opis podzespołu** wyjaśnia jego działanie. Dostępne są silnik, rozbieralne sprzęgło, skrzynia, przekładnia główna z półosiami, turbo, rozrząd, olej i zasilanie paliwem.
-- **Turbo**: lista przybliżeń prowadzi przez turbinę, wałek z łożyskami, sprężarkę, wastegate i intercooler. Każdą grupę można odizolować. Włącz turbo przyciskiem przy modelu, wznów animację i zwiększ gaz.
+- Wybór silnika w nagłówku: R3, R4, R6, V6, VR6, V8, V12, W16 oraz Boxer 6. Boxer 4 pozostaje wewnętrznym modelem presetu Subaru WRX.
+- Główne widoki: **Silnik**, **Cylinder**, **Napęd**, **Sprzęgło / Konwerter**, **Skrzynia**, **Dyferencjał**, **Hybryda** i **Zawieszenie**. Wszystkie zakładki są widoczne; na węższych ekranach układają się w kolejne rzędy.
+- **Napęd**: wybierz podzespół z listy, aby ustawić kamerę. **Odizoluj** ukrywa pozostałe zespoły, a **Opis podzespołu** wyjaśnia jego działanie. Dostępne są silnik, sprzęgło, skrzynia, przekładnia główna z półosiami, turbo, rozrząd, olej i zasilanie paliwem. Rozdział AWD/4WD pojawia się dla odpowiedniej konfiguracji; te mechanizmy nie powielają już głównego paska widoków.
+- **Turbo**: w **Napędzie** wybierz przybliżenie turbo. Włącz doładowanie w konfiguracji, wznów animację i zwiększ gaz; przekrój pokazuje turbinę, sprężarkę i połączone przewody.
 - Przycisk **×** zamyka panel parametrów. **Pokaż parametry** przywraca go; wyłączenie **Opisów** ukrywa również panel. Na telefonie parametry są domyślnie zwinięte.
 - **Przepływ** włącza i wyłącza strzałki: momentu w napędzie oraz gazów w turbo. Strzałki są symbolami, nie częściami mechanizmu.
 - Na pełnym ekranie pozostają dostępne gaz, sprzęgło i bieg dla manuala albo gaz, hamulec i bieg/wybierak dla DCT, automatu i hybrydy.
@@ -91,10 +91,10 @@ Dokumentacja: [własne workflow GitHub Pages](https://docs.github.com/en/pages/g
 - **Sprzęgło** uruchamia się z częściami złożonymi. Zielone powierzchnie wskazują styk cierny; schemat obok pokazuje, kiedy napęd zostaje przerwany. Przycisk **Złóż części** usuwa umowne odstępy montażowe. W trakcie częściowego wciskania spada siła docisku, a widoczna szczelina powstaje po rozłączeniu.
 - **Skrzynia biegów**: w manualu lista przybliża przesuwkę wybranego biegu. Zmiana trwa dydaktyczne 2,4 s: rozłączenie, synchronizacja, zazębienie przesuwki. DCT pokazuje przejęcie momentu między pakietami, automat człony planetarne i hydraulikę. **Następny etap** zatrzymuje animację i wykonuje kolejny etap wraz z odpowiadającym mu krokiem symulacji. Wznów animację przyciskiem odtwarzania.
 - **Dyferencjał**: wybierz zakręt w lewo / na wprost / zakręt w prawo. **Uruchom pokaz stołowy** animuje sam mechanizm niezależnie od prędkości samochodu, z wyraźnym oznaczeniem trybu. **Odsłoń satelity** ukrywa koło talerzowe i ramę kosza. Zbliżenie satelitów ukrywa koła jezdne. Niebieski oznacza lewą półoś, złoty prawą, miedziany satelity.
-- **Rozrząd**: wybierz pasek zębaty lub łańcuch w konfiguracji. Koło 24-zębne napędza koło 48-zębne; znaczniki ułatwiają obserwację przełożenia 2:1.
-- **Olej**: prześledź smok, pompę, filtr, magistralę, łożyska oraz spływ do miski. Jasnozielone strzałki oznaczają dopływ, ciemnozielone powrót.
-- **Paliwo / gaźnik**: wybierz MPI, GDI lub gaźnik. Lista zawiera dodatkowe zbliżenia gaźnika i pompy GDI, które automatycznie wybierają właściwe zasilanie. MPI/GDI i gaźnik nie zmieniają arbitralnie osiągów. Gaźnik pokazuje zwężkę, dyszę, komorę pływakową i przepustnicę reagującą na gaz.
-- Panel cyklu czterosuwowego pozostaje widoczny w każdym widoku, także na pełnym ekranie. Kliknij numer cylindra, aby śledzić jego suw.
+- **Rozrząd**: zbliżenie jest w **Napędzie** oraz **Silniku**. Wybierz pasek zębaty lub łańcuch w konfiguracji; przełożenie wału do wałków wynosi 2:1.
+- **Olej**: w **Napędzie** wybierz przybliżenie obiegu i warstwę oleju. Prześledź smok, pompę, filtr, magistralę, łożyska oraz spływ do miski.
+- **Paliwo / gaźnik**: w **Napędzie** wybierz zasilanie paliwem. Typ MPI, GDI lub gaźnik zmieniasz w konfiguracji. Gaźnik pokazuje zwężkę, dyszę, komorę pływakową i przepustnicę reagującą na gaz.
+- Panel cyklu czterosuwowego jest dostępny w widokach silnika i napędu; osobne doświadczenia sprzęgła, skrzyni i zawieszenia zostawiają więcej miejsca na mechanizm. Kliknij numer cylindra, aby śledzić jego suw.
 - Na dużym ekranie scena wypełnia dostępną szerokość, a boczny panel sterowania przewija się niezależnie.
 - Kliknięcie części: opis zasady działania.
 - Suwak gazu: otwarcie przepustnicy w uproszczonym modelu.

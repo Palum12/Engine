@@ -15,9 +15,9 @@
 .suspension-telemetry th{color:#9ab5c6;font-weight:500}.suspension-telemetry td{color:#d2e0e7}
 .suspension-telemetry small{display:block;margin-top:10px;color:#88a3b4;line-height:1.5}
 .suspension-telemetry{grid-area:suspension}
-.visual-panel.suspension-mode{grid-template-areas:"tabs" "inspect" "scene" "playback" "suspension";grid-template-rows:46px auto minmax(360px,1fr) 52px auto;min-height:800px}
-.visual-panel.suspension-mode:fullscreen{grid-template-rows:46px auto minmax(180px,1fr) 52px auto}
+.visual-panel.suspension-mode{grid-template-areas:"tabs" "inspect" "scene" "playback" "suspension";grid-template-rows:auto auto minmax(360px,1fr) 52px auto;min-height:800px}
+.visual-panel.suspension-mode:fullscreen{display:grid;grid-template-areas:"tabs" "inspect" "scene" "playback" "suspension";grid-template-rows:auto auto minmax(180px,1fr) 52px auto}
 .visual-panel.suspension-mode .quick-controls{display:none!important}
 .suspension-mode .scene-caption{max-width:65%}
 @media(max-width:980px){.suspension-controls{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}.suspension-controls>.section-heading,.suspension-controls>p,.suspension-actions{grid-column:1/-1}.visual-panel.suspension-mode{display:flex;min-height:0}.suspension-mode .scene{height:480px;min-height:360px}.suspension-telemetry{padding:12px}}
-@media(max-width:600px){.suspension-controls{display:block;padding:16px}.suspension-telemetry{font-size:11px}.suspension-telemetry th,.suspension-telemetry td{padding-right:8px}.suspension-mode .scene{height:400px}.suspension-mode .scene-caption{max-width:90%}.suspension-mode .scene-legend{max-width:65%}.visual-panel.suspension-mode:fullscreen{display:grid;grid-template-rows:42px auto minmax(100px,1fr) 54px auto}.suspension-mode:fullscreen .suspension-telemetry small{display:none}}
+@media(max-width:600px){.suspension-controls{display:block;padding:16px}.suspension-telemetry{font-size:11px}.suspension-telemetry th,.suspension-telemetry td{padding-right:8px}.suspension-mode .scene{height:400px}.suspension-mode .scene-caption{max-width:90%}.suspension-mode .scene-legend{max-width:65%}.visual-panel.suspension-mode:fullscreen{display:grid;grid-template-rows:auto auto minmax(100px,1fr) 54px auto}.suspension-mode:fullscreen .suspension-telemetry small{display:none}}
