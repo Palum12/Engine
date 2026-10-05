@@ -52,6 +52,8 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
 - `docs/NEXT_SESSION.md` records user feedback and implementation status.
   Check the linked `docs/MECHANISM_AND_SUSPENSION_QA.md` for verification evidence
   and limitations; a checked backlog item alone is not proof of a clear view.
+  Later suspension mounting/label changes are tracked in
+  `docs/SUSPENSION_CONNECTIONS_QA.md`; keep evidence separate from design intent.
 
 ## Conventions and pitfalls
 
@@ -91,6 +93,15 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   Equal wheel spring/damper rates compare layouts without inventing OEM tuning.
   Pushrod/pullrod actuate inboard springs; double wishbones still guide the wheels.
   Leaf springs use a rigid axle with heave/roll. Keep unilateral tyre contact.
+  Travel limits are 0.22 m bump/0.23 m rebound relative to the loaded rest pose
+  and the body's height at each wheel, including roll. Stop reactions share
+  both masses/roll inertias; never clamp a leaf wheel outside its axle DOFs.
+  Body/rigid-axle roll is limited to ±0.25 rad, the one-axis lesson's supported
+  guidance range, with an inelastic angular stop. Do not imply rollover physics.
+  Keep visible body/subframe/upright mounts at the same points as the moving
+  suspension ends. The body is a cutaway context for one axle, not a second
+  physics model. Read `docs/SUSPENSION_REFERENCES.md` for topology and scope.
+  Turning labels off must leave right-click descriptions available on meshes.
 - Manual gearbox sections `selector` and `synchronizer` expose the actuation
   path and one cropped mechanism. Keep `setSynchronizerGear`, `applySection`,
   section bounds and the actual staged Simulation shift consistent.

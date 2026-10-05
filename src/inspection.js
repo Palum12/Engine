@@ -1,10 +1,11 @@
 export const INSPECTIONS = {
   suspension: [
-    { id: 'all', label: 'Cała oś · droga i nadwozie', part: 'suspensionBody', hint: 'Porównaj tor koła z ruchem nadwozia. Zmień nawierzchnię, prędkość i tłumienie w panelu zawieszenia.' },
-    { id: 'suspensionLinks', label: 'Prowadzenie · wahacze / zwrotnica', part: 'suspensionLinks', hint: 'Łączniki ustalają tor koła. W pushrod i pullrod koło prowadzą dwa wahacze; drążek uruchamia sprężynę.' },
-    { id: 'suspensionSpring', label: 'Sprężyna / resor · ugięcie', part: 'suspensionSpring', hint: 'Sprężyna podtrzymuje nadwozie. Spróbuj miękkiej i twardej sprężyny przy tej samej nierówności.' },
-    { id: 'suspensionDamper', label: 'Amortyzator · tłumienie', part: 'suspensionDamper', hint: 'Ustaw tłumienie na 0%, przejedź po nierówności, potem przywróć 100% i porównaj zanikanie drgań.' },
-    { id: 'suspensionRoad', label: 'Koła i nierówna nawierzchnia', part: 'suspensionRoad', hint: 'Różne nierówności pod L / P pokazują przechył nadwozia i połączenie kół w sztywnej osi.' }
+    { id: 'all', label: 'Cała oś i nadwozie', part: 'suspensionBody', hint: 'Porównaj ruch koła z ruchem nadwozia.' },
+    { id: 'suspensionBody', label: 'Nadwozie i mocowania', part: 'suspensionBody', hint: 'Kielichy i rama pomocnicza łączą zawieszenie z nadwoziem.' },
+    { id: 'suspensionLinks', label: 'Wahacze i mocowania', part: 'suspensionLinks', hint: 'Obserwuj połączenie zwrotnicy z nadwoziem.' },
+    { id: 'suspensionSpring', label: 'Sprężyna / resor', part: 'suspensionSpring', hint: 'Zmień sztywność i porównaj ugięcie.' },
+    { id: 'suspensionDamper', label: 'Amortyzator', part: 'suspensionDamper', hint: 'Wyłącz tłumienie i porównaj kołysanie.' },
+    { id: 'suspensionRoad', label: 'Kontakt z drogą', part: 'suspensionRoad', hint: 'Nierówność pod jednym kołem przechyla nadwozie.' }
   ],
   engine: [
     { id: 'all', label: 'Cały silnik · przekrój', part: 'block', hint: 'Blok z cylindrami, głowica z zaworami i połączony napęd rozrządu.' },
@@ -68,6 +69,10 @@ export const INSPECTIONS = {
 };
 
 export function getInspections(view, sim) {
+  if (view === 'suspension') return [
+    ...INSPECTIONS.suspension,
+    ...(['pushrod', 'pullrod'].includes(sim.suspension.type) ? [{ id: 'suspensionRocker', label: 'Drążek i dźwignia', part: 'suspensionRocker', hint: 'Drążek obraca dźwignię i ściska sprężynę z amortyzatorem.' }] : [])
+  ];
   const converter = [
     { id: 'converter', label: 'Konwerter · pompa / turbina / kierownica', part: 'converter', hint: 'Olej przekazuje energię. Pompa i turbina mogą mieć różne obroty; konwerter umożliwia pełzanie bez pedału sprzęgła.' },
     { id: 'pump', label: 'Pompa · wejście od silnika', part: 'pump', hint: 'Pompa obraca się z silnikiem i rozpędza olej.' },

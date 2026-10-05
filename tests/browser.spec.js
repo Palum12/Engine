@@ -413,6 +413,115 @@ test('clutch, selector, DCT branches and all five suspension layouts are inspect
   expect(errors).toEqual([]);
 });
 
+test('suspension body mounts, five layouts and right-click descriptions stay readable', async ({ page }, info) => {
+  test.setTimeout(540_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const errors = await openApp(page);
+  await page.locator('#pause').click();
+  await page.locator('.view-tab[data-view="suspension"]').click();
+  await page.locator('#suspension-road').selectOption('split');
+  await page.locator('#suspension-amplitude').evaluate(element => {
+    element.value = '12'; element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const capture = async name => {
+    // Use the actual inspection control for an instant camera fit before QA.
+    await page.locator('#inspect-section').dispatchEvent('change');
+    await page.waitForTimeout(300);
+    await page.locator('#scene').screenshot({ path: info.outputPath(`${name}.png`) });
+  };
+  for (const type of ['macpherson', 'multilink', 'leaf', 'pushrod', 'pullrod']) {
+    await page.locator('#suspension-type').selectOption(type);
+    await page.locator('#inspect-section').selectOption('all');
+    await page.locator('#isolate').uncheck();
+    if (['multilink', 'pushrod', 'pullrod'].includes(type)) {
+      await page.locator('#labels').uncheck();
+      await capture(`${type}-rest`);
+    }
+    await page.locator('#suspension-step').evaluate(button => { for (let i = 0; i < 7; i++) button.click(); });
+    await page.locator('#labels').check();
+    await capture(`${type}-body-mounts`);
+    const labels = page.locator('.model-label:visible');
+    expect(await labels.count()).toBeLessThanOrEqual(5);
+    await expect(labels.filter({ hasText: /Nawierzchnia|Koło [LP]/ })).toHaveCount(0);
+    await page.locator('#labels').uncheck();
+    await expect(page.locator('.model-label:visible')).toHaveCount(0);
+    await capture(`${type}-without-labels`);
+    if (type === 'multilink' || type === 'pushrod' || type === 'pullrod') {
+      await page.locator('#inspect-section').selectOption(type === 'multilink' ? 'suspensionLinks' : 'suspensionRocker');
+      await capture(`${type}-connections`);
+      if (type !== 'multilink') {
+        await page.locator('#isolate').check();
+        await capture(`${type}-actuation-isolated`);
+        await page.locator('#isolate').uncheck();
+      }
+    }
+  }
+
+  await page.locator('#suspension-type').selectOption('macpherson');
+  await page.locator('#inspect-section').selectOption('suspensionDamper');
+  await page.locator('#isolate').check();
+  await page.locator('#labels').uncheck();
+  await capture('damper-picking');
+  const canvas = page.locator('#scene canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  const rect = await canvas.boundingBox();
+  // Try a small grid on the real rendered mesh instead of exposing scene internals
+  // or relying on the position of a DOM label (which is deliberately hidden).
+  let pickedPoint;
+  for (const [x, y] of [[0.5, 0.5], [0.45, 0.5], [0.55, 0.5], [0.5, 0.4], [0.5, 0.6], [0.4, 0.4], [0.6, 0.6]]) {
+    const point = { x: rect.x + rect.width * x, y: rect.y + rect.height * y };
+    await page.mouse.click(point.x, point.y, { button: 'right' });
+    if (await page.locator('#part-panel').isVisible()) {
+      if (await page.locator('#part-title').textContent() === 'Amortyzator') { pickedPoint = point; break; }
+      await page.locator('#close-part').click();
+    }
+  }
+  expect(pickedPoint, 'right-click selects the rendered damper with all labels hidden').toBeTruthy();
+  await expect(page.locator('#part-title')).toHaveText('Amortyzator');
+  await expect(page.locator('#part-description')).not.toBeEmpty();
+  await expect(page.locator('#labels')).not.toBeChecked();
+  await expect(page.locator('.model-label:visible')).toHaveCount(0);
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('right-click-description-labels-off.png') });
+  await page.locator('#close-part').click();
+  // A right drag still pans. Returning to its start must not turn it into a pick.
+  await page.mouse.move(pickedPoint.x, pickedPoint.y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(pickedPoint.x + 45, pickedPoint.y + 15, { steps: 4 });
+  await page.mouse.move(pickedPoint.x, pickedPoint.y, { steps: 4 });
+  await page.mouse.up({ button: 'right' });
+  await expect(page.locator('#part-panel')).toBeHidden();
+  if (await page.evaluate(() => document.fullscreenEnabled)) {
+    await page.locator('#fullscreen').click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    await capture('damper-fullscreen');
+    await canvas.scrollIntoViewIfNeeded();
+    const fullRect = await canvas.boundingBox();
+    for (const [x, y] of [[0.5, 0.5], [0.45, 0.5], [0.55, 0.5], [0.5, 0.4], [0.5, 0.6]]) {
+      await page.mouse.click(fullRect.x + fullRect.width * x, fullRect.y + fullRect.height * y, { button: 'right' });
+      if (await page.locator('#part-panel').isVisible()) {
+        if (await page.locator('#part-title').textContent() === 'Amortyzator') break;
+        await page.locator('#close-part').click();
+      }
+    }
+    await expect(page.locator('#part-panel')).toBeVisible();
+    await expect(page.locator('#part-title')).toHaveText('Amortyzator');
+    await expect(page.locator('#labels')).not.toBeChecked();
+    await page.locator('.visual-panel').screenshot({ path: info.outputPath('right-click-fullscreen.png') });
+    await page.locator('#close-part').click();
+    await page.locator('#fullscreen').click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  }
+  await page.locator('#inspect-section').selectOption('all');
+  await page.locator('#isolate').uncheck();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#suspension-type').selectOption('pushrod');
+  await page.locator('#labels').check();
+  await capture('pushrod-phone');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+  await expect(page.locator('.view-tab[data-view="suspension"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 for (const id of ['ibiza-mpi-2016', 'a4-quattro-2011', '911-carrera-s-2025', '508-eat8-2018', 'corolla-hybrid-2025', 'veyron-2005']) test(`mechanism views remain clear: ${id}`, async ({ page }, info) => {
   test.setTimeout(180_000);
   const errors = await openApp(page);

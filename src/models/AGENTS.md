@@ -89,6 +89,24 @@ the exact internals or scale of every real vehicle preset.
 - Suspension uses X for travel and Z for the two wheels, with visual SI scale 4.
   Stable anchors use `labelHidden` for inactive layouts/far-side duplicates.
   Bounds traverse visible ancestors and detail sections fit the near-side parts.
+  Body cutaway, subframe mounts and uprights must share the exact hardpoints
+  used by moving links, spring seats and damper eyes. Do not substitute floating
+  rods or a detached upper rectangle for visible load paths. Include body roll
+  in every body-side hardpoint; keep the hub and upright connected through travel.
+  Five-link layouts need five individual upright/subframe attachments. Push/pull
+  rods supplement double wishbones and end at real pins of a pivoted rocker;
+  the rocker pivot and fixed coilover end are mounted to the body. Keep all pins
+  on the rocker mesh and telescopic damper sections overlapping over travel.
+  Solve the rigid actuation rod in the rolling body's local frame, retaining
+  its continuous rest branch. Check both force-relative travel limits plus
+  body roll; a clamped inverse cosine must not silently stretch the rod.
+  Overview labels name only important mechanisms; wheels/road and far-side
+  duplicates stay selectable without permanent labels. Label visibility must
+  never disable raycasting or right-click part descriptions.
+  Actuator close-ups look from negative X along the rocker shaft; a +Z wheel-side
+  view hides the low pullrod behind the wheel and sill. Keep isolation optional.
+  Whole-axle camera bounds include only nearby road (X ±4 scene units); the full
+  moving road remains rendered and its dedicated section still fits the road.
 - A continuous casting joins each head's chambers in engine views; the single
   chamber casting is retained for cylinder views. Only the first head anchor has
   `userData.overview`, keeping a discoverable head label in vehicle overviews.

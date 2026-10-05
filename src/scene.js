@@ -34,7 +34,7 @@ export class EngineScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.domElement.setAttribute('aria-label', 'Model 3D silnika. Przeciągnij, aby obracać. Dwa palce na touchpadzie przesuwają kamerę, szczypnięcie przybliża model. Przycisk Przesuwanie zmienia działanie przeciągania.');
+    this.renderer.domElement.setAttribute('aria-label', 'Model 3D silnika. Przeciągnij, aby obracać. Prawy przycisk: kliknięcie pokazuje opis części, przeciąganie przesuwa kamerę. Dwa palce na touchpadzie przesuwają kamerę, szczypnięcie przybliża model. Przycisk Przesuwanie zmienia działanie przeciągania.');
     this.renderer.domElement.setAttribute('role', 'img');
     container.prepend(this.renderer.domElement);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -96,33 +96,52 @@ export class EngineScene {
     this.resize();
     this.setView('engine', true);
     this.raycaster = new THREE.Raycaster();
-    let origin;
-    this.renderer.domElement.addEventListener('pointerdown', event => {
-      origin = event.button === 0 && event.isPrimary !== false && !this.cameraInput.pan && !event.ctrlKey && !event.metaKey && !event.shiftKey ? [event.clientX, event.clientY] : null;
-    });
-    this.renderer.domElement.addEventListener('pointercancel', () => { origin = null; });
-    this.renderer.domElement.addEventListener('pointerup', event => {
-      const start = origin;
-      origin = null;
-      if (!start || Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 6) return;
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      this.raycaster.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1), this.camera);
-      const visible = object => object.visible && (!object.parent || visible(object.parent));
-      const hits = this.raycaster.intersectObjects(this.root.children, true).filter(hit => visible(hit.object) && !hit.object.userData.ignorePick);
-      if (!hits.length) return;
-      let object = hits[0].object;
-      let part, cylinder;
-      while (object) {
-        part ??= object.userData.part;
-        cylinder ??= object.userData.cylinder;
-        object = object.parent;
-      }
-      if (part) this.onSelect(part, cylinder);
-    });
+    this.bindPicking();
     this.renderer.domElement.addEventListener('webglcontextlost', event => {
       event.preventDefault();
       container.dispatchEvent(new CustomEvent('renderlost'));
     });
+  }
+
+  bindPicking() {
+    const canvas = this.renderer.domElement;
+    let origin = null;
+    this.pickListeners = {
+      pointerdown: event => {
+        const primaryClick = event.button === 0 && !this.cameraInput.pan && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+        origin = event.isPrimary !== false && (primaryClick || event.button === 2)
+          ? { x: event.clientX, y: event.clientY, button: event.button, pointerId: event.pointerId, dragged: false } : null;
+      },
+      pointermove: event => {
+        if (origin && event.pointerId === origin.pointerId && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) origin.dragged = true;
+      },
+      pointercancel: () => { origin = null; },
+      pointerup: event => {
+        const start = origin;
+        origin = null;
+        if (!start || event.pointerId !== start.pointerId || event.button !== start.button || start.dragged || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) return;
+        this.pickPart(event.clientX, event.clientY);
+      },
+      contextmenu: event => event.preventDefault()
+    };
+    for (const [name, listener] of Object.entries(this.pickListeners)) canvas.addEventListener(name, listener);
+  }
+
+  pickPart(clientX, clientY) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    this.raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1), this.camera);
+    const selectable = object => !object || object.visible && !object.userData.ignorePick && selectable(object.parent);
+    const hit = this.raycaster.intersectObjects(this.root.children, true).find(candidate => selectable(candidate.object));
+    if (!hit) return;
+    let object = hit.object;
+    let part, cylinder;
+    while (object) {
+      part ??= object.userData.part;
+      cylinder ??= object.userData.cylinder;
+      object = object.parent;
+    }
+    if (part) this.onSelect(part, cylinder);
   }
 
   setEngine(id) {
@@ -159,6 +178,7 @@ export class EngineScene {
       element.className = 'model-label';
       element.textContent = data.text;
       element.addEventListener('click', () => this.onSelect(data.part, data.cylinder));
+      element.addEventListener('contextmenu', event => { event.preventDefault(); this.onSelect(data.part, data.cylinder); });
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       this.leaders.append(line);
       this.container.append(element);
@@ -352,7 +372,9 @@ export class EngineScene {
     const radialClutch = mode === 'clutch' && this.sim.transmission === 'manual' && ['clutchCover', 'diaphragm'].includes(section);
     const synchroDetail = mode === 'gearbox' && this.sim.transmission === 'manual' && section === 'synchronizer';
     const dctGearbox = mode === 'gearbox' && this.sim.transmission === 'dct';
-    const direction = radialClutch ? vec(1.2, 0.35, 1.3) : lateralClutch || synchroDetail ? vec(0.08, 0.12, 1.9) : dctGearbox ? vec(0.18, 0.22, 1.9) : mode === 'differential' && section === 'core' ? vec(1.6,0.6,0.9) : directions[view] || directions[mode];
+    // Look along the rocker shaft so the wheel cannot hide the inboard linkage.
+    const suspensionActuation = mode === 'suspension' && ['pushrod', 'pullrod'].includes(this.sim.suspension.type) && ['suspensionRocker', 'suspensionSpring', 'suspensionDamper'].includes(section);
+    const direction = suspensionActuation ? vec(-1.7, 0.35, 0.7) : radialClutch ? vec(1.2, 0.35, 1.3) : lateralClutch || synchroDetail ? vec(0.08, 0.12, 1.9) : dctGearbox ? vec(0.18, 0.22, 1.9) : mode === 'differential' && section === 'core' ? vec(1.6,0.6,0.9) : directions[view] || directions[mode];
     this.fitBounds(bounds, direction, instant);
   }
 
@@ -457,7 +479,9 @@ export class EngineScene {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     const occupied = [];
-    this.labelElements.forEach(({ data, element, line }) => {
+    const suspensionPriority = ['suspensionBody', 'suspensionLinks', 'suspensionRocker', 'suspensionSpring', 'suspensionDamper'];
+    const labels = this.mode === 'suspension' ? [...this.labelElements].sort((a, b) => suspensionPriority.indexOf(a.data.part) - suspensionPriority.indexOf(b.data.part)) : this.labelElements;
+    labels.forEach(({ data, element, line }) => {
       const parentVisible = object => !object || object.visible && parentVisible(object.parent);
       const whole = ['drive', 'drive-detail'].includes(this.mode);
       const overview = data.anchor.userData.overview || data.assembly === 'vehicle' || ['battery', 'transfer'].includes(data.assembly);
@@ -470,7 +494,7 @@ export class EngineScene {
       const diffLabel = this.mode !== 'differential' || this.inspection !== 'core' || ['differential','finalDrive'].includes(data.part);
       const headLabel = !this.isolate || this.inspection !== 'cylinderHead' || ['cylinderHead', 'camshaft', 'valves'].includes(data.part);
       const automaticLabel = this.sim.transmission !== 'automatic' || !this.isolate || !['planetary', 'automaticClutches', 'valveBody'].includes(this.inspection) || data.part === this.inspection;
-      const labelLimit = whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
+      const labelLimit = this.mode === 'suspension' ? width < 600 ? 4 : 5 : whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
       const selectorLabel = this.mode !== 'gearbox' || this.inspection !== 'selector' || !['synchronizerHub', 'synchronizerSleeve', 'synchronizer', 'synchroCone', 'dogTeeth'].includes(data.part);
       const assembledClutchLabel = this.mode !== 'clutch' || this.sim.transmission !== 'manual' || this.drive.exploded > 0 || this.inspection !== 'all' || ['friction', 'pressurePlate', 'diaphragm', 'releaseBearing'].includes(data.part);
       const show = selectorLabel && assembledClutchLabel && !data.anchor.userData.labelHidden && occupied.length < labelLimit && timingLabel && headLabel && automaticLabel && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
@@ -508,6 +532,7 @@ export class EngineScene {
 
   dispose() {
     this.resizeObserver.disconnect();
+    for (const [name, listener] of Object.entries(this.pickListeners)) this.renderer.domElement.removeEventListener(name, listener);
     this.cameraInput.dispose();
     this.controls.dispose();
     this.engine.dispose();

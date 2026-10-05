@@ -22,6 +22,11 @@ const TIRE_RATE = 190000;
 const TIRE_DAMPING = 420;
 const BASE_RATE = 25000;
 const BASE_DAMPING = 1800;
+const BODY_INERTIA = 490;
+const AXLE_INERTIA = 110;
+const BUMP_TRAVEL = 0.22;
+const REBOUND_TRAVEL = 0.23;
+const MAX_ROLL = 0.25;
 const STEP = 1 / 600;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
@@ -98,7 +103,7 @@ export class SuspensionSimulation {
     const damperForce = this.dampingRate * (wheel.velocity - velocity);
     // Progressive bump/rebound stops. They prevent unlimited suspension travel.
     const relative = length - (BODY_HEIGHT - this.staticWheelHeight);
-    const stops = relative < -0.22 ? 160000 * (-0.22 - relative) : relative > 0.23 ? -100000 * (relative - 0.23) : 0;
+    const stops = relative < -BUMP_TRAVEL ? 160000 * (-BUMP_TRAVEL - relative) : relative > REBOUND_TRAVEL ? -100000 * (relative - REBOUND_TRAVEL) : 0;
     const road = this.roadAt(this.distance, side);
     const overlap = WHEEL_RADIUS + road.height - wheel.height;
     const tireForce = overlap > 0 ? Math.max(0, TIRE_RATE * overlap + TIRE_DAMPING * (road.slope * this.speed / 3.6 - wheel.velocity)) : 0;
@@ -108,27 +113,99 @@ export class SuspensionSimulation {
   integrate(dt) {
     const forces = [this.forces(0), this.forces(1)];
     this.bodyVelocity += ((forces[0].support + forces[1].support) / MASS - G) * dt;
-    this.rollVelocity += ((forces[1].support - forces[0].support) * TRACK_HALF * Math.cos(this.roll) - 250 * this.rollVelocity) / 490 * dt;
+    this.rollVelocity += ((forces[1].support - forces[0].support) * TRACK_HALF * Math.cos(this.roll) - 250 * this.rollVelocity) / BODY_INERTIA * dt;
     this.bodyHeight += this.bodyVelocity * dt;
     this.roll += this.rollVelocity * dt;
     if (this.type === 'leaf') {
       // One rigid axle has heave and roll DOFs; wheel centres remain on its beam.
       const net = forces.map(force => force.tireForce - force.support - this.wheelMass * G);
       this.axleVelocity += (net[0] + net[1]) / (this.wheelMass * 2) * dt;
-      this.axleRollVelocity += (net[1] - net[0]) * TRACK_HALF * Math.cos(this.axleRoll) / 110 * dt;
+      this.axleRollVelocity += (net[1] - net[0]) * TRACK_HALF * Math.cos(this.axleRoll) / AXLE_INERTIA * dt;
       this.axleHeight += this.axleVelocity * dt;
       this.axleRoll += this.axleRollVelocity * dt;
-      this.wheels.forEach((wheel, side) => {
-        const sign = side ? 1 : -1;
-        wheel.height = this.axleHeight + sign * TRACK_HALF * Math.sin(this.axleRoll);
-        wheel.velocity = this.axleVelocity + sign * TRACK_HALF * Math.cos(this.axleRoll) * this.axleRollVelocity;
-      });
+      this.refreshAxleWheels();
     } else this.wheels.forEach((wheel, side) => {
       wheel.velocity += (forces[side].tireForce - forces[side].support - this.wheelMass * G) / this.wheelMass * dt;
       wheel.height += wheel.velocity * dt;
     });
+    this.constrainTravel();
     this.distance += this.speed / 3.6 * dt; this.time += dt;
     for (const wheel of this.wheels) wheel.angle += this.speed / 3.6 / WHEEL_RADIUS * dt;
+  }
+
+  refreshAxleWheels() {
+    this.wheels.forEach((wheel, side) => {
+      const sign = side ? 1 : -1;
+      wheel.height = this.axleHeight + sign * TRACK_HALF * Math.sin(this.axleRoll);
+      wheel.velocity = this.axleVelocity + sign * TRACK_HALF * Math.cos(this.axleRoll) * this.axleRollVelocity;
+    });
+  }
+
+  constrainRoll() {
+    let corrected = false;
+    // This axle lesson has vertical wheel guides, not lateral motion or a
+    // rollover model. Guide stops bound its body/axle roll to the linkage range.
+    for (const [angle, velocity] of [['roll', 'rollVelocity'], ...(this.type === 'leaf' ? [['axleRoll', 'axleRollVelocity']] : [])]) {
+      if (Math.abs(this[angle]) < MAX_ROLL - 1e-10) continue;
+      if (Math.abs(this[angle]) > MAX_ROLL) {
+        this[angle] = clamp(this[angle], -MAX_ROLL, MAX_ROLL);
+        corrected = true;
+      }
+      if (this[angle] * this[velocity] > 0) { this[velocity] = 0; corrected = true; }
+    }
+    if (corrected && this.type === 'leaf') this.refreshAxleWheels();
+    return corrected;
+  }
+
+  constrainTravel() {
+    const rest = BODY_HEIGHT - this.staticWheelHeight;
+    const minimum = rest - BUMP_TRAVEL, maximum = rest + REBOUND_TRAVEL;
+    const rigid = this.type === 'leaf';
+    // Mechanical travel stops act between the body and wheel/axle. Distribute
+    // their reaction over both masses and roll inertias; never move a leaf wheel
+    // separately from its rigid axle or create an upward road-contact force.
+    for (let iteration = 0; iteration < 8; iteration++) {
+      let corrected = this.constrainRoll();
+      for (let side = 0; side < 2; side++) {
+        const wheel = this.wheels[side], sign = side ? 1 : -1;
+        let bodyLever = sign * TRACK_HALF * Math.cos(this.roll);
+        let axleLever = sign * TRACK_HALF * Math.cos(this.axleRoll);
+        const inverseWheelMass = rigid ? 1 / (this.wheelMass * 2) : 1 / this.wheelMass;
+        let inverseMass = 1 / MASS + bodyLever * bodyLever / BODY_INERTIA + inverseWheelMass + (rigid ? axleLever * axleLever / AXLE_INERTIA : 0);
+        const length = this.bodyHeight + sign * TRACK_HALF * Math.sin(this.roll) - wheel.height;
+        const error = length < minimum ? length - minimum : length > maximum ? length - maximum : 0;
+        if (Math.abs(error) > 1e-9) {
+          const reaction = -error / inverseMass;
+          this.bodyHeight += reaction / MASS;
+          this.roll += reaction * bodyLever / BODY_INERTIA;
+          if (rigid) {
+            this.axleHeight -= reaction * inverseWheelMass;
+            this.axleRoll -= reaction * axleLever / AXLE_INERTIA;
+            this.refreshAxleWheels();
+          } else wheel.height -= reaction * inverseWheelMass;
+          bodyLever = sign * TRACK_HALF * Math.cos(this.roll);
+          axleLever = sign * TRACK_HALF * Math.cos(this.axleRoll);
+          inverseMass = 1 / MASS + bodyLever * bodyLever / BODY_INERTIA + inverseWheelMass + (rigid ? axleLever * axleLever / AXLE_INERTIA : 0);
+          corrected = true;
+        }
+        const direction = length <= minimum + 1e-8 ? -1 : length >= maximum - 1e-8 ? 1 : 0;
+        const relativeVelocity = this.bodyVelocity + bodyLever * this.rollVelocity - wheel.velocity;
+        if (direction && direction * relativeVelocity > 0) {
+          // Inelastic stop: remove only motion further into the limit. Motion
+          // away from it remains free, preserving momentum without adding energy.
+          const impulse = -relativeVelocity / inverseMass;
+          this.bodyVelocity += impulse / MASS;
+          this.rollVelocity += impulse * bodyLever / BODY_INERTIA;
+          if (rigid) {
+            this.axleVelocity -= impulse * inverseWheelMass;
+            this.axleRollVelocity -= impulse * axleLever / AXLE_INERTIA;
+            this.refreshAxleWheels();
+          } else wheel.velocity -= impulse * inverseWheelMass;
+        }
+      }
+      if (!corrected) break;
+    }
+    this.constrainRoll();
   }
 
   refreshTelemetry() {

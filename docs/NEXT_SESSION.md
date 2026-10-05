@@ -45,3 +45,22 @@ granice odwzorowania opisuje [raport odbioru](MECHANISM_AND_SUSPENSION_QA.md).
 - Nie zmieniać źródeł podczas testów przeglądarkowych.
 - Dodać odpowiednie testy połączeń i fizyki oraz uzupełnić instrukcje AGENTS.
 - Publikację uzgadniać z zakresem następnego polecenia użytkownika.
+
+## Kolejne uwagi do zawieszenia — 5 października 2026
+
+Użytkownik zgłosił wolne końce elementów, szczególnie w wielowahaczu i
+pushrodzie/pullrodzie, nieczytelny górny prostokąt zamiast kontekstu karoserii
+oraz zbyt wiele etykiet. Opis wybranego elementu ma być dostępny prawym
+przyciskiem myszy również z wyłączonymi etykietami.
+
+Aktualny zakres poprawy i rzeczywiste wyniki odbioru zapisuje
+[SUSPENSION_CONNECTIONS_QA.md](SUSPENSION_CONNECTIONS_QA.md). Wcześniejsze
+odhaczenie zakładki powyżej nie zastępuje sprawdzenia ciągłości mocowań i
+obejrzenia aktualnych ujęć.
+
+Zakres zakończony lokalnie na gałęzi `codex/suspension-connections`: połączone
+mocowania pięciu konstrukcji, przekrój nadwozia, krótkie etykiety oraz opisy
+pod prawym przyciskiem z wyłączonymi etykietami. Zmieniono też stronę kamery
+w zbliżeniach dźwigni, aby odsłonić niski pullrod. Odbiór: 206 testów Node,
+build i końcowy scenariusz Chromium przeszły; zrzuty obejrzano. Publikacja
+tych zmian wymaga osobnego polecenia użytkownika.

@@ -45,3 +45,15 @@
   or screenshot can scroll it into view. Include phone/tablet/fullscreen layouts;
   the eight views and nine header engines must remain accessible without a strip
   scrollbar. Boxer 4 is still tested through the Subaru preset.
+- `scene-picking.test.js` uses the actual raycaster and OrbitControls to check
+  right-click picking with labels off, ancestor visibility and right-button pan.
+  A drag returning to its start must still count as a drag, not a selection.
+- The suspension-body browser scenario captures all five layouts with labels
+  on/off, split-road roll, and rest/close-ups for multilink and push/pull. Check
+  actual images for mounting continuity, not just finite bounds. It also picks
+  a rendered damper by right click in normal and fullscreen views with labels off.
+  Inspect both push/pull actuation close-ups with and without isolation; a test
+  pass does not prove that a low rocker is visible behind the wheel or body.
+- `suspension-travel.test.js` checks hard travel/roll stops across the road controls,
+  rigid-axle DOFs, vertical momentum and inelastic impact energy. Keep these
+  checks separate from real-mesh rod closure in `suspension-connections.test.js`.

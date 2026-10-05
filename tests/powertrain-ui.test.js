@@ -21,7 +21,7 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       .replace(/\r?\n/g, newline)
       .replace(/^import ['"].*\.css['"];\r?\n/gm, '')
       .replace(/from '(\.\/[^']+)'/g, (_, path) => `from '${new URL(path, new URL('../src/main.js', import.meta.url)).href}'`);
-    app = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { sim, player, updateUI, toastTimer };').toString('base64')}`);
+    app = await import(`data:text/javascript;base64,${Buffer.from(source + '\nexport { sim, player, updateUI, choosePart, toastTimer };').toString('base64')}`);
     console.error = originalError;
     const $ = selector => window.document.querySelector(selector);
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
@@ -251,6 +251,29 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal($('#suspension-controls').hidden, false);
       assert.equal($('.control-panel').hidden, true);
       select('#suspension-type', 'pullrod');
+      assert.ok($('#inspect-section').querySelector('option[value="suspensionRocker"]'), 'push/pull linkage has a reachable close-up');
+      assert.ok($('#inspect-section').querySelector('option[value="suspensionBody"]'), 'body attachment close-up is available');
+      $('#labels').checked = false;
+      $('#labels').dispatchEvent(new window.Event('change', { bubbles: true }));
+      app.choosePart('suspensionDamper');
+      assert.equal($('#part-panel').hidden, false);
+      assert.equal($('#part-title').textContent, 'Amortyzator');
+      assert.equal($('#labels').checked, false, 'part descriptions work without enabling canvas labels');
+      assert.ok($('#part-description').textContent.length < 190, 'the selected part has a short explanation');
+      app.choosePart('suspensionRocker');
+      assert.match($('#part-description').textContent, /ciągnie drążek/);
+      select('#suspension-type', 'pushrod');
+      assert.match($('#part-description').textContent, /pcha drążek/);
+      select('#suspension-type', 'leaf');
+      assert.equal($('#inspect-section').querySelector('option[value="suspensionRocker"]'), null, 'inactive linkage inspection is removed');
+      assert.equal($('#part-panel').hidden, true, 'a rocker description closes when that part disappears');
+      app.choosePart('suspensionSpring');
+      assert.equal($('#part-title').textContent, 'Resor piórowy');
+      select('#suspension-type', 'pullrod');
+      assert.equal($('#part-title').textContent, 'Sprężyna', 'an open description updates with the chosen layout');
+      $('#close-part').click();
+      $('#labels').checked = true;
+      $('#labels').dispatchEvent(new window.Event('change', { bubbles: true }));
       select('#suspension-road', 'split');
       input('#suspension-amplitude', '12');
       input('#suspension-damping', '0');

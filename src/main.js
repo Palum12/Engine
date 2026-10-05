@@ -25,7 +25,7 @@ import { ScenarioPlayer, SCENARIOS } from './scenarios.js';
 import { EngineScene } from './scene.js';
 import { ENGINES, getEngine } from './engines.js';
 import { manualClutchState } from './manual-clutch.js';
-import { SUSPENSION_CONTROLS, SUSPENSION_TELEMETRY, SUSPENSION_NOTES, SUSPENSION_PARTS } from './suspension-ui.js';
+import { SUSPENSION_CONTROLS, SUSPENSION_TELEMETRY, SUSPENSION_NOTES, SUSPENSION_PARTS, suspensionPartDescription } from './suspension-ui.js';
 import { CAR_PRESETS, getCarPreset } from './car-presets.js';
 import { applyCarPreset } from './car-configuration.js';
 import { Simulation, STROKES, GEAR_RATIOS, cycleDegrees, strokeIndex } from './simulation.js';
@@ -242,7 +242,7 @@ function choosePart(part, cylinder) {
     $('#cylinder-number').value = cylinder;
     scene?.selectCylinder(cylinder);
   }
-  let [title, description] = PARTS[part] || PARTS.block;
+  let [title, description] = suspensionPartDescription(part, sim.suspension.type) || PARTS[part] || PARTS.block;
   if (part === 'crank') description += ` Przykładowa kolejność zapłonu ${getEngine(sim.engineId).name}: ${getEngine(sim.engineId).firingOrder.join(' → ')}.`;
   if (part === 'banks' || part === 'timing') description = `${getEngine(sim.engineId).architecture}. ${getEngine(sim.engineId).note} Wałki obracają się dwa razy wolniej od wału korbowego. Trasa napędu, przekładnie pośrednie i dźwigienki są schematyczne; nie służą do ustawiania rozrządu w samochodzie.`;
   $('#part-title').textContent = title;
@@ -463,8 +463,15 @@ $('#suspension-type').addEventListener('change', event => {
   sim.suspension.setType(event.target.value);
   scene?.suspension.update(sim);
   scene?.refreshLabels();
+  configureInspection(mode);
   scene?.setView(mode, true);
   updateSuspensionUI();
+  if (selectedPart?.startsWith('suspension') && !$('#part-panel').hidden) {
+    if (selectedPart === 'suspensionRocker' && !['pushrod', 'pullrod'].includes(sim.suspension.type)) {
+      $('#part-panel').hidden = true;
+      selectedPart = null;
+    } else choosePart(selectedPart);
+  }
 });
 $('#suspension-road').addEventListener('change', event => { sim.suspension.setRoad(event.target.value); updateSuspensionUI(); });
 for (const [name, setter, divisor] of [['speed', 'setSpeed', 1], ['amplitude', 'setAmplitude', 100], ['spring', 'setSpring', 100], ['damping', 'setDamping', 100]]) {

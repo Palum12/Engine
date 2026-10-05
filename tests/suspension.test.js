@@ -121,7 +121,7 @@ test('suspension geometry has reversible sections, stable anchors and connected 
       for (const section of ['all', 'suspensionLinks', 'suspensionSpring', 'suspensionDamper', 'suspensionRoad', 'suspensionRocker']) {
         model.setSection(section, true);
         assert.equal(model.axleDrive.visible, section === 'all');
-        assert.equal(model.roadAnchor.userData.labelHidden, !['all', 'suspensionRoad'].includes(section));
+        assert.equal(model.roadAnchor.userData.labelHidden, true);
         const box = model.bounds(section);
         assert.ok([...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite));
         assert.ok(!box.isEmpty());
@@ -129,7 +129,7 @@ test('suspension geometry has reversible sections, stable anchors and connected 
       model.setSection('all', false);
       assert.ok(model.body.visible && model.roads[0].mesh.visible);
       assert.equal(model.axleDrive.visible, true);
-      assert.equal(model.roadAnchor.userData.labelHidden, false);
+      assert.equal(model.roadAnchor.userData.labelHidden, true);
       if (type === 'leaf') {
         model.group.updateWorldMatrix(true, true);
         for (const corner of model.corners) {
