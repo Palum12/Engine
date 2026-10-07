@@ -21,7 +21,7 @@ test('inspection separates the clutch layers into clear gaps without changing pe
   const layers = [model.flywheel, model.disc, model.pressureFace, model.diaphragmRing, model.coverRing, model.bearing].map(bounds);
   for (let i = 1; i < layers.length; i++) assert.ok(layers[i].min.x - layers[i - 1].max.x > 0.45, `layers ${i - 1}/${i} overlap or leave an unreadable gap`);
   assert.ok(model.clutchState.contact);
-  assert.ok(model.contacts.every(contact => contact.visible));
+  assert.ok(model.contacts.every(contact => !contact.visible), 'disassembly gaps must not display a false physical contact');
 
   // Pedal travel still decreases spring force before opening the physical faces.
   const discX = model.disc.position.x, pressureX = model.pressure.position.x;
@@ -113,15 +113,16 @@ test('exploded inspections replace the long metal cage with unobtrusive assembly
   assert.ok(model.assemblyGuides.visible);
 
   model.exploded = 0; model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.every(({ outer }) => outer.visible));
+  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
+  assert.ok(model.fingers.every(({ outer }) => outer.visible === (outer.userData.sectionVisible !== false)), 'physical spring links return outside the fixed cutaway sector');
   assert.equal(model.assemblyGuides.visible, false);
   sim.clutch = 0.5; model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.every(({ outer }) => outer.visible));
+  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
   assert.equal(model.assemblyGuides.visible, false);
 
   // A vehicle overview must restore physical links even if the bench remembers
   // its previous exploded setting.
   model.exploded = 0.7; model.setView('drive'); model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.every(({ outer }) => outer.visible));
+  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
   assert.equal(model.assemblyGuides.visible, false);
 }));

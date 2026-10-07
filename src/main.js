@@ -58,7 +58,7 @@ let disposed = false;
 let readoutMuted = window.matchMedia('(max-width:600px)').matches;
 let mechanismReadoutRequested = false;
 let selectedPresetId = '';
-let manualClutchExplosion = 0.55;
+let manualClutchExplosion = 0;
 
 const PARTS = {
   timing: ['Rozrząd: pasek lub łańcuch', 'Wał korbowy napędza wałki rozrządu. Koło wałka ma dwa razy więcej zębów, dlatego zawory wykonują jeden cykl na dwa obroty wału. Pasek ma zęby; łańcuch współpracuje z kołami łańcuchowymi i wymaga smarowania. Przełącznik zmienia ilustrację napędu, nie osiągi silnika. Trasa, napinacz i krzywki są schematyczne.'],
@@ -104,7 +104,6 @@ const PARTS = {
   torsionSprings: ['Sprężyny tłumiące w tarczy', 'Sprężyny pomiędzy okładziną a piastą łagodzą pulsacje momentu i szarpnięcia napędu. To inne sprężyny niż sprężyna talerzowa docisku. Ich ugięcia nie są osobno symulowane.'],
   pressurePlate: ['Docisk', 'Obraca się z kołem zamachowym. Sprężyna talerzowa zaciska tarczę cierną. Wciskanie pedału najpierw zmniejsza siłę zacisku, choć powierzchnie nadal się stykają: pod obciążeniem mogą się ślizgać. Dopiero po odciążeniu sprężyste taśmy odsuwają płytę.'],
   diaphragm: ['Sprężyna talerzowa', 'Jej palce są naciskane przez łożysko oporowe. Ugięcie środka zmienia nacisk zewnętrznej części sprężyny na docisk. Ruch został powiększony, aby był widoczny.'],
-  releaseBearing: ['Łożysko oporowe i widełki', 'Wciśnięcie pedału przesuwa widełki i łożysko w stronę obracającej się sprężyny talerzowej. Łożysko pozwala przenieść nacisk pomiędzy nieruchomym mechanizmem sterowania a obracającym się dociskiem.'],
   inputShaft: ['Wał wejściowy', 'Jest połączony z tarczą sprzęgła. Niebieskie koła są osadzone na tym wale i obracają się razem z nim. Po wciśnięciu sprzęgła wał nie musi obracać się z prędkością silnika.'],
   outputShaft: ['Wał wyjściowy', 'Przekazuje napęd do przekładni głównej i kół. Na luzie duże koła zębate obracają się swobodnie względem wału. Dopiero przesuwka łączy wybrane koło z wałem.'],
   gearPair: ['Stale zazębiona para kół', 'Koła zębate nie przesuwają się, aby wybrać bieg: pozostają zazębione. Zmienia się połączenie wybranego koła z wałem wyjściowym. Większe koło odbierające daje mniejsze obroty i większy moment. Zęby są uproszczone, a ich liczby zachowują podane przełożenia.'],
@@ -117,7 +116,7 @@ const PARTS = {
   valves: ['Zawory i rozrząd', 'Zawór dolotowy wpuszcza ładunek, wydechowy wypuszcza spaliny. Wałek rozrządu obraca się dwa razy wolniej od wału korbowego. Model pomija wyprzedzenia, opóźnienia i współotwarcie zaworów.'],
   spark: ['Świeca zapłonowa', 'Iskra pojawia się pod koniec sprężania i inicjuje spalanie mieszanki. Ciśnienie rośnie, a gazy wykonują pracę na tłoku. W rzeczywistym silniku wyprzedzenie zapłonu zależy m.in. od obrotów i obciążenia.'],
   block: ['Blok silnika', 'W bloku znajdują się cylindry prowadzące tłoki. Przekrój odsłania wnętrze; wyłącz go, żeby zobaczyć osłonę cylindrów. To schemat edukacyjny, bez pełnego układu chłodzenia. Smarowanie pokazano w osobnym widoku „Olej”.'],
-  clutch: ['Sprzęgło cierne', 'Koło zamachowe i docisk obracają się z silnikiem; tarcza przez wielowypust obraca wał wejściowy skrzyni. Wciskanie pedału przez łożysko i palce sprężyny zmniejsza docisk oraz limit przenoszonego momentu. Przy poślizgu powierzchnie nadal się stykają, ale mają różne obroty: tarcie przekazuje moment i wytwarza ciepło. Dopiero brak docisku i szczelina rozłączają napęd. Pedał zwolniony daje pełny docisk; wciśnięty pozwala zmienić bieg. Skok części jest powiększony dla czytelności.'],
+  clutch: ['Sprzęgło cierne', 'Koło zamachowe i docisk obracają się z silnikiem; tarcza przez wielowypust obraca wał wejściowy skrzyni. Wciskanie pedału przez łożysko i palce sprężyny zmniejsza docisk oraz limit przenoszonego momentu. Przy poślizgu powierzchnie nadal się stykają, ale mają różne obroty: tarcie przekazuje moment i wytwarza ciepło. Brak docisku przerywa napęd, a dalszy ruch otwiera szczelinę. Pedał zwolniony daje pełny docisk; wciśnięty pozwala zmienić bieg. Skok części jest powiększony dla czytelności.'],
   gearbox: ['Manualna skrzynia biegów', 'Na niższym biegu koła obracają się wolniej, ale dostają większy moment. Pary kół są stale zazębione; wybrana para zostaje połączona z wałem wyjściowym. Złoty pierścień oznacza wybrany bieg. Bieg N nie przekazuje napędu na koła.'],
   wheel: ['Napęd kół', 'Za skrzynią działa przekładnia główna 3,9:1, zmniejszająca obroty i zwiększająca moment na kołach. W widoku „Napęd szczegółowy” można obejrzeć przekładnię główną, mechanizm różnicowy i półosie; w zwykłym widoku koło przedstawia wynikowy ruch pojazdu. Model zakłada masę 1250 kg i promień koła 0,31 m.'],
   intake: ['Dolot', 'Niebieski kanał doprowadza powietrze do zaworu dolotowego. Przy wtrysku pośrednim paliwo jest dodawane przed zaworem. Złote drobiny przedstawiają paliwo, niebieskie — powietrze.'],
@@ -132,7 +131,7 @@ Object.assign(PARTS, SUSPENSION_PARTS);
 Object.assign(PARTS, {
   clutchCover: ['Obudowa sprzęgła', 'Obudowa jest przykręcona do koła zamachowego i obraca się z silnikiem. Podpiera sprężynę talerzową oraz przez sprężyste taśmy obraca docisk. W przekroju usunięto część obudowy, aby odsłonić sprężynę. Rozstrzelenie pokazuje kolejność części; nie jest skokiem roboczym sprzęgła.'],
   releaseActuator: ['Współosiowy wysprzęglik hydrauliczny', 'Cylinder jest zamocowany do obudowy skrzyni wokół wału wejściowego. Ciśnienie od pedału wysuwa tłok i przesuwa łożysko wysprzęglające. Łożysko przekazuje nacisk na obracające się palce sprężyny. To jeden z wariantów wysprzęglania; inne sprzęgła używają zewnętrznych widełek.'],
-  releaseBearing: ['Łożysko wysprzęglające', 'Przesuwane osiowo łożysko naciska palce sprężyny talerzowej, zmniejszając docisk tarczy. Jedna bieżnia współpracuje z obracającą się sprężyną, druga z nieruchomym wysprzęglikiem. Pozwala to przekazać nacisk bez obracania cylindra hydraulicznego.'],
+  releaseBearing: ['Łożysko wysprzęglające', 'Tłok centralnego wysprzęglika przesuwa łożysko w stronę silnika i naciska palce sprężyny talerzowej. Korpus łożyska przesuwa się po prowadnicy, ale nie wiruje. Pierścień stykający się ze sprężyną obraca się z nią. Łożysko łączy nieruchome sterowanie z obracającym się dociskiem.'],
   gearSelector: ['Wybierak biegów', 'Ruch poprzeczny dźwigni wybiera wodzik, a ruch wzdłużny przesuwa go wraz z widełkami. Widełki obejmują rowek tulei synchronizatora. Tuleja przesuwa się po piaście związanej z wałem; dopiero po synchronizacji zachodzi na zęby kłowe koła. W modelu jeden wodzik obsługuje jeden bieg dla czytelności; w wielu skrzyniach para biegów współdzieli tuleję i widełki.'],
   shiftRail: ['Wodzik', 'Wodzik przesuwa widełki i tuleję wybranego synchronizatora. Ruch wybieraka jest tu przenoszony przez widoczne cięgno. W rzeczywistej skrzyni blokady wodzików chronią przed włączeniem dwóch przełożeń jednocześnie.'],
   dctOdd: ['Gałąź K1 · biegi nieparzyste', 'Pakiet K1 łączy silnik z wewnętrznym wałem wejściowym. Wybrana para kół napędza wał wyjściowy przez tuleję. Biegi 1, 3 i 5 należą do tej gałęzi; pozostałe koła obracają się swobodnie, dopóki tuleja ich nie połączy.'],
@@ -158,7 +157,25 @@ app.innerHTML = `
           <button class="view-tab active" data-view="engine" aria-pressed="true">Silnik</button><button class="view-tab" data-view="cylinder" aria-pressed="false">Cylinder</button><button class="view-tab" data-view="drive-detail" aria-pressed="false">Napęd</button><button class="view-tab" data-view="clutch" aria-pressed="false">Sprzęgło</button><button class="view-tab" data-view="gearbox" aria-pressed="false">Skrzynia</button><button class="view-tab" data-view="differential" aria-pressed="false">Dyferencjał</button>
         </div><button class="icon-button" id="fullscreen" aria-label="Pełny ekran modelu" title="Pełny ekran">${icon('expand')}</button></div>
         <div class="inspection-toolbar" id="inspection-toolbar" hidden><label>Przybliż podzespół<select id="inspect-section"></select></label><label class="isolate-option" id="isolate-option"><input id="isolate" type="checkbox">Odizoluj</label><button id="inspect-description" class="quiet-button">Opis podzespołu</button><span id="inspection-note"></span>
-          <div class="lesson-tools" id="clutch-lesson" hidden><svg class="clutch-diagram" viewBox="0 0 270 52" role="img" aria-label="Przekrój styku koła zamachowego, tarczy i docisku"><path d="M0 26H80M180 26H270" stroke="#6ac5e9" stroke-width="5"/><rect x="70" y="4" width="20" height="44" fill="#a3b3c0"/><rect id="diagram-disc" x="90" y="7" width="12" height="38" fill="#e0b354"/><rect id="diagram-pressure" x="102" y="4" width="16" height="44" fill="#a3b3c0"/><path id="diagram-torque" d="M10 26H240m-10-7 10 7-10 7" fill="none" stroke="#78edab" stroke-width="3"/></svg><div><strong id="contact-state"></strong><small id="contact-detail"></small></div><button class="secondary-button" id="assemble-clutch">Złóż części</button></div>
+          <div class="lesson-tools" id="clutch-lesson" hidden>
+            <svg class="clutch-diagram" viewBox="0 0 330 118" role="img" aria-label="Przekrój sprzęgła: łożysko naciska sprężynę, która zwalnia docisk">
+              <text x="8" y="14">SILNIK</text><text x="240" y="14">SKRZYNIA</text>
+              <path d="M8 67H70M102 67H319" stroke="#6ac5e9" stroke-width="5"/>
+              <path d="M90 27H154V40M90 107H154V94" fill="none" stroke="#7996a8" stroke-width="5"/>
+              <rect x="70" y="32" width="20" height="70" rx="2" fill="#a3b3c0"/>
+              <rect id="diagram-disc" x="90" y="35" width="12" height="64" fill="#b18b60"/>
+              <rect id="diagram-pressure" x="102" y="32" width="16" height="70" rx="2" fill="#a3b3c0"/>
+              <path id="diagram-spring" d="M118 34L154 40L199 58M118 100L154 94L199 76" fill="none" stroke="#ffcc73" stroke-width="4"/>
+              <circle cx="154" cy="40" r="4" fill="#7996a8"/><circle cx="154" cy="94" r="4" fill="#7996a8"/>
+              <rect id="diagram-bearing" x="199" y="54" width="15" height="26" rx="3" fill="#6ac5e9"/>
+              <path id="diagram-release" d="M258 46H220m8-5-8 5 8 5" fill="none" stroke="#6ac5e9" stroke-width="2"/>
+              <path id="diagram-torque" d="M8 67H310m-10-6 10 6-10 6" fill="none" stroke="#78edab" stroke-width="3"/>
+              <text x="60" y="116">koło · tarcza · docisk</text><text x="217" y="96">łożysko ←</text>
+            </svg>
+            <div class="clutch-contact"><strong id="contact-state"></strong><small id="contact-detail"></small><div class="clutch-clamp"><span>Docisk sprężyny <b id="clutch-clamp-value">100%</b></span><meter id="clutch-clamp" min="0" max="1" value="1" aria-label="Względny docisk sprężyny talerzowej"></meter><span id="clutch-gap-state"></span></div></div>
+            <div class="clutch-actions"><div role="group" aria-label="Położenie pedału sprzęgła"><button class="secondary-button" data-clutch-pedal="0">Zwolnij</button><button class="secondary-button" data-clutch-pedal="0.5">Pół pedału</button><button class="secondary-button" data-clutch-pedal="1">Wciśnij</button></div><button class="secondary-button" id="assemble-clutch">Złóż części</button><span id="clutch-display" data-state="assembled">Złożone · ruch roboczy</span></div>
+            <small id="clutch-mechanism-detail"></small>
+          </div>
           <div class="lesson-tools" id="gear-lesson" hidden><div class="shift-stages"><span data-shift-stage="release">1 · Rozłączenie</span><span data-shift-stage="synchronize">2 · Synchronizacja</span><span data-shift-stage="engage">3 · Przesuwka</span><span data-shift-stage="idle">4 · Połączenie</span></div><button class="secondary-button" id="shift-step">Następny etap</button><small id="shift-detail"></small></div>
           <div class="lesson-tools" id="diff-lesson" hidden><button class="secondary-button" id="diff-demo" aria-pressed="false">Uruchom pokaz stołowy</button><div class="turn-buttons" role="group" aria-label="Kierunek jazdy"><button data-turn="1">Zakręt w lewo</button><button data-turn="0" class="active">Na wprost</button><button data-turn="-1">Zakręt w prawo</button></div><label><input id="diff-open" type="checkbox">Odsłoń satelity</label><div class="diff-speeds"><span>L <b id="diff-left"></b></span><span>Kosz <b id="diff-carrier"></b></span><span>P <b id="diff-right"></b></span></div><small id="diff-detail"></small></div>
         </div>
@@ -219,7 +236,7 @@ document.querySelector('#clutch').closest('.pedal-control').id = 'clutch-control
 document.querySelector('#quick-gear').closest('label').insertAdjacentHTML('beforebegin', '<button id="quick-brake" class="secondary-button" aria-pressed="false" hidden>Hamulec</button>');
 document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="dct-lesson" hidden><span id="dct-k1"></span><span id="dct-k2"></span><strong id="dct-state"></strong><button id="dct-shift-step" class="secondary-button">Następny etap</button></div>');
 document.querySelector('#inspection-toolbar').insertAdjacentHTML('beforeend', '<div class="lesson-tools" id="automatic-lesson" hidden><span id="automatic-slip"></span><span id="automatic-lockup"></span><strong id="automatic-state"></strong></div>');
-document.querySelector('#clutch-lesson').insertAdjacentHTML('beforeend', '<button class="secondary-button" id="clutch-slip-demo">Pokaż ruszanie z poślizgiem</button><small class="mechanics-explanation">Łożysko wciska palce sprężyny już przy częściowym wciśnięciu pedału. Spada docisk, choć tarcze nadal się stykają. Dopiero po odciążeniu powstaje szczelina. Poślizg oznacza różne obroty, a jego energia zamienia się w ciepło.</small>');
+document.querySelector('.clutch-actions').insertAdjacentHTML('beforeend', '<button class="secondary-button" id="clutch-slip-demo">Pokaż ruszanie z poślizgiem</button>');
 document.querySelector('#assemble-clutch').insertAdjacentHTML('beforebegin', '<button class="secondary-button" id="spread-clutch">Pokaż warstwy</button>');
 document.querySelector('#gear-lesson').insertAdjacentHTML('afterbegin', '<label>Obserwowany bieg<select id="synchronizer-gear">' + [1,2,3,4,5].map(n => `<option value="${n}"${n === 2 ? ' selected' : ''}>${n}</option>`).join('') + '</select></label><button class="secondary-button" id="synchronizer-demo">Pokaż zmianę biegu</button>');
 document.querySelector('#dct-lesson').insertAdjacentHTML('beforeend', '<small id="dct-layout-note">Schemat DCT ma 6 biegów i pokazuje zasadę dwóch gałęzi. Nazwa F1 DCT w drogowych Ferrari oznacza dwusprzęgłową skrzynię; model nie odwzorowuje przekładni bolidu ani dokładnej konstrukcji Ferrari.</small>');
@@ -331,7 +348,7 @@ function updateReadouts() {
   const relevant = ['clutch', 'gearbox', 'turbo'].includes(mode) || ['drive', 'drive-detail'].includes(mode) && ['clutch','converter','gearbox','planetary','automaticClutches','valveBody','turbo'].includes(scene?.inspection);
   const turbo = mode === 'turbo' || mode === 'drive-detail' && scene?.inspection === 'turbo';
   const explodedClutch = mode === 'clutch' && sim.transmission === 'manual' && Number($('#explode').value) > 0;
-  const detailLesson = mode === 'gearbox' && sim.transmission === 'manual' && ['selector', 'synchronizer'].includes($('#inspect-section').value);
+  const detailLesson = sim.transmission === 'manual' && (mode === 'clutch' || mode === 'gearbox' && ['selector', 'synchronizer'].includes($('#inspect-section').value));
   const visible = relevant && $('#labels').checked && !readoutMuted && (!(explodedClutch || detailLesson) || mechanismReadoutRequested);
   $('#mechanism-readout').hidden = !visible || turbo;
   $('#turbo-readout').hidden = !visible || !turbo;
@@ -352,19 +369,37 @@ function updateLessons() {
   $('#diff-demo').hidden = !['differential','finalDrive','frontAxle','rearAxle'].includes(view);
 }
 function updateLessonState() {
-  const clutchState = manualClutchState(sim.clutch, getEngine(sim.engineId).torque, sim.shiftTarget !== null);
-  const separated = !clutchState.contact;
+  const state = manualClutchState(sim.clutch, getEngine(sim.engineId).torque, sim.shiftTarget !== null);
+  const separated = !state.contact;
   const slipping = !separated && sim.clutchSlip > 60;
-  $('#contact-state').textContent = separated ? 'ROZŁĄCZONE · brak docisku' : slipping ? 'STYK Z POŚLIZGIEM · obroty się różnią' : 'POŁĄCZONE · tarcza napędza wejście';
-  const torque = Math.min(Math.abs(sim.transmittedTorque), clutchState.capacity);
+  const exploded = mode === 'clutch' && Number($('#explode').value) > 0;
+  $('#contact-state').textContent = separated ? 'ROZŁĄCZONE · brak docisku' : slipping ? 'STYK Z POŚLIZGIEM · obroty się różnią' : 'POŁĄCZONE · tarcza obraca wejście';
+  const torque = Math.min(Math.abs(sim.transmittedTorque), state.capacity);
   const slipRpm = Math.abs(sim.rpm - sim.inputOmega * 30 / Math.PI);
   const heat = torque * slipRpm * Math.PI / 30;
-  $('#contact-detail').textContent = `Docisk ${Math.round(clutchState.clampFactor * 100)}% · limit ${Math.round(clutchState.capacity)} Nm · przenoszone ${Math.round(torque)} Nm · poślizg ${Math.round(slipRpm)} obr./min · ciepło ${(heat / 1000).toFixed(2)} kW${scene?.drive.exploded > 0 ? ' · odstępy rozstrzelone są umowne' : ''}`;
-  const release = clutchState.release;
-  $('#diagram-disc').setAttribute('x',90 + release * 25);
-  $('#diagram-pressure').setAttribute('x',102 + release * 65);
-  $('#diagram-pressure').style.opacity = 0.35 + clutchState.clampFactor * 0.65;
-  $('#diagram-torque').style.opacity = clutchState.clampFactor;
+  $('#contact-detail').textContent = `Docisk ${Math.round(state.clampFactor * 100)}% · limit ${Math.round(state.capacity)} Nm · przenoszone ${Math.round(torque)} Nm · poślizg ${Math.round(slipRpm)} obr./min · ciepło ${(heat / 1000).toFixed(2)} kW`;
+  $('#clutch-clamp-value').textContent = `${Math.round(state.clampFactor * 100)}%`;
+  $('#clutch-clamp').value = state.clampFactor;
+  $('#clutch-gap-state').textContent = state.release > 0 ? 'Szczeliny po obu stronach tarczy · powiększone' : separated ? 'Tarcza odciążona · początek rozłączenia' : 'Obie okładziny stykają się z powierzchniami';
+  $('#clutch-display').dataset.state = exploded ? 'exploded' : 'assembled';
+  $('#clutch-display').textContent = exploded ? 'Rozstrzelone · odstępy montażowe' : 'Złożone · ruch roboczy';
+  $('#assemble-clutch').disabled = !exploded;
+  $$('[data-clutch-pedal]').forEach(button => button.setAttribute('aria-pressed', Math.abs(Number(button.dataset.clutchPedal) - sim.clutch) < 0.005));
+  $('#clutch-mechanism-detail').textContent = exploded
+    ? 'Rozsunięcie służy rozpoznaniu części — nie jest szczeliną roboczą. Złóż części, aby zobaczyć styk. Przekrój obok pokazuje zawsze złożony mechanizm.'
+    : state.pedal < 0.02
+      ? 'Sprężyna talerzowa zaciska tarczę między kołem zamachowym a dociskiem. Pokrywa jest przykręcona do koła; taśmy łączą ją z dociskiem. Pedał nie jest potrzebny do zaciskania.'
+      : separated
+        ? 'Pedał → hydraulika → tłok wysprzęglika → łożysko. Łożysko naciska palce sprężyny; sprężyna ugina się na podparciu, a taśmy odciągają docisk. Tarcza i wał skrzyni mogą obracać się niezależnie od silnika.'
+        : 'Pedał przesuwa łożysko w stronę silnika. Palce sprężyny uginają się na podparciu, docisk maleje; tarcza nadal dotyka obu powierzchni. Poślizg pojawia się, gdy wymagany moment przewyższa tarcie.';
+  const release = state.release;
+  $('#diagram-disc').setAttribute('x', 90 + release * 8);
+  $('#diagram-pressure').setAttribute('x', 102 + release * 28);
+  $('#diagram-bearing').setAttribute('x', 199 - state.pedal * 28);
+  $('#diagram-spring').setAttribute('d', `M${118 + release * 28} 34L154 40L${199 - state.pedal * 28} 58M${118 + release * 28} 100L154 94L${199 - state.pedal * 28} 76`);
+  $('#diagram-release').setAttribute('d', `M${258 - state.pedal * 28} 46H${220 - state.pedal * 28}m8-5-8 5 8 5`);
+  $('#diagram-release').style.opacity = state.pedal > 0 ? 1 : 0.15;
+  $('#diagram-torque').style.opacity = separated ? 0 : state.clampFactor;
   const stage = sim.shiftStage;
   const inspectedGear = /^gear([1-5])$/.exec($('#inspect-section').value);
   const synchroView = $('#inspect-section').value === 'synchronizer';
@@ -527,7 +562,9 @@ function setClutchExplosion(value, frame = true) {
   $('#explode').value = Math.round(value * 100);
   $('#explode-value').textContent = `${Math.round(value * 100)}%`;
   updateReadouts();
+  updateLessonState();
 }
+$$('[data-clutch-pedal]').forEach(button => button.addEventListener('click', () => setPedal('clutch', Number(button.dataset.clutchPedal))));
 $('#assemble-clutch').addEventListener('click', () => setClutchExplosion(0));
 $('#spread-clutch').addEventListener('click', () => setClutchExplosion(0.7));
 $('#show-head').addEventListener('click', () => {
@@ -651,6 +688,7 @@ $('#reset').addEventListener('click', () => {
   if (scene) { scene.finalDrive.demo = false; [scene.finalDrive, scene.vehicle.front, scene.vehicle.rear].forEach(diff => { diff.openCarrier = false; diff.exploded = 0; }); scene.dct.exploded = 0; scene.drive.exploded = 0; }
   $('#diff-open').checked = false;
   $('#diff-explode').value = 0;
+  manualClutchExplosion = 0;
   $('#explode').value = 0;
   $('#explode-value').textContent = '0%';
   $('#timing-type').value = 'belt';

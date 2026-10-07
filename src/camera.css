@@ -17,3 +17,12 @@
   .orbit-hint { padding-right: 0; max-width: none; right: 10px; left: 14px; font-size: 10px; }
   .scene-legend { bottom: 53px; left: 14px; gap: 10px; flex-wrap: wrap; max-width: calc(100% - 28px); }
 }
+@media (max-width: 600px) {
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-tools { width: auto; right: 10px; bottom: 38px; flex-direction: row; align-items: stretch; }
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-device { padding: 3px 6px; font-size: 9px; gap: 3px; }
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-device select { width: 65px; height: 28px; font-size: 10px; }
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-pan { width: 34px; height: 36px; border-top: 0; border-bottom: 0; border-left: 1px solid #394550; border-right: 1px solid #394550; }
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-pan span { display: none; }
+  .scene[data-view="clutch"][data-transmission="manual"] .camera-zoom .icon-button { width: 34px; min-width: 34px; height: 36px; }
+  .scene[data-view="clutch"][data-transmission="manual"] .scene-legend { bottom: 84px; }
+}

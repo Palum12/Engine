@@ -12,6 +12,133 @@ async function openApp(page) {
   return errors;
 }
 
+async function setRange(page, selector, value) {
+  await page.locator(selector).evaluate((input, nextValue) => {
+    input.value = String(nextValue);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+}
+
+async function clutchDiagram(page) {
+  return page.locator('#clutch-lesson').evaluate(lesson => {
+    const number = (selector, attribute) => Number(lesson.querySelector(selector).getAttribute(attribute));
+    return {
+      discRight: number('#diagram-disc', 'x') + number('#diagram-disc', 'width'),
+      pressure: number('#diagram-pressure', 'x'),
+      bearing: number('#diagram-bearing', 'x'),
+    };
+  });
+}
+
+async function settleVisibleScene(page) {
+  await page.bringToFront();
+  await page.locator('#scene canvas').scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
+  // Pausing freezes physics, while visible animation frames still update the
+  // mechanism from its controls. Await those frames before sampling WebGL.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+test('manual clutch explains spring force, contact and release even while paused', async ({ page }, info) => {
+  const errors = await openApp(page);
+  await page.locator('#transmission-type').selectOption('manual');
+  await page.locator('.view-tab[data-view="clutch"]').click();
+  await expect(page.locator('#clutch-lesson')).toBeVisible();
+  await expect(page.locator('#clutch-clamp-value')).toHaveText('100%');
+  await expect(page.locator('#clutch-mechanism-detail')).toContainText(/sprężyn/i);
+  await expect(page.locator('#clutch-mechanism-detail')).toContainText(/pedał/i);
+  await expect(page.locator('#explode')).toHaveValue('0');
+  await expect(page.locator('#clutch-display')).toHaveAttribute('data-state', 'assembled');
+  await expect(page.locator('#labels')).toBeChecked();
+  await page.locator('#pause').click();
+  await expect(page.locator('#pause')).toHaveAttribute('aria-label', 'Wznów symulację');
+  if (await page.locator('#mechanism-readout').isVisible()) {
+    await page.locator('#mechanism-readout .close-readout').click();
+  }
+  // Refit through the real control: software WebGL may not finish an animated fit promptly.
+  await page.locator('#inspect-section').dispatchEvent('change');
+  await page.waitForTimeout(250);
+  const engaged = await clutchDiagram(page);
+  expect(engaged.pressure).toBeCloseTo(engaged.discRight, 4);
+  await expect(page.locator('#contact-state')).toContainText(/połącz|styk|kontakt|zaciśnię/i);
+  await settleVisibleScene(page);
+  await page.screenshot({ path: info.outputPath('clutch-engaged.png') });
+  const engagedCanvas = await page.locator('#scene canvas').screenshot({ path: info.outputPath('clutch-engaged-canvas.png') });
+
+  await page.locator('[data-clutch-pedal="0.5"]').click();
+  await expect(page.locator('#clutch')).toHaveValue('50');
+  await expect.poll(async () => Number((await page.locator('#clutch-clamp-value').innerText()).replace('%', ''))).toBeGreaterThan(0);
+  await expect.poll(async () => Number((await page.locator('#clutch-clamp-value').innerText()).replace('%', ''))).toBeLessThan(100);
+
+  await page.locator('[data-clutch-pedal="1"]').click();
+  await expect(page.locator('#clutch')).toHaveValue('100');
+  await expect(page.locator('#clutch-clamp-value')).toHaveText('0%');
+  await expect(page.locator('#clutch-gap-state')).toContainText(/szczelin|rozłącz|odsunięt/i);
+  await expect(page.locator('#contact-state')).toContainText(/rozłącz|rozdziel|oddziel|brak styku/i);
+  const released = await clutchDiagram(page);
+  expect(released.pressure).toBeGreaterThan(released.discRight);
+  expect(released.pressure).toBeGreaterThan(engaged.pressure);
+  expect(released.bearing).toBeLessThan(engaged.bearing);
+  await expect(page.locator('#pause')).toHaveAttribute('aria-label', 'Wznów symulację');
+  await settleVisibleScene(page);
+  await page.screenshot({ path: info.outputPath('clutch-released.png') });
+  await expect.poll(async () => (await page.locator('#scene canvas').screenshot({ path: info.outputPath('clutch-released-canvas.png') })).equals(engagedCanvas), {
+    timeout: 30_000, message: 'The paused 3D clutch must release when its pedal is fully pressed',
+  }).toBe(false);
+
+  await setRange(page, '#explode', 80);
+  await expect(page.locator('#explode-value')).toHaveText('80%');
+  await expect(page.locator('#clutch-display')).toHaveAttribute('data-state', 'exploded');
+  await page.locator('#inspect-section').dispatchEvent('change');
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: info.outputPath('clutch-exploded.png') });
+  await page.locator('#assemble-clutch').click();
+  await expect(page.locator('#explode')).toHaveValue('0');
+  await expect(page.locator('#clutch-display')).toHaveAttribute('data-state', 'assembled');
+  await page.locator('[data-clutch-pedal="0"]').click();
+  await expect(page.locator('#clutch')).toHaveValue('0');
+  await expect(page.locator('#clutch-clamp-value')).toHaveText('100%');
+  const reengaged = await clutchDiagram(page);
+  expect(reengaged.pressure).toBeCloseTo(reengaged.discRight, 4);
+  expect(reengaged.bearing).toBeCloseTo(engaged.bearing, 4);
+
+  await page.locator('.view-tab[data-view="drive-detail"]').click();
+  await page.locator('#inspect-section').selectOption('clutch');
+  await page.locator('#isolate').check();
+  await expect(page.locator('.visual-panel')).toHaveAttribute('data-inspection', 'clutch');
+  await expect(page.locator('#clutch-lesson')).toBeVisible();
+  await page.locator('#inspect-section').dispatchEvent('change');
+  await page.waitForTimeout(250);
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('isolated-manual-clutch.png') });
+  expect(errors).toEqual([]);
+});
+
+test('phone clutch lesson keeps pedal presets, explanation and model within the viewport', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await openApp(page);
+  await page.locator('#transmission-type').selectOption('manual');
+  await page.locator('.view-tab[data-view="clutch"]').click();
+  await expect(page.locator('#clutch-lesson')).toBeVisible();
+  await page.locator('#pause').click();
+  await page.locator('[data-clutch-pedal="1"]').click();
+  await expect(page.locator('#clutch-clamp-value')).toHaveText('0%');
+  await page.locator('[data-clutch-pedal="0"]').click();
+  await expect(page.locator('#clutch-clamp-value')).toHaveText('100%');
+  await expect(page.locator('#clutch-mechanism-detail')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+  expect(overflow).toBe(false);
+  for (const selector of ['#clutch-lesson', '#clutch-mechanism-detail', '#scene canvas']) {
+    const bounds = await page.locator(selector).boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(391);
+  }
+  await page.locator('#inspect-section').dispatchEvent('change');
+  await page.waitForTimeout(250);
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('phone-clutch.png') });
+  expect(errors).toEqual([]);
+});
+
 test('compact navigation keeps every name and suspension visible at desktop, tablet and phone widths', async ({ page }, info) => {
   test.setTimeout(540_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -555,7 +682,7 @@ for (const id of ['ibiza-mpi-2016', 'a4-quattro-2011', '911-carrera-s-2025', '50
     } else {
       await page.locator('.view-tab[data-view="clutch"]').click();
       if (preset.transmission === 'manual') {
-        await expect(page.locator('#explode')).toHaveValue('55');
+        await expect(page.locator('#explode')).toHaveValue('0');
         await expect(page.locator('#mechanism-readout')).toBeHidden();
         await screenshot(`${id}-clutch-layers`);
         await page.locator('#spread-clutch').click();

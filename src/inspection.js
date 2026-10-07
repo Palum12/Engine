@@ -15,7 +15,7 @@ export const INSPECTIONS = {
   'drive-detail': [
     { id: 'all', label: 'Cały układ', part: 'driveDetail', hint: 'Od spalania do kół. Wybierz podzespół, aby przybliżyć go bez opuszczania tego widoku.' },
     { id: 'engine', label: '1 · Silnik i kolektory', part: 'crank', hint: 'Tłoki → korbowody → wał korbowy. Kolektory łączą cylindry z dolotem i wydechem.' },
-    { id: 'clutch', label: '2 · Sprzęgło', part: 'clutch', hint: 'Rozsuń części suwakiem. Wciśnij i zwolnij pedał, obserwując docisk oraz łożysko.' },
+    { id: 'clutch', label: '2 · Sprzęgło', part: 'clutch', hint: 'Zwolnij pedał: sprężyna zaciska tarczę. Wciśnij: łożysko odciąża docisk. Przekrój odsłania podparcia.' },
     { id: 'gearbox', label: '3 · Skrzynia biegów', part: 'gearbox', hint: 'Wciśnij sprzęgło i wybierz bieg. Przesuwka łączy wybrane koło z wałem wyjściowym.' },
     { id: 'finalDrive', label: '4 · Przekładnia i półosie', part: 'finalDrive', hint: 'Przekładnia 3,9:1 zmniejsza obroty; kosz mechanizmu różnicowego napędza dwie półosie.' },
     { id: 'timing', label: '6 · Rozrząd', part: 'timing', hint: 'Wał korbowy napędza wałki przez pasek lub łańcuch w stosunku 2:1.' },
@@ -24,7 +24,7 @@ export const INSPECTIONS = {
     { id: 'turbo', label: '5 · Turbo i intercooler', part: 'turbo', hint: 'Oddzielne drogi: spaliny napędzają turbinę, powietrze płynie przez sprężarkę i intercooler.' }
   ],
   clutch: [
-    {id:'all',label:'Całe sprzęgło · droga momentu',part:'clutch',hint:'„Pokaż warstwy” rozsuwa części do nauki; szare kreski pokazują linię złożenia. „Złóż części” pokazuje rzeczywisty styk; pedał zmniejsza docisk, zanim otworzy szczelinę.'},
+    {id:'all',label:'Całe sprzęgło · droga momentu',part:'clutch',hint:'Złożone: styk bez szczelin przy zwolnionym pedale. Wciśnięcie odciąża docisk i otwiera szczelinę. „Pokaż warstwy” rozsuwa części do nauki. Ruch i docisk względny są umowne.'},
     {id:'flywheel',label:'1 · Koło zamachowe · silnik',part:'flywheel',hint:'Połączone z wałem silnika. Obraca się również wtedy, gdy tarcza sprzęgła jest odłączona.'},
     {id:'friction',label:'2 · Tarcza cierna i piasta',part:'friction',hint:'Okładziny odbierają moment przez tarcie. Piasta z wielowypustem napędza wał skrzyni; sprężyny tłumią szarpnięcia.'},
     {id:'pressurePlate',label:'3 · Docisk i sprężyste taśmy',part:'pressurePlate',hint:'Docisk obraca się z silnikiem i ściska tarczę. Taśmy przenoszą obrót oraz odsuwają docisk po odciążeniu.'},

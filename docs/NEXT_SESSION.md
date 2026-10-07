@@ -64,3 +64,13 @@ pod prawym przyciskiem z wyłączonymi etykietami. Zmieniono też stronę kamery
 w zbliżeniach dźwigni, aby odsłonić niski pullrod. Odbiór: 206 testów Node,
 build i końcowy scenariusz Chromium przeszły; zrzuty obejrzano. Publikacja
 tych zmian wymaga osobnego polecenia użytkownika.
+
+## Kolejne uwagi do sprzęgła — 7 października 2026
+
+Użytkownik ponownie wskazał trwałe odstępy, niejasne źródło zacisku oraz
+części wirujące bez podparcia. Zmieniono domyślny widok na złożony przekrój,
+uzupełniono połączenia i ruch wysprzęglika oraz dodano schemat i wskaźnik
+docisku. Rozstrzelenie jest osobnym nieruchomym układem do nauki budowy.
+Aktualne wyniki i ograniczenia zapisuje [CLUTCH_CONTACT_QA.md](CLUTCH_CONTACT_QA.md).
+W tym zleceniu użytkownik upoważnił też do publikacji na głównej gałęzi
+i sprawdzenia wdrożenia GitHub Pages.
