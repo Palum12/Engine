@@ -129,11 +129,20 @@ test('stable label frames reuse measured sizes and leave unchanged DOM attribute
     scene.labelSizeRevision++;
     scene.renderLabels();
     assert.equal(measurements, 4, 'resizing/font changes invalidate cached dimensions');
+    let obstacleReads = 0;
+    const x = Number.parseFloat(element.style.left), y = Number.parseFloat(element.style.top);
+    scene.container.getBoundingClientRect = () => ({ left: 0, top: 0 });
+    scene.container.querySelectorAll = () => [{ hidden: false, getBoundingClientRect() { obstacleReads++; return { left: x - 65, top: y - 18, width: 130, height: 36 }; } }];
+    scene.labelSizeRevision++;
+    scene.renderLabels();
+    assert.ok(element.hidden || Math.abs(Number.parseFloat(element.style.top) - y) > 30, 'labels avoid camera and display controls');
+    scene.renderLabels();
+    assert.equal(obstacleReads, 1, 'fixed overlay bounds are cached until resize/font invalidation');
     scene.labels = false;
     scene.renderLabels();
     assert.equal(element.hidden, true);
     assert.equal(line.style.display, 'none');
-    assert.equal(measurements, 4);
+    assert.equal(measurements, 6);
     observer.disconnect();
   } finally { await window.happyDOM.close(); }
 });

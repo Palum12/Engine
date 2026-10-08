@@ -36,6 +36,15 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
         if (transmission !== 'manual') assert.doesNotMatch($('.learning-strip p').textContent, /Wciśnij sprzęgło/);
       }
     });
+    await t.test('telemetry refreshes a stroke hidden during suspension when the cycle panel returns', () => {
+      $('.view-tab[data-view="suspension"]').click();
+      app.sim.angle = 460; app.updateUI(true);
+      $('.view-tab[data-view="engine"]').click();
+      assert.match($('#stroke-description').textContent, /rozpręż|tłok/i);
+      assert.equal($('#stroke-badge').textContent, '03');
+      $('#reset').click();
+      $('.view-tab[data-view="drive-detail"]').click();
+    });
     await t.test('default whole vehicle, nine compact engine choices and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
@@ -346,6 +355,17 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal($('.control-panel').hidden, false);
       assert.equal($('#mount-settings').hidden, false);
       assert.equal(app.sim.engineId, 'r3');
+    });
+    await t.test('a repeated visible telemetry update makes no DOM mutations', () => {
+      select('#transmission-type', 'manual');
+      $('.view-tab[data-view="gearbox"]').click();
+      $('#show-readout').click();
+      app.sim.paused = true; app.updateUI(true);
+      const observer = new window.MutationObserver(() => {});
+      observer.observe($('#app'), { subtree: true, attributes: true, childList: true, characterData: true });
+      app.updateUI(true);
+      const records = observer.takeRecords(); observer.disconnect();
+      assert.deepEqual(records.map(record => `${record.target.id}:${record.attributeName || record.type}`), []);
     });
     assert.deepEqual(errors, []);
     const ids = [...window.document.querySelectorAll('[id]')].map(node => node.id);
