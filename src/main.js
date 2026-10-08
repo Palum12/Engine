@@ -1,4 +1,9 @@
-import { cycleVisuals } from './cycle-visuals.js';
+import { POWERTRAIN_CONTROLS, VEHICLE_TOOLS, SCENARIO_TOOLS } from './powertrain-ui.js';
+import { appTemplate } from './ui/app-template.js';
+import { PARTS } from './ui/part-descriptions.js';
+import { updateDrivingHelp } from './ui/driving-help.js';
+import { createTelemetry } from './ui/telemetry.js';
+import { createFrameLoop } from './frame-loop.js';
 import '@fontsource/dm-sans/latin-400.css';
 import '@fontsource/dm-sans/latin-ext-400.css';
 import '@fontsource/dm-sans/latin-500.css';
@@ -21,15 +26,14 @@ import './suspension.css';
 import './clutch.css';
 import { getInspections } from './inspection.js';
 import { TRANSMISSIONS, DRIVE_LAYOUTS, evaluateTraction } from './powertrain.js';
-import { POWERTRAIN_CONTROLS, VEHICLE_TOOLS, SCENARIO_TOOLS, POWERTRAIN_PARTS } from './powertrain-ui.js';
 import { ScenarioPlayer, SCENARIOS } from './scenarios.js';
 import { EngineScene } from './scene.js';
-import { ENGINES, getEngine } from './engines.js';
-import { manualClutchState, manualClutchPresentation } from './manual-clutch.js';
-import { SUSPENSION_CONTROLS, SUSPENSION_TELEMETRY, SUSPENSION_NOTES, SUSPENSION_PARTS, suspensionPartDescription } from './suspension-ui.js';
+import { getEngine } from './engines.js';
+import { manualClutchState } from './manual-clutch.js';
+import { SUSPENSION_CONTROLS, SUSPENSION_TELEMETRY, suspensionPartDescription } from './suspension-ui.js';
 import { CAR_PRESETS, getCarPreset } from './car-presets.js';
 import { applyCarPreset } from './car-configuration.js';
-import { Simulation, STROKES, GEAR_RATIOS, cycleDegrees, strokeIndex } from './simulation.js';
+import { Simulation, cycleDegrees, strokeIndex } from './simulation.js';
 
 const icons = {
   piston: '<path d="M6 3h12v7H6zM9 6h6M12 10v8m-3 0h6v3H9z"/>',
@@ -55,181 +59,17 @@ let mode = 'engine';
 let scene;
 let selectedPart = null;
 let toastTimer;
-let disposed = false;
+let frameLoop = null;
 let readoutMuted = window.matchMedia('(max-width:600px)').matches;
 let mechanismReadoutRequested = false;
 let selectedPresetId = '';
 let manualClutchExplosion = 0;
 
-const PARTS = {
-  timing: ['Rozrząd: pasek lub łańcuch', 'Wał korbowy napędza wałki rozrządu. Koło wałka ma dwa razy więcej zębów, dlatego zawory wykonują jeden cykl na dwa obroty wału. Pasek ma zęby; łańcuch współpracuje z kołami łańcuchowymi i wymaga smarowania. Przełącznik zmienia ilustrację napędu, nie osiągi silnika. Trasa, napinacz i krzywki są schematyczne.'],
-  tensioner: ['Napinacz rozrządu', 'Utrzymuje napięcie paska lub łańcucha i ogranicza drgania. Pomaga utrzymać właściwą współpracę z zębami kół. W rzeczywistym układzie łańcuchowym dochodzą prowadnice i często napinacz hydrauliczny.'],
-  sump: ['Miska i smok olejowy', 'Miska zbiera olej spływający z silnika. Smok z sitkiem zasysa go do pompy. To układ z mokrą miską; olej nie wypełnia komory spalania.'],
-  oilPump: ['Pompa oleju', 'Pompa zasysa olej ze smoka i tłoczy go do filtra oraz magistrali. Napęd pochodzi od silnika; pokazano schemat pompy zębatej. Zawór przelewowy ogranicza ciśnienie w realnym układzie, lecz jego pracy nie symulujemy.'],
-  oilFilter: ['Filtr oleju', 'Zatrzymuje zanieczyszczenia przed podaniem oleju do kanałów smarujących. Filtr oleju i filtr paliwa należą do dwóch oddzielnych obiegów.'],
-  oilGallery: ['Magistrala i łożyska', 'Kanały doprowadzają olej pod ciśnieniem do łożysk wału i wałków rozrządu. W rzeczywistym wale wewnętrzne wiercenia doprowadzają go też do czopów korbowodowych. Tutaj pokazano główne gałęzie; przewody są wyprowadzone na zewnątrz dla czytelności. Zielone strzałki ilustrują kierunek, nie obliczony wydatek pompy.'],
-  oilReturn: ['Powrót oleju', 'Po smarowaniu olej spływa grawitacyjnie kanałami do miski. Pompa pobiera go ponownie. Ciemnozielona droga oznacza spływ, jasnozielona — dopływ pod ciśnieniem.'],
-  fuelTank: ['Zbiornik paliwa', 'Magazynuje benzynę. W przykładzie pompa w zbiorniku przesyła paliwo przez filtr do układu zasilania. Położenie zbiornika obok silnika jest wyłącznie dydaktyczne.'],
-  fuelPump: ['Pompa paliwa i zbiornik', 'Pompa niskiego ciśnienia przesyła benzynę przez filtr. MPI zasila wtryskiwacze w kanałach dolotowych. GDI potrzebuje dodatkowej pompy wysokiego ciśnienia. Gaźnik wymaga znacznie niższego ciśnienia i zaworu sterowanego pływakiem; pompa może być mechaniczna lub elektryczna.'],
-  fuelFilter: ['Filtr paliwa', 'Usuwa zanieczyszczenia przed gaźnikiem lub układem wtryskowym. Nie jest połączony z układem smarowania.'],
-  highPressurePump: ['Pompa wysokiego ciśnienia · GDI', 'Pompa tłoczkowa, zwykle napędzana krzywką wałka rozrządu, podnosi ciśnienie paliwa dla listwy i wtryskiwaczy GDI. Widoczny tłoczek obrazuje ruch roboczy. To dodatkowy stopień po pompie zasilającej; model nie oblicza ciśnienia paliwa.'],
-  carburetor: ['Gaźnik: zwężka, dysza i pływak', 'Powietrze przyspiesza w zwężce Venturiego. Różnica ciśnień powoduje wypływ paliwa z dyszy zasilanej z komory pływakowej. Pływak z zaworem utrzymuje poziom paliwa, a przepustnica reguluje dopływ mieszanki. Gaźnik jest przed kolektorem; nie ma osobnego wtryskiwacza przy każdym cylindrze. To przekrój jednego gardzielowego układu, bez obwodu biegu jałowego, ssania i pompki przyspieszającej.'],
-  airFilter: ['Filtr powietrza', 'Oczyszcza powietrze przed przepustnicą lub gaźnikiem. Paliwo płynie inną drogą; miesza się z powietrzem dopiero w gaźniku, przed zaworem MPI lub w cylindrze GDI.'],
-  synchroCone: ['Stożek i pierścień synchronizatora', 'Tarcie między stożkiem koła a pierścieniem wyrównuje obroty koła i wału. Dopiero wtedy przesuwka może zazębić się z wieńcem kłowym koła. Pomarańczowy pierścień oznacza tę fazę tarciową.'],
-  driveDetail: ['Napęd szczegółowy', 'Wszystkie podzespoły pracują na wspólnym stanie symulacji: silnik, rozbieralne sprzęgło, skrzynia, wał napędowy, przekładnia główna, półosie i koła. Układ dolotu oraz wydechu łączy silnik z turbosprężarką i intercoolerem. Wybierz podzespół z listy, obróć go i przybliż. Opcja „Odizoluj” ukrywa pozostałe zespoły. Układ przestrzenny i profile przekładni są schematyczne.'],
-  finalDrive: ['Przekładnia główna 3,9:1', 'Mały zębnik odbiera obrót ze skrzyni i napędza koło talerzowe połączone z koszem mechanizmu różnicowego. Na 3,9 obrotu wału wejściowego przypada jeden obrót kosza. Oś obrotu zmienia kierunek o 90°. Zęby stożkowe są przedstawione schematycznie; to ilustracja przekładni, nie dokładny model zazębienia.'],
-  differential: ['Mechanizm różnicowy', 'Koło talerzowe obraca kosz z satelitami. Satelity współpracują z kołami bocznymi połączonymi z półosiami. Podczas jazdy na wprost obie półosie obracają się jednakowo; na zakręcie mechanizm pozwala im obracać się z różnymi prędkościami. W widoku „Dyferencjał” wybierz zakręt i uruchom pokaz stołowy. Średnia prędkości półosi zawsze równa się prędkości kosza. Pokaz ilustruje kinematykę otwartego mechanizmu, bez modelu przyczepności opon.'],
-  halfShaft: ['Półosie i przeguby', 'Przekazują moment od mechanizmu różnicowego do piast kół. Przeguby pozwalają przenosić obrót przy zmianach ustawienia zawieszenia. Ugięcia zawieszenia i kąty przegubów nie są tu symulowane.'],
-  propShaft: ['Wał napędowy', 'Łączy wyjście skrzyni z przekładnią główną. Widoczne przeguby i kołnierze pokazują połączenia wału. To schemat układu wzdłużnego; w samochodzie z napędem przednim przekładnia główna jest zwykle zintegrowana ze skrzynią.'],
-  wheelHub: ['Piasta, koło i hamulec', 'Półoś obraca piastę i koło. Tarcza hamulcowa obraca się razem z piastą, a zacisk pozostaje nieruchomy. Przycisk hamulca w symulacji zwiększa opór ruchu pojazdu.'],
-  turbine: ['Turbina spalinowa · strona gorąca', 'Energia spalin napędza łopatki wirnika turbiny. Obudowa spiralna kieruje przepływ do wirnika, a spaliny uchodzą wzdłuż jego osi do wydechu. Spaliny nie przepływają do sprężarki; oba wirniki łączy wyłącznie wałek.'],
-  compressor: ['Sprężarka · strona dolotowa', 'Świeże powietrze wpływa osiowo od strony filtra. Wirnik przyspiesza je i kieruje promieniowo na zewnątrz. Dyfuzor oraz obudowa spiralna spowalniają przepływ i podnoszą ciśnienie. Sprężone powietrze płynie dalej do intercoolera.'],
-  turboShaft: ['Wspólny wałek turbo', 'Wirnik turbiny i wirnik sprężarki są sztywno połączone tym samym wałkiem, dlatego obracają się z tą samą prędkością. Turbo nie ma mechanicznego połączenia z wałem korbowym. Animacja wałka jest umownie spowolniona.'],
-  turboBearing: ['Rdzeń turbo, wałek i łożyska', 'Przekrój odsłania wałek, dwa łożyska ślizgowe oraz element oporowy przejmujący obciążenie osiowe. Film olejowy oddziela powierzchnie. Uszczelnienia ograniczają przepływ oleju do obudów turbiny i sprężarki.'],
-  turboOil: ['Smarowanie rdzenia turbo', 'Zielony przewód doprowadza olej pod ciśnieniem do łożysk. Grubszy przewód dolny odprowadza go do silnika. Olej smaruje i odprowadza ciepło. To ilustracja połączeń, bez obliczania przepływu oleju.'],
-  wastegate: ['Wastegate · obejście turbiny', 'Zawór otwiera obejście po stronie spalin. Część spalin omija wtedy wirnik turbiny, ograniczając dostarczaną mu energię i narastanie doładowania. To nie zawór upustowy powietrza. W modelu otwarcie jest ilustracją zależną od doładowania, bez osobnego regulatora.'],
-  intercooler: ['Intercooler · chłodnica powietrza', 'Sprężanie podnosi temperaturę powietrza. Intercooler odbiera część ciepła, zwiększając gęstość ładunku. Żółty kanał pokazuje cieplejsze powietrze ze sprężarki, a niebieski — schłodzone powietrze kierowane do silnika. Temperatury nie są obliczane w tej symulacji.'],
-  throttleBody: ['Przepustnica', 'Obrotowa klapa reguluje dopływ powietrza do silnika benzynowego. Suwak gazu otwiera ją. Za przepustnicą powietrze dociera kolektorem do zaworów dolotowych; spaliny płyną osobnym układem.'],
-  rod: ['Korbowód', 'Łączy sworzeń tłoka z czopem wału korbowego. Zmienia kąt podczas obrotu wału, zachowując stałą długość. W modelach V korbowody obu banków napędzają jeden wspólny wał.'],
-  banks: ['Rzędy cylindrów i głowice', 'W silniku widlastym cylindry są pochylone w dwóch rzędach, ale napędzają jeden wał korbowy.'],
-  cylinderHead: ['Głowica silnika', 'Głowica zamyka cylindry od góry. Jej dolna powierzchnia tworzy sklepienie komory spalania, a uszczelka oddziela gazy, olej i płyn chłodzący. Niebieskoszary odlew obejmuje wszystkie cylindry danej głowicy. W nim biegną kanały dolotu, wydechu i chłodzenia. Zawory otwierają drogę gazom; krzywki przez dźwigienki wciskają zawory, sprężyny je zamykają. Niebieskie kanały oznaczają dolot, miedziane wydech. W przekroju usunięto przednią ścianę odlewu, aby było widać gniazda, prowadnice i sprężyny.'],
-  headGasket: ['Uszczelka pod głowicą', 'Leży między blokiem a głowicą i uszczelnia komorę spalania. Oddziela też kanały oleju i chłodziwa. Pokazany pierścień wokół cylindra ilustruje jej położenie; rzeczywista uszczelka obejmuje całą powierzchnię głowicy.'],
-  valveSeat: ['Gniazdo zaworu', 'Zamknięty zawór opiera się o pierścień gniazda, uszczelniając komorę. Krzywka wciska zawór w kierunku tłoka; powstaje szczelina, przez którą płyną gazy. Sprężyna przywraca styk zaworu z gniazdem.'],
-  valveGuide: ['Prowadnica zaworu', 'Utrzymuje trzonek zaworu w osi i pozwala mu przesuwać się góra–dół. Nie obraca się z wałkiem rozrządu.'],
-  valveSpring: ['Sprężyna zaworu', 'Zamyka zawór po zejściu krzywki z dźwigienki i utrzymuje kontakt części rozrządu. To inna sprężyna niż sprężyna talerzowa sprzęgła.'],
-  coolantJacket: ['Kanał chłodzenia głowicy', 'Płyn odbiera ciepło z odlewu wokół komór i kanałów wydechu. Niebieskozielony fragment wskazuje położenie kanału; przepływ i temperatura chłodziwa nie są tu obliczane.'],
-  headBolt: ['Śruba głowicy', 'Dociska głowicę do bloku przez uszczelkę. Utrzymuje połączenie szczelne mimo ciśnienia spalania. Model nie jest instrukcją dokręcania.'],
-  flywheel: ['Koło zamachowe', 'Jest połączone z wałem silnika. Jego bezwładność wygładza nierównomierność pracy między zapłonami. Płaska powierzchnia styka się z okładziną tarczy sprzęgła; zewnętrzny wieniec służy rozrusznikowi.'],
-  friction: ['Tarcza sprzęgła i okładziny', 'Brązowy pierścień to okładzina cierna. Docisk zaciska tarczę pomiędzy sobą a kołem zamachowym. Jej piasta jest osadzona na wieloklinie wału wejściowego skrzyni, więc tarcza obraca się z tym wałem, a nie zawsze z silnikiem.'],
-  discHub: ['Piasta i wieloklin', 'Wieloklin przekazuje moment z tarczy sprzęgła do wału wejściowego. Pozwala też tarczy minimalnie przesuwać się osiowo podczas wysprzęglania.'],
-  torsionSprings: ['Sprężyny tłumiące w tarczy', 'Sprężyny pomiędzy okładziną a piastą łagodzą pulsacje momentu i szarpnięcia napędu. To inne sprężyny niż sprężyna talerzowa docisku. Ich ugięcia nie są osobno symulowane.'],
-  pressurePlate: ['Docisk', 'Obraca się z kołem zamachowym. Sprężyna talerzowa zaciska tarczę cierną. Wciskanie pedału najpierw zmniejsza siłę zacisku, choć powierzchnie nadal się stykają: pod obciążeniem mogą się ślizgać. Dopiero po odciążeniu sprężyste taśmy odsuwają płytę.'],
-  diaphragm: ['Sprężyna talerzowa', 'Jej palce są naciskane przez łożysko oporowe. Ugięcie środka zmienia nacisk zewnętrznej części sprężyny na docisk. Ruch został powiększony, aby był widoczny.'],
-  inputShaft: ['Wał wejściowy', 'Jest połączony z tarczą sprzęgła. Niebieskie koła są osadzone na tym wale i obracają się razem z nim. Po wciśnięciu sprzęgła wał nie musi obracać się z prędkością silnika.'],
-  outputShaft: ['Wał wyjściowy', 'Przekazuje napęd do przekładni głównej i kół. Na luzie duże koła zębate obracają się swobodnie względem wału. Dopiero przesuwka łączy wybrane koło z wałem.'],
-  gearPair: ['Stale zazębiona para kół', 'Koła zębate nie przesuwają się, aby wybrać bieg: pozostają zazębione. Zmienia się połączenie wybranego koła z wałem wyjściowym. Większe koło odbierające daje mniejsze obroty i większy moment. Zęby są uproszczone, a ich liczby zachowują podane przełożenia.'],
-  synchronizer: ['Przesuwka i sprzęgło kłowe', 'Złota przesuwka zazębia się z bocznymi zębami wybranego koła i łączy je z wałem wyjściowym. W rzeczywistej skrzyni synchronizator wcześniej wyrównuje obroty; pomarańczowy pierścień pokazuje wyrównywanie obrotów, a przesuwka przesuwa się dopiero potem do położenia zablokowanego. Dla czytelności każdy bieg ma własną przesuwkę.'],
-  shiftFork: ['Widełki zmiany biegów', 'Przesuwają tuleję wzdłuż wału, wybierając połączenie koła z wałem wyjściowym. Same widełki nie obracają się razem z tuleją.'],
-  bearing: ['Łożyska wałów', 'Podpierają wały, utrzymują odległość między nimi i pozwalają na obrót. Stała odległość osi utrzymuje zazębienie wszystkich par kół.'],
-
-  piston: ['Tłok i korbowód', 'Tłok porusza się wzdłuż osi cylindra, między głowicą a wałem. Korbowód zamienia ten ruch na obrót. R4 i R6 mają jeden rząd, V dwa rozchylone rzędy, VR6 dwa wąskie rzędy pod wspólną głowicą, a W16 cztery rzędy pod dwiema głowicami. W bokserze tłoki pracują poziomo po obu stronach wału.'],
-  crank: ['Wał korbowy', 'Odbiera siłę z korbowodów i przekazuje obrót do koła zamachowego. Na pełny cykl czterosuwowy przypadają dwa obroty wału, czyli 720°.'],
-  valves: ['Zawory i rozrząd', 'Zawór dolotowy wpuszcza ładunek, wydechowy wypuszcza spaliny. Wałek rozrządu obraca się dwa razy wolniej od wału korbowego. Model pomija wyprzedzenia, opóźnienia i współotwarcie zaworów.'],
-  spark: ['Świeca zapłonowa', 'Iskra pojawia się pod koniec sprężania i inicjuje spalanie mieszanki. Ciśnienie rośnie, a gazy wykonują pracę na tłoku. W rzeczywistym silniku wyprzedzenie zapłonu zależy m.in. od obrotów i obciążenia.'],
-  block: ['Blok silnika', 'W bloku znajdują się cylindry prowadzące tłoki. Przekrój odsłania wnętrze; wyłącz go, żeby zobaczyć osłonę cylindrów. To schemat edukacyjny, bez pełnego układu chłodzenia. Smarowanie pokazano w osobnym widoku „Olej”.'],
-  clutch: ['Sprzęgło cierne', 'Koło zamachowe i docisk obracają się z silnikiem; tarcza przez wielowypust obraca wał wejściowy skrzyni. Wciskanie pedału przez łożysko i palce sprężyny zmniejsza docisk oraz limit przenoszonego momentu. Przy poślizgu powierzchnie nadal się stykają, ale mają różne obroty: tarcie przekazuje moment i wytwarza ciepło. Brak docisku przerywa napęd, a dalszy ruch otwiera szczelinę. Pedał zwolniony daje pełny docisk; wciśnięty pozwala zmienić bieg. Skok części jest powiększony dla czytelności.'],
-  gearbox: ['Manualna skrzynia biegów', 'Na niższym biegu koła obracają się wolniej, ale dostają większy moment. Pary kół są stale zazębione; wybrana para zostaje połączona z wałem wyjściowym. Złoty pierścień oznacza wybrany bieg. Bieg N nie przekazuje napędu na koła.'],
-  wheel: ['Napęd kół', 'Za skrzynią działa przekładnia główna 3,9:1, zmniejszająca obroty i zwiększająca moment na kołach. W widoku „Napęd szczegółowy” można obejrzeć przekładnię główną, mechanizm różnicowy i półosie; w zwykłym widoku koło przedstawia wynikowy ruch pojazdu. Model zakłada masę 1250 kg i promień koła 0,31 m.'],
-  intake: ['Dolot', 'Niebieski kanał doprowadza powietrze do zaworu dolotowego. Przy wtrysku pośrednim paliwo jest dodawane przed zaworem. Złote drobiny przedstawiają paliwo, niebieskie — powietrze.'],
-  exhaust: ['Wydech', 'Spaliny uchodzą przez otwarty zawór wydechowy do kolektora. W silniku z turbo ich energia napędza turbinę połączoną wałkiem ze sprężarką.'],
-  injection: ['Miejsce wtrysku', 'MPI: paliwo jest wtryskiwane do kanału przed zaworem dolotowym. Gaźnik: paliwo miesza się z powietrzem w zwężce przed kolektorem. GDI: wtryskiwacz podaje paliwo bezpośrednio do cylindra. Pokazany wtrysk GDI podczas sprężania jest jednym z wariantów; rzeczywiste układy mogą wtryskiwać także podczas ssania i wielokrotnie.'],
-  turbo: ['Turbosprężarka', 'Spaliny obracają turbinę (kolor miedziany), a wspólny wałek napędza sprężarkę (kolor niebieski). Sprężarka wtłacza więcej powietrza do silnika. Doładowanie narasta z opóźnieniem; zwiększ gaz i obroty, żeby to zobaczyć. Przekrój pokazuje obudowy spiralne, wirniki, wspólny wałek z łożyskami, smarowanie, zawór wastegate, intercooler i przepustnicę. Powietrze nie miesza się ze spalinami.']
-};
-
 const app = document.querySelector('#app');
-Object.assign(PARTS, POWERTRAIN_PARTS);
-Object.assign(PARTS, SUSPENSION_PARTS);
-Object.assign(PARTS, {
-  clutchCover: ['Obudowa sprzęgła', 'Obudowa jest przykręcona do koła zamachowego i obraca się z silnikiem. Podpiera sprężynę talerzową oraz przez sprężyste taśmy obraca docisk. W przekroju usunięto część obudowy, aby odsłonić sprężynę. Rozstrzelenie pokazuje kolejność części; nie jest skokiem roboczym sprzęgła.'],
-  releaseActuator: ['Współosiowy wysprzęglik hydrauliczny', 'Cylinder jest zamocowany do obudowy skrzyni wokół wału wejściowego. Ciśnienie od pedału wysuwa tłok i przesuwa łożysko wysprzęglające. Łożysko przekazuje nacisk na obracające się palce sprężyny. To jeden z wariantów wysprzęglania; inne sprzęgła używają zewnętrznych widełek.'],
-  releaseBearing: ['Łożysko wysprzęglające', 'Tłok centralnego wysprzęglika przesuwa łożysko w stronę silnika i naciska palce sprężyny talerzowej. Korpus łożyska przesuwa się po prowadnicy, ale nie wiruje. Pierścień stykający się ze sprężyną obraca się z nią. Łożysko łączy nieruchome sterowanie z obracającym się dociskiem.'],
-  gearSelector: ['Wybierak biegów', 'Ruch poprzeczny dźwigni wybiera wodzik, a ruch wzdłużny przesuwa go wraz z widełkami. Widełki obejmują rowek tulei synchronizatora. Tuleja przesuwa się po piaście związanej z wałem; dopiero po synchronizacji zachodzi na zęby kłowe koła. W modelu jeden wodzik obsługuje jeden bieg dla czytelności; w wielu skrzyniach para biegów współdzieli tuleję i widełki.'],
-  shiftRail: ['Wodzik', 'Wodzik przesuwa widełki i tuleję wybranego synchronizatora. Ruch wybieraka jest tu przenoszony przez widoczne cięgno. W rzeczywistej skrzyni blokady wodzików chronią przed włączeniem dwóch przełożeń jednocześnie.'],
-  dctOdd: ['Gałąź K1 · biegi nieparzyste', 'Pakiet K1 łączy silnik z wewnętrznym wałem wejściowym. Wybrana para kół napędza wał wyjściowy przez tuleję. Biegi 1, 3 i 5 należą do tej gałęzi; pozostałe koła obracają się swobodnie, dopóki tuleja ich nie połączy.'],
-  dctEven: ['Gałąź K2 · biegi parzyste', 'Pakiet K2 napędza rurowy wał otaczający wał K1. Obsługuje biegi 2, 4 i 6. Przygotowany bieg ma połączoną tuleję, lecz bez docisku K2 silnik nie przekazuje tej gałęzi momentu.'],
-  dctSelector: ['Hydrauliczny wybierak DCT', 'Sterownik uruchamia elektrozawory i reguluje ciśnienie siłowników. Tłok przesuwa wodzik, widełki i tuleję synchronizatora. Dzięki dwóm gałęziom sterownik może przygotować kolejny bieg, zanim zacznie zamykać jego sprzęgło.']
-});
-app.innerHTML = `
-  <header class="app-header">
-    <a class="brand" href="./" aria-label="Engine Lab — strona główna"><span class="brand-symbol">${icon('piston')}</span><span>ENGINE<span class="brand-light"> / LAB</span></span></a>
-    <span class="header-note">INTERAKTYWNE LABORATORIUM MECHANIKI</span>
-    <button class="quiet-button" id="help-button">${icon('info')}<span>Jak to działa</span></button>
-  </header>
-  <main>
-    <div class="page-heading"><div><div class="eyebrow">OD SPALANIA DO RUCHU</div><h1>Silnik benzynowy<span class="title-dot">.</span></h1></div><div class="engine-picker"><div class="engine-buttons" role="group" aria-label="Układ cylindrów">${Object.values(ENGINES).filter(engine => engine.id !== 'boxer4').map(engine => `<button data-engine="${engine.id}" class="${engine.id === 'r4' ? 'active' : ''}" aria-pressed="${engine.id === 'r4'}" title="${engine.name}">${({r3:'R3', r6:'R6', w16:'W16'})[engine.id] || engine.name}</button>`).join('')}</div><div class="model-spec"><span id="engine-displacement">2.0 l</span><span id="engine-bank-angle">Rzędowy</span></div></div></div>
-    <section class="car-presets" aria-label="Presety samochodów">
-      <label>Samochód<select id="car-preset"><option value="">Własna konfiguracja</option>${CAR_PRESETS.map(car => `<option value="${car.id}">${car.name} · ${car.year} · ${car.variant}</option>`).join('')}</select></label>
-      <div><strong id="car-preset-summary">Zbuduj własny napęd lub wybierz znany samochód.</strong><p id="car-preset-note">Presety ustawiają architekturę napędu. Parametry i mechanizmy symulacji są dydaktyczne.</p></div>
-    </section>
-    <section id="mount-settings" class="mount-settings" aria-label="Konfiguracja napędu"><strong>Konfiguracja napędu</strong></section>
-    <div class="workspace">
-      <section class="visual-panel" aria-label="Model i cykl silnika">
-        <div class="view-toolbar"><div class="view-tabs" role="group" aria-label="Widok modelu">
-          <button class="view-tab active" data-view="engine" aria-pressed="true">Silnik</button><button class="view-tab" data-view="cylinder" aria-pressed="false">Cylinder</button><button class="view-tab" data-view="drive-detail" aria-pressed="false">Napęd</button><button class="view-tab" data-view="clutch" aria-pressed="false">Sprzęgło</button><button class="view-tab" data-view="gearbox" aria-pressed="false">Skrzynia</button><button class="view-tab" data-view="differential" aria-pressed="false">Dyferencjał</button>
-        </div><button class="icon-button" id="fullscreen" aria-label="Pełny ekran modelu" title="Pełny ekran">${icon('expand')}</button></div>
-        <div class="inspection-toolbar" id="inspection-toolbar" hidden><label>Przybliż podzespół<select id="inspect-section"></select></label><label class="isolate-option" id="isolate-option"><input id="isolate" type="checkbox">Odizoluj</label><button id="inspect-description" class="quiet-button">Opis podzespołu</button><span id="inspection-note"></span>
-          <div class="lesson-tools" id="clutch-lesson" hidden>
-            <div class="clutch-actions"><div role="group" aria-label="Położenie pedału sprzęgła"><button class="secondary-button" data-clutch-pedal="0">Zwolniony · zacisk</button><button class="secondary-button" data-clutch-pedal="0.5">Pół pedału</button><button class="secondary-button" data-clutch-pedal="1">Wciśnięty · rozłączone</button></div><span id="clutch-display" data-state="assembled">Złożone · ruch roboczy</span><button class="secondary-button" id="assemble-clutch">Złóż części</button></div>
-            <details id="clutch-schematic"><summary>Schemat sił i warstwy</summary>
-            <svg class="clutch-diagram" viewBox="0 0 330 118" role="img" aria-label="Przekrój sprzęgła: łożysko naciska sprężynę, która zwalnia docisk">
-              <text x="8" y="14">SILNIK</text><text x="240" y="14">SKRZYNIA</text>
-              <path d="M8 67H70M102 67H319" stroke="#6ac5e9" stroke-width="5"/>
-              <path d="M90 27H154V40M90 107H154V94" fill="none" stroke="#7996a8" stroke-width="5"/>
-              <rect x="70" y="32" width="20" height="70" rx="2" fill="#a3b3c0"/>
-              <rect id="diagram-disc" x="90" y="35" width="12" height="64" fill="#b18b60"/>
-              <rect id="diagram-pressure" x="102" y="32" width="16" height="70" rx="2" fill="#a3b3c0"/>
-              <path id="diagram-spring" d="M118 34L154 40L199 58M118 100L154 94L199 76" fill="none" stroke="#ffcc73" stroke-width="4"/>
-              <circle cx="154" cy="40" r="4" fill="#7996a8"/><circle cx="154" cy="94" r="4" fill="#7996a8"/>
-              <rect id="diagram-bearing" x="199" y="54" width="15" height="26" rx="3" fill="#6ac5e9"/>
-              <path id="diagram-release" d="M258 46H220m8-5-8 5 8 5" fill="none" stroke="#6ac5e9" stroke-width="2"/>
-              <path id="diagram-torque" d="M8 67H310m-10-6 10 6-10 6" fill="none" stroke="#78edab" stroke-width="3"/>
-              <text x="60" y="116">koło · tarcza · docisk</text><text x="217" y="96">łożysko ←</text>
-            </svg>
-            <button class="secondary-button" id="spread-clutch">Pokaż warstwy</button><small>Rozsunięcie części pokazuje ich kolejność. Skok roboczy jest powiększony, ale nie rozsuwa całego zespołu.</small>
-            </details>
-          </div>
-          <div class="lesson-tools" id="gear-lesson" hidden><div class="shift-stages"><span data-shift-stage="release">1 · Rozłączenie</span><span data-shift-stage="synchronize">2 · Synchronizacja</span><span data-shift-stage="engage">3 · Przesuwka</span><span data-shift-stage="idle">4 · Połączenie</span></div><button class="secondary-button" id="shift-step">Następny etap</button><small id="shift-detail"></small></div>
-          <div class="lesson-tools" id="diff-lesson" hidden><button class="secondary-button" id="diff-demo" aria-pressed="false">Uruchom pokaz stołowy</button><div class="turn-buttons" role="group" aria-label="Kierunek jazdy"><button data-turn="1">Zakręt w lewo</button><button data-turn="0" class="active">Na wprost</button><button data-turn="-1">Zakręt w prawo</button></div><label><input id="diff-open" type="checkbox">Odsłoń satelity</label><div class="diff-speeds"><span>L <b id="diff-left"></b></span><span>Kosz <b id="diff-carrier"></b></span><span>P <b id="diff-right"></b></span></div><small id="diff-detail"></small></div>
-        </div>
-        <div class="scene" id="scene">
-          <div class="scene-caption"><span class="live-status" id="engine-status">SILNIK PRACUJE</span><span id="view-caption">Przekrój rzędowej czwórki</span><strong id="phase-overlay"></strong></div>
-          <div id="clutch-status" data-state="grip" hidden>
-            <strong id="contact-state"></strong>
-            <div class="clutch-speeds"><span>Silnik · koło + docisk <b id="clutch-engine-rpm"></b></span><span>Tarcza + wał skrzyni <b id="clutch-input-rpm"></b></span><span class="clutch-clamp">Zacisk <b id="clutch-clamp-value">100%</b><meter id="clutch-clamp" min="0" max="1" value="1" aria-label="Względny docisk sprężyny talerzowej"></meter></span></div>
-            <span id="clutch-gap-state"></span>
-            <small id="clutch-mechanism-detail"></small>
-            <small id="clutch-motion"></small>
-          </div>
-          <div class="mechanism-readout" id="mechanism-readout" hidden><button class="close-readout" aria-label="Ukryj parametry napędu">×</button><strong id="mechanism-state"></strong><div><span>Silnik <b id="mechanism-engine-rpm"></b></span><span>Wejście skrzyni <b id="mechanism-input-rpm"></b></span><span>Wyjście skrzyni <b id="mechanism-output-rpm"></b></span></div><small id="mechanism-detail"></small><small id="contact-detail" hidden></small></div>
-          <div class="mechanism-readout turbo-readout" id="turbo-readout" hidden><button class="close-readout" aria-label="Ukryj parametry turbo">×</button><strong id="turbo-state"></strong><div><span>Doładowanie<b id="turbo-pressure">0,00 bar</b></span><span>Wastegate<b id="wastegate-value">0%</b></span></div><small id="turbo-explanation"></small><button id="turbo-activate" class="secondary-button">Włącz turbo</button></div>
-          <button id="show-readout" class="show-readout quiet-button" hidden>Pokaż parametry</button>
-          <div class="scene-options"><label><input id="cutaway" type="checkbox" checked><span>Przekrój</span></label><label><input id="labels" type="checkbox" checked><span>Opisy</span></label><label id="flow-option" hidden><input id="flow" type="checkbox" checked><span>Przepływ</span></label></div>
-          <div class="scene-legend"><span><i style="--dot:#68c9ed"></i>Powietrze</span><span><i style="--dot:#ffdc80"></i>Paliwo</span><span><i style="--dot:#c4d0dc"></i>Spaliny</span></div>
-          <div class="camera-tools" role="group" aria-label="Sterowanie kamerą"><label class="camera-device">Gesty<select id="camera-input" aria-label="Urządzenie sterujące kamerą" title="Auto rozpoznaje touchpad i kółko. Wybierz urządzenie, jeśli przewijanie reaguje inaczej niż oczekujesz."><option value="auto">Auto</option><option value="touchpad">Touchpad</option><option value="mouse">Mysz</option></select></label><button id="camera-pan" class="icon-button camera-pan" aria-label="Przesuwanie kamery" aria-pressed="false" title="Włącz, aby przeciąganie przesuwało kamerę">${icon('pan')}<span>Przesuwanie</span></button><div class="camera-zoom"><button id="zoom-in" class="icon-button" aria-label="Przybliż">${icon('plus')}</button><button id="zoom-out" class="icon-button" aria-label="Oddal">${icon('minus')}</button><button id="camera-reset" class="icon-button" aria-label="Przywróć kamerę">${icon('focus')}</button></div></div>
-          <div class="orbit-hint">${icon('rotate')}<span>Przeciągnij: obrót · 2 palce: przesuwanie · szczypnięcie: zoom</span></div>
-          <div id="toast" role="status" aria-live="polite"></div>
-        </div>
-        <div class="quick-controls" aria-label="Sterowanie przy modelu"><label for="quick-throttle">Gaz <output id="quick-throttle-value">0%</output><input id="quick-throttle" type="range" min="0" max="100" value="0"></label><label for="quick-clutch">Sprzęgło <output id="quick-clutch-value">0%</output><input id="quick-clutch" class="blue-range" type="range" min="0" max="100" value="0"></label><label for="quick-gear">Bieg<select id="quick-gear"><option value="0">N</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label></div>
-        <div class="playback"><div class="playback-left"><button id="pause" class="play-button" aria-label="Wstrzymaj symulację">${icon('pause')}</button><button id="next-stroke" class="quiet-button" title="Zatrzymaj i przejdź o jeden suw">Następny suw ${icon('chevron')}</button></div><label id="explode-control" class="explode-control" hidden>Widok rozstrzelony<input id="explode" type="range" min="0" max="100" value="0"><output id="explode-value">0%</output></label><label class="speed-select">Tempo animacji<select id="animation-speed"><option value="0.01">1%</option><option value="0.02" selected>2%</option><option value="0.05">5%</option><option value="0.1">10%</option><option value="1">100%</option></select></label></div>
-        <div class="cycle-panel" id="cycle-panel">
-          <div class="section-heading"><span>CYKL CZTEROSUWOWY</span><label class="cylinder-select">Cylinder <select id="cylinder-number" aria-label="Numer cylindra"><option value="0">01</option><option value="1">02</option><option value="2">03</option><option value="3">04</option></select></label></div>
-          <div class="cylinder-strip"><div id="cylinder-states" role="group" aria-label="Fazy cylindrów"></div><span id="firing-interval">Zapłon co 180°</span></div>
-          <div class="stroke-tabs" role="group" aria-label="Wybierz suw i zatrzymaj animację">${STROKES.map((stroke, i) => `<button data-stroke="${i}" style="--stroke:${stroke.color}" aria-pressed="false"><span class="stroke-number">0${i + 1}</span><span>${stroke.name}</span><span class="stroke-direction">${i % 2 ? '↑' : '↓'}</span></button>`).join('')}</div>
-          <div class="cycle-track"><input id="cycle-angle" type="range" min="0" max="719" value="30" aria-label="Kąt wału w cyklu, 0 do 719 stopni"><div><span>0°</span><span>180°</span><span>360°</span><span>540°</span><span>720°</span></div></div>
-          <div class="cycle-status"><span id="intake-status"></span><span id="exhaust-status"></span><strong id="combustion-status"></strong></div>
-          <div class="stroke-description"><span class="stroke-badge" id="stroke-badge">01</span><p id="stroke-description"></p><span class="angle-readout" id="angle-readout">30°</span></div>
-          <button id="explain-cycle" class="quiet-button cycle-explain-button">Co oznaczają kolory i gdzie jest dym?</button>
-        </div>
-        <div class="part-panel" id="part-panel" hidden><div class="section-heading"><span>POZNAJ ELEMENT</span><button id="close-part" class="quiet-button">Zamknij ×</button></div><h2 id="part-title"></h2><p id="part-description"></p></div>
-      </section>
-      <aside class="control-panel" aria-label="Sterowanie silnikiem">
-        <div class="control-heading"><span class="section-heading">STANOWISKO STEROWANIA</span><button class="icon-button" id="reset" aria-label="Zresetuj symulację" title="Reset symulacji">${icon('reset')}</button></div>
-        <div class="rpm-display"><span class="metric-label">Obroty silnika</span><div><strong id="rpm">900</strong><span>obr./min</span></div><div class="rpm-bar"><i id="rpm-bar"></i></div><div class="rpm-scale"><span>0</span><span>2 000</span><span>4 000</span><span>6 500</span></div></div>
-        <div class="secondary-metrics"><div><span class="metric-label">Prędkość</span><strong><span id="speed">0</span><small> km/h</small></strong></div><div><span class="metric-label">Moment silnika</span><strong><span id="torque">0</span><small> Nm</small></strong></div></div>
-        <div class="pedal-control"><div class="control-label"><label for="throttle">Gaz</label><output id="throttle-value">0<span>%</span></output></div><input class="accent-range" id="throttle" type="range" min="0" max="100" value="0"><div class="range-caption"><span>Bieg jałowy</span><span>Pełny gaz</span></div></div>
-        <div class="pedal-control"><div class="control-label"><label for="clutch">Pedał sprzęgła</label><output id="clutch-value">0<span>%</span></output></div><input id="clutch" class="blue-range" type="range" min="0" max="100" value="0"><div class="range-caption"><span>Zwolniony</span><span>Wciśnięty</span></div><button id="clutch-toggle" class="clutch-button" aria-pressed="false">Wciśnij sprzęgło <kbd>Shift</kbd></button></div>
-        <div class="gear-control"><div class="control-label"><span>Bieg</span><span class="small-label" id="ratio-label">Luz</span></div><div class="gear-buttons" role="group" aria-label="Wybór biegu">${GEAR_RATIOS.map((_, i) => `<button data-gear="${i}" class="${i === 0 ? 'active' : ''}" aria-pressed="${i === 0}">${i || 'N'}</button>`).join('')}</div><p class="control-hint" id="drive-status">Luz: silnik nie napędza kół.</p></div>
-        <div class="engine-actions"><button id="ignition" class="secondary-button">${icon('power')}<span>Wyłącz silnik</span></button><button id="brake" class="secondary-button brake-button" aria-pressed="false">Hamulec</button></div>
-        <div class="configuration"><div class="section-heading">KONFIGURACJA SILNIKA</div><p id="engine-summary" class="engine-summary"></p><div class="setting-label">Zasilanie paliwem</div><div class="segmented" role="group" aria-label="Zasilanie paliwem"><button data-injection="mpi" class="active" aria-pressed="true">Pośredni <span>MPI</span></button><button data-injection="gdi" aria-pressed="false">Bezpośredni <span>GDI</span></button><button data-injection="carb" aria-pressed="false">Gaźnik<span>Zwężka</span></button></div><p id="injection-note" class="control-hint">Paliwo trafia do kanału przed zaworem dolotowym.</p><label class="timing-setting">Napęd rozrządu<select id="timing-type"><option value="belt">Pasek zębaty</option><option value="chain">Łańcuch</option></select></label><p id="timing-note" class="control-hint"></p><label class="turbo-setting"><span>Turbodoładowanie<small id="turbo-label">Silnik wolnossący</small></span><input id="turbo" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label><div class="boost-readout" id="boost-row" hidden><span>Ciśnienie doładowania</span><strong id="boost">0,00 bar</strong></div></div>
-        <div class="control-footer">${icon('info')}<span>Parametry orientacyjne. Animacja jest spowolniona, wskazania odpowiadają symulacji.</span></div>
-      </aside>
-    </div>
-    <section class="learning-strip"><div class="learning-number">SPRÓBUJ SAM</div><p><strong>Poczuj różnicę między biegami.</strong> Wciśnij sprzęgło, wybierz 1, dodaj gazu i powoli zwalniaj pedał. Przejdź do widoku „Napęd”, żeby zobaczyć, jak moment dociera do koła.</p><button id="try-drive" class="quiet-button">Zobacz napęd ${icon('arrow')}</button></section>
-    <footer class="page-footer"><span>ENGINE / LAB <span class="footer-separator">·</span> Model edukacyjny</span><span>Obróć. Przybliż. Zrozum.</span></footer>
-  </main>
-  <dialog id="cycle-dialog" class="cycle-explainer"><div class="dialog-heading"><h2>Co dzieje się w cylindrze?</h2><button id="close-cycle" class="icon-button" aria-label="Zamknij opis cyklu">×</button></div><p>Niebieskie znaczniki oznaczają powietrze, żółte paliwo. Podczas sprężania ta sama mieszanka zajmuje coraz mniej miejsca — nie zmienia się nagle w inny gaz. Przy GDI paliwo dodajemy dopiero w czasie sprężania.</p><p>Iskra przed górnym martwym punktem rozpoczyna spalanie. Front płomienia rozchodzi się od świecy, a gorące produkty spalania rozprężają się i naciskają na tłok. Płomień gaśnie przed końcem suwu pracy; spaliny pozostają do wydechu.</p><p>Jasnoszare znaczniki to umownie pokazane spaliny, nie dym. Rozgrzany, sprawny silnik benzynowy nie powinien stale kopcić na czarno. Czerń oznacza sadzę z niepełnego spalania; widoczna biała mgiełka przy zimnym wydechu może być skroploną wodą. Barwy i rozmiary cząstek są dydaktyczne, nie przedstawiają wyglądu cząsteczek.</p><p>Model pokazuje idealizowane suwy 0–180–360–540–720°. Rzeczywiste otwieranie zaworów wykracza poza te granice i zależy od silnika, obrotów i zmiennych faz rozrządu.</p><a href="https://www.grc.nasa.gov/www/k-12/airplane/combst1.html" target="_blank" rel="noreferrer">Spalanie — NASA</a> · <a href="https://github.com/Palum12/Engine/blob/main/docs/ENGINE_REFERENCES.md" target="_blank" rel="noreferrer">Źródła i zakres odwzorowania silników</a></dialog>
-  <dialog id="help-dialog"><div class="dialog-heading"><h2>Twoje małe laboratorium</h2><button id="close-help" class="icon-button" aria-label="Zamknij instrukcję">×</button></div><p>Przeciąganie obraca model. Dwa palce przesuwane po touchpadzie przesuwają kamerę, a szczypnięcie przybliża tylko model. Na ekranie dotykowym użyj dwóch palców do przesuwania i powiększania. Przycisk Przesuwanie pozwala przesuwać kamerę zwykłym przeciąganiem. Kółko myszy i przyciski + / − przybliżają model. Jeśli Auto myli urządzenie, wybierz Touchpad lub Mysz w polu Gesty. Gesty przechwytujemy tylko nad sceną; poza nią powiększanie strony działa normalnie. Klikaj części, aby poznać ich działanie.</p><ol><li><strong>Odkryj cztery suwy.</strong> Kliknij suw, aby zatrzymać model w jego środku. Suwak kąta pozwala ręcznie przesuwać wał przez pełny cykl.</li><li><strong>Rusz z miejsca.</strong> Wciśnij sprzęgło, wybierz pierwszy bieg, ustaw około 25% gazu i powoli zwalniaj sprzęgło suwakiem.</li><li><strong>Zmień bieg.</strong> Odejmij gaz, wciśnij sprzęgło, wybierz następny bieg i płynnie zwolnij pedał.</li><li><strong>Porównaj konfiguracje.</strong> Zmień MPI na GDI i zobacz położenie wtryskiwacza. Włącz turbo, dodaj gazu i obserwuj narastające doładowanie.</li></ol><p><strong>Skróty:</strong> spacja — pauza, Shift — sprzęgło (przytrzymaj), strzałki góra/dół — gaz, N i 1–5 — bieg. Skróty nie działają podczas edycji pól.</p><p class="dialog-note">To uproszczona symulacja dydaktyczna, a nie model konkretnego samochodu. Pomijamy m.in. szczegółową termodynamikę spalania oraz szczegółową dynamikę tarcia synchronizatora. Etapy zmiany biegów są celowo spowolnione do 2,4 s; obroty wejścia są wyrównywane przed połączeniem. Chłodzenie powietrza, smarowanie turbo oraz sterowanie wastegate są zilustrowane, ale nie obliczane fizycznie. GDI może w rzeczywistości wtryskiwać paliwo w różnych fazach; tutaj pokazano wtrysk przy sprężaniu. Dwuwałkowa skrzynia pokazuje stale zazębione pary, przesuwki i widełki. Używa osobnej przesuwki na bieg, aby ułatwić obserwację. Modele V mają kąt 60° oraz przykładową numerację i kolejność zapłonu. To schematy dydaktyczne, nie rysunki konstrukcyjne. Widok turbo jest osobnym przekrojem.</p></dialog>
-`;
+
+
+
+document.querySelector('#app').innerHTML = appTemplate(icon);
 
 const controlsTemplate = document.createElement('template');
 controlsTemplate.innerHTML = POWERTRAIN_CONTROLS;
@@ -381,75 +221,7 @@ function updateLessons() {
   $('#diff-lesson').hidden = !['differential','finalDrive','frontAxle','rearAxle'].includes(view);
   $('#diff-demo').hidden = !['differential','finalDrive','frontAxle','rearAxle'].includes(view);
 }
-function updateLessonState() {
-  const state = manualClutchState(sim.clutch, getEngine(sim.engineId).torque, sim.shiftTarget !== null);
-  const separated = !state.contact;
-  const exploded = mode === 'clutch' && Number($('#explode').value) > 0;
-  const presentation = manualClutchPresentation({ state, engineRpm: sim.rpm, inputOmega: sim.inputOmega, transmittedTorque: sim.transmittedTorque, exploded });
-  $('#clutch-status').dataset.state = $('#clutch-lesson').dataset.state = presentation.kind;
-  $('#contact-state').textContent = ({
-    grip: 'ZACISK · obroty wyrównane',
-    slip: 'STYK Z POŚLIZGIEM · tarcie przenosi moment i grzeje',
-    contact: 'STYK · bez przenoszonego momentu',
-    open: 'ROZŁĄCZONE · brak zacisku i momentu przez tarcie',
-    exploded: 'WARSTWY MONTAŻOWE · nie pokazują pracy sprzęgła'
-  })[presentation.kind];
-  $('#clutch-engine-rpm').textContent = `${Math.round(sim.rpm)} obr./min`;
-  $('#clutch-input-rpm').textContent = `${Math.round(sim.inputOmega * 30 / Math.PI)} obr./min`;
-  $('#contact-detail').textContent = exploded ? 'Widok rozstrzelony służy rozpoznaniu części. Złóż sprzęgło, aby odczytać tarcie i przepływ momentu.' : `Docisk ${Math.round(state.clampFactor * 100)}% · limit ${Math.round(state.capacity)} Nm · przenoszone ${Math.round(presentation.torque)} Nm · poślizg ${Math.round(presentation.slipRpm)} obr./min · ciepło ${(presentation.heatPower / 1000).toFixed(2)} kW`;
-  $('#clutch-clamp-value').textContent = `${Math.round(state.clampFactor * 100)}%`;
-  $('#clutch-clamp').value = state.clampFactor;
-  $('#clutch-gap-state').textContent = exploded ? 'Odstępy montażowe · nie są szczelinami roboczymi' : state.release > 0 ? 'Dwie szczeliny · powierzchnie nie trą o siebie' : separated ? 'Brak siły zacisku · tarcza odciążona' : 'Obie okładziny stykają się z powierzchniami';
-  $('#clutch-display').dataset.state = exploded ? 'exploded' : 'assembled';
-  $('#clutch-display').textContent = exploded ? 'Rozstrzelone · odstępy montażowe' : 'Złożone · ruch roboczy';
-  $('#assemble-clutch').disabled = !exploded;
-  $$('[data-clutch-pedal]').forEach(button => button.setAttribute('aria-pressed', Math.abs(Number(button.dataset.clutchPedal) - sim.clutch) < 0.005));
-  $('#clutch-mechanism-detail').textContent = exploded
-    ? 'Złóż części, aby zobaczyć, jak sprężyna zaciska tarczę i jak pedał ją zwalnia.'
-    : state.pedal < 0.02
-      ? 'Sprężyna → docisk → tarcza → koło. Sprężyna zaciska; pedał jest zwolniony.'
-      : separated
-        ? 'Pedał → hydraulika → łożysko ←. Sprężyna zwalnia docisk; taśmy odsuwają go →.'
-        : 'Pedał → hydraulika → łożysko wciska palce sprężyny. Zacisk maleje, styk pozostaje.';
-  $('#clutch-motion').textContent = exploded ? 'Obroty i oznaczenia tarcia są tu wyłączone.' : presentation.kind === 'slip'
-    ? `Różnica obrotów ${Math.round(presentation.slipRpm)} obr./min → ciepło ${(presentation.heatPower / 1000).toFixed(1)} kW.`
-    : separated ? 'Silnik nadal obraca koło i docisk. Tarcza z wałem może obracać się niezależnie.'
-      : presentation.synchronous ? 'Koło i docisk obraca silnik; tarcie obraca tarczę i wał skrzyni.'
-        : 'Powierzchnie są zaciśnięte. Moment i ciepło odczytasz po wznowieniu ruchu.';
-  if (sim.transmission === 'manual') {
-    $('#mechanism-state').textContent = $('#contact-state').textContent;
-    if (lessonView() === 'clutch') $('#mechanism-detail').textContent = 'Moment przez tarcie zależy od zacisku. Ciepło pojawia się, gdy powierzchnie przenoszą moment przy różnych obrotach. Podane skoki są powiększone, a docisk względny.';
-  }
-  const release = state.release;
-  $('#diagram-disc').setAttribute('x', 90 + release * 8);
-  $('#diagram-pressure').setAttribute('x', 102 + release * 28);
-  $('#diagram-bearing').setAttribute('x', 199 - state.pedal * 28);
-  $('#diagram-spring').setAttribute('d', `M${118 + release * 28} 34L154 40L${199 - state.pedal * 28} 58M${118 + release * 28} 100L154 94L${199 - state.pedal * 28} 76`);
-  $('#diagram-release').setAttribute('d', `M${258 - state.pedal * 28} 46H${220 - state.pedal * 28}m8-5-8 5 8 5`);
-  $('#diagram-release').style.opacity = state.pedal > 0 ? 1 : 0.15;
-  $('#diagram-torque').style.opacity = separated || exploded ? 0 : state.clampFactor;
-  const stage = sim.shiftStage;
-  const inspectedGear = /^gear([1-5])$/.exec($('#inspect-section').value);
-  const synchroView = $('#inspect-section').value === 'synchronizer';
-  const selected = sim.shiftTarget || Number(inspectedGear?.[1] || (synchroView ? $('#synchronizer-gear').value : 0)) || sim.gear;
-  const focusedFreeGear = Boolean((inspectedGear || synchroView) && selected !== sim.gear && sim.shiftTarget === null);
-  $$('[data-shift-stage]').forEach(element => element.classList.toggle('active', element.dataset.shiftStage === stage && !focusedFreeGear && (sim.shiftTarget !== null || sim.gear > 0)));
-  $('#shift-step').disabled = sim.shiftTarget === null;
-  $('#synchronizer-gear').disabled = sim.shiftTarget !== null;
-  const output = sim.outputOmega * 30 / Math.PI;
-  const free = selected ? sim.inputOmega / sim.ratios[selected] * 30 / Math.PI : 0;
-  $('#shift-detail').textContent = sim.shiftTarget !== null ? `${sim.shiftFrom || 'N'} → ${sim.shiftTarget || 'N'} · ${stage === 'release' ? 'Tuleja opuszcza zęby poprzedniego biegu.' : stage === 'synchronize' ? 'Pierścień trze o stożek, wyrównując obroty.' : 'Tuleja zachodzi na zęby kłowe koła.'} Koło ${Math.round(free)} / wał ${Math.round(output)} obr./min.` : focusedFreeGear ? `Koło biegu ${selected} obraca się swobodnie na łożysku: ${Math.round(free)} obr./min. Piasta i wał: ${Math.round(output)} obr./min. Tuleja nie łączy tego koła z wałem. ${sim.gear ? `Bieg ${sim.gear} jest włączony w innej parze.` : 'Skrzynia jest na luzie.'}` : sim.gear ? `Bieg ${sim.gear}: tuleja łączy zęby kłowe koła z piastą wału. Koło i wał ${Math.round(output)} obr./min. Pozostałe koła obracają się na łożyskach.` : 'Luz: koła obracają się na łożyskach, a piasty są związane z wałem. Zazębienie pary nie wystarcza: dopiero tuleja łączy koło z wałem.';
-  const diff = inspectedDifferential();
-  $('#diff-left').textContent = `${(diff?.leftSpeed || 0).toFixed(1)}`;
-  $('#diff-carrier').textContent = `${(diff?.carrierSpeed || 0).toFixed(1)}`;
-  $('#diff-right').textContent = `${(diff?.rightSpeed || 0).toFixed(1)}`;
-  $('#diff-demo').textContent = diff?.demo ? 'Zakończ pokaz stołowy' : 'Uruchom pokaz stołowy';
-  $('#diff-demo').setAttribute('aria-pressed', Boolean(diff?.demo));
-  $$('[data-turn]').forEach(button => { const active = Number(button.dataset.turn) === sim.turn; button.classList.toggle('active',active); button.setAttribute('aria-pressed',active); });
-  const front = mode === 'differential' ? sim.driveLayout === 'fwd' : diff === scene?.vehicle.front;
-  const locked = front ? sim.frontLock : sim.rearLock;
-  $('#diff-detail').textContent = `${diff?.demo ? 'Pokaz stołowy · umowne obroty, niezależne od jazdy auta.' : 'Otwarty dyferencjał działa mechanicznie: nie steruje nim komputer. Opory kół i długość toru wyznaczają różnicę obrotów.'} ${locked ? 'Blokada łączy półosie: wymusza wspólne obroty.' : sim.turn === 0 ? 'Na wprost: satelity krążą z koszem, bez obrotu na własnych osiach.' : 'W zakręcie satelity obracają się także na swoich osiach: jedna półoś zwalnia, druga przyspiesza.'} (L + P) / 2 = kosz · obr./min.`;
-}
+
 function inspectedDifferential() {
   return mode === 'differential' ? scene?.finalDrive : scene?.vehicle[scene?.inspection === 'rearAxle' ? 'rear' : sim.driveLayout === 'fwd' || scene?.inspection === 'frontAxle' ? 'front' : 'rear'];
 }
@@ -567,7 +339,7 @@ $$('[data-injection]').forEach(button => button.addEventListener('click', () => 
   }
 }));
 function updateConfiguration() {
-  lastStroke = -1;
+
   $$('[data-injection]').forEach(button => {
     const active = button.dataset.injection === sim.injection;
     button.classList.toggle('active', active);
@@ -740,6 +512,7 @@ $('#close-part').addEventListener('click', () => { $('#part-panel').hidden = tru
 $('#explain-cycle').addEventListener('click', () => { $('.visual-panel').append($('#cycle-dialog')); $('#cycle-dialog').showModal(); });
 $('#close-cycle').addEventListener('click', () => $('#cycle-dialog').close());
 $('#cycle-dialog').addEventListener('click', event => { if (event.target === $('#cycle-dialog')) $('#cycle-dialog').close(); });
+$('#render-quality').addEventListener('change', event => scene?.setQuality(event.target.value));
 $('#help-button').addEventListener('click', () => $('#help-dialog').showModal());
 $('#close-help').addEventListener('click', () => $('#help-dialog').close());
 $('#help-dialog').addEventListener('click', event => { if (event.target === $('#help-dialog')) $('#help-dialog').close(); });
@@ -759,7 +532,6 @@ function releaseKeyboardClutch() {
 window.addEventListener('keyup', event => { if (event.key === 'Shift') releaseKeyboardClutch(); });
 window.addEventListener('blur', releaseKeyboardClutch);
 
-let lastStroke = -1;
 function updateTimingNote() {
   const engine = getEngine(sim.engineId);
   $('#timing-note').textContent = `${engine.headAngles.length} ${engine.headAngles.length === 1 ? 'głowica' : 'głowice'} · ${engine.headAngles.length * 2} wałki · ${engine.cylinders * 4} zawory. ${sim.timing !== engine.timing ? 'Eksperyment: zmieniony rodzaj napędu względem wybranego wariantu. ' : ''}Schemat trasy; proporcja obrotów wał : wałek = 2 : 1.`;
@@ -782,7 +554,7 @@ function updateEngineUI() {
     selectedCylinder = Number(button.dataset.cylinder);
     $('#cylinder-number').value = selectedCylinder;
     scene?.selectCylinder(selectedCylinder);
-    lastStroke = -1;
+
     updateUI();
   }));
   $$('.engine-buttons [data-engine]').forEach(button => {
@@ -790,7 +562,7 @@ function updateEngineUI() {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active);
   });
-  lastStroke = -1;
+
 }
 $$('.engine-buttons [data-engine]').forEach(button => button.addEventListener('click', () => {
   player.stop();
@@ -808,6 +580,7 @@ $('#explode').addEventListener('input', event => {
 
 let configuredTransmission = null;
 function updatePowertrainConfiguration() {
+  updateDrivingHelp(sim.transmission, document);
   const automatic = sim.transmission !== 'manual';
   if (scene && scene.engine.id !== sim.engineId) scene.setEngine(sim.engineId);
   $('#transmission-type').value = sim.transmission;
@@ -919,66 +692,6 @@ function setHybridRange(range) {
   updateUI();
 }
 
-function updatePowertrainMetrics() {
-  for (const name of ['throttle', 'clutch']) {
-    const value = Math.round(sim[name] * 100);
-    $(`#${name}`).value = $(`#quick-${name}`).value = value;
-    $(`#${name}-value`).innerHTML = `${value}<span>%</span>`;
-    $(`#quick-${name}-value`).textContent = `${value}%`;
-    $(`#${name}`).style.setProperty('--fill', `${value}%`);
-    $(`#quick-${name}`).style.setProperty('--fill', `${value}%`);
-  }
-  $('#vehicle-turn').value = sim.turn * 100;
-  $('#quick-brake').setAttribute('aria-pressed', Boolean(sim.brake));
-  $('#brake').setAttribute('aria-pressed', Boolean(sim.brake));
-  $('#pause').innerHTML = icon(sim.paused ? 'play' : 'pause');
-  $('#pause').setAttribute('aria-label', sim.paused ? 'Wznów symulację' : 'Wstrzymaj symulację');
-  $('#clutch-toggle').setAttribute('aria-pressed', sim.clutch >= 0.85);
-  $('#clutch-toggle').innerHTML = `${sim.clutch >= 0.85 ? 'Zwolnij pedał' : 'Wciśnij pedał'} <kbd>Shift</kbd>`;
-  $('#scenario-play').textContent = player.id && !sim.paused ? 'Wstrzymaj' : 'Odtwórz';
-  $('#scenario-next').disabled = !player.id || player.index >= player.steps.length - 1;
-  $('#scenario-description').textContent = player.id ? `${player.index + 1}/${player.steps.length} · ${player.step.text}` : 'Wybierz doświadczenie. Możesz odtworzyć animację lub przechodzić krokami.';
-  sim.traction.wheels.forEach((wheel, i) => {
-    $(`#wheel-rpm-${i}`).textContent = `${Math.round(wheel.rpm)} obr./min`;
-    $(`#wheel-torque-${i}`).textContent = `${Math.round(wheel.torque)} Nm${wheel.slip > 1 ? ' · poślizg' : ''}${wheel.driven ? '' : ' · toczy się'}`;
-  });
-  $('#traction-note').textContent = sim.traction.binding ? 'Sztywne połączenie osi + zakręt na asfalcie: wymagane drogi osi różnią się. Pojawia się wymuszony poślizg opon i naprężenie napędu.' : sim.traction.slip ? 'Przyczepność ogranicza moment docierający do podłoża. Porównaj otwarty dyferencjał z blokadą i obserwuj poślizg słabszego koła.' : 'Model przyczepności jest quasi-statyczny. W otwartym dyferencjale moment obu półosi jest równy; obroty mogą być różne.';
-  $('#dct-k1').textContent = `K1 · bieg ${sim.dct.selected[0]} · docisk ${Math.round(sim.dct.engagement[0] * 100)}% · ${Math.round(sim.dct.torques[0])} Nm`;
-  $('#dct-k2').textContent = `K2 · bieg ${sim.dct.selected[1]} · docisk ${Math.round(sim.dct.engagement[1] * 100)}% · ${Math.round(sim.dct.torques[1])} Nm`;
-  $('#dct-state').textContent = sim.shiftTarget !== null ? `${sim.shiftFrom || 'N'} → ${sim.shiftTarget || 'N'} · ${sim.shiftStage === 'preselect' ? 'wybór biegu' : sim.shiftStage === 'handover' ? 'przejmowanie momentu z poślizgiem' : 'ustalenie docisku'}` : sim.gear ? `Aktywny ${sim.gear} · przygotowany ${sim.dct.prepared}` : 'N · brak napędu';
-  $('#dct-shift-step').disabled = sim.shiftTarget === null;
-  $('#automatic-slip').textContent = `Poślizg · ${Math.round(sim.automatic.slipRpm)} obr./min`;
-  $('#automatic-lockup').textContent = `Lock-up · ${Math.round(sim.automatic.lockup * 100)}%`;
-  $('#automatic-state').textContent = sim.gear ? `Bieg ${sim.gear} · moment turbiny ${Math.round(sim.automatic.turbineTorque)} Nm` : 'N · brak napędu kół';
-  const h = sim.hybrid;
-  const kw = power => `${(power / 1000).toFixed(1).replace('.', ',')} kW`;
-  $('#hybrid-state').textContent = h.state;
-  if (document.activeElement !== $('#battery-soc')) $('#battery-soc').value = h.soc * 100;
-  $('#battery-soc-value').textContent = `${Math.round(h.soc * 100)}%`;
-  $('#battery-current').textContent = `${Math.abs(h.batteryCurrent).toFixed(1).replace('.', ',')} A ${h.batteryPower > 50 ? '→ falownik' : h.batteryPower < -50 ? '→ bateria' : '· spoczynek'}`;
-  $('#battery-power').textContent = `${kw(Math.abs(h.batteryPower))} ${h.batteryPower > 50 ? 'oddaje' : h.batteryPower < -50 ? 'przyjmuje' : ''}`;
-  $('#battery-energy').textContent = `${(h.soc * h.capacityKwh).toFixed(2).replace('.', ',')} kWh`;
-  $('#energy-battery-label').textContent = `Bateria ${Math.round(h.soc * 100)}%`;
-  $('#energy-mg1-value').textContent = kw(h.generatorPower);
-  $('#energy-mg2-value').textContent = kw(h.motorPower);
-  $('#energy-battery-value').textContent = kw(h.batteryPower);
-  $('#mg1-rpm').textContent = `${Math.round(h.mg1Omega * 30 / Math.PI)} obr./min`;
-  $('#mg2-rpm').textContent = `${Math.round(h.mg2Omega * 30 / Math.PI)} obr./min`;
-  $('#hybrid-engine-rpm').textContent = `${Math.round(sim.rpm)} obr./min`;
-  $('#hybrid-balance').textContent = `Bilans: silnik ${kw(h.enginePower)} + bateria ${kw(h.batteryPower)} = wyjście ${kw(h.mechanicalPower + h.motorPower)} + straty ${kw(h.lossPower)}${h.startPower > 0 ? ` + rozruch ${kw(h.startPower)}` : ''}.`;
-  const powers = { engine: h.enginePower - (h.startPower || 0), mechanical: h.mechanicalPower, generation: h.generatorMechanical, mg1: h.generatorPower, mg2: h.motorDcPower, wheel: h.motorPower, battery: h.batteryPower };
-  Object.entries(powers).forEach(([id, power]) => {
-    const line = $(`#energy-${id}`);
-    const active = Math.abs(power) > 50;
-    line.dataset.active = String(active);
-    line.dataset.direction = power < 0 ? 'reverse' : 'forward';
-    line.setAttribute('marker-end', active && power > 0 ? 'url(#energy-arrow)' : 'none');
-    line.setAttribute('marker-start', active && power < 0 ? 'url(#energy-arrow)' : 'none');
-    line.style.strokeWidth = active ? String(2 + Math.min(3, Math.abs(power) / 10000)) : '1.3';
-  });
-  $('.energy-map').classList.toggle('paused', sim.paused);
-}
-
 $('#transmission-type').addEventListener('change', event => {
   player.stop();
   stopDifferentialDemo();
@@ -1048,111 +761,12 @@ $('#scenario-start').addEventListener('click', prepareScenario);
 $('#scenario-play').addEventListener('click', () => { if (!player.id) prepareScenario(); pause(); });
 $('#scenario-next').addEventListener('click', () => { if (player.next()) { updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); updateUI(); } });
 
-function updateSuspensionUI() {
-  const state = sim.suspension;
-  $('#suspension-type').value = state.type;
-  $('#suspension-road').value = state.road;
-  $('#suspension-type-note').textContent = SUSPENSION_NOTES[state.type];
-  for (const [name, value, label] of [
-    ['speed', state.speed, `${Math.round(state.speed)} km/h`],
-    ['amplitude', state.amplitude * 100, `${Math.round(state.amplitude * 100)} cm`],
-    ['spring', state.spring * 100, `${Math.round(state.spring * 100)}%`],
-    ['damping', state.damping * 100, `${Math.round(state.damping * 100)}%`]
-  ]) {
-    if (document.activeElement !== $(`#suspension-${name}`)) $(`#suspension-${name}`).value = value;
-    $(`#suspension-${name}-value`).textContent = label;
-  }
-  $('#suspension-tempo').value = sim.suspensionTempo;
-  $('#suspension-body-state').textContent = `Przejechane ${state.distance.toFixed(1)} m · przechył ${(state.roll * 180 / Math.PI).toFixed(1)}°`;
-  state.wheels.forEach((wheel, index) => {
-    const prefix = `#suspension-${index ? 'right' : 'left'}-`;
-    $(prefix + 'road').textContent = `${(wheel.roadHeight * 100).toFixed(1)} cm`;
-    $(prefix + 'travel').textContent = `${(wheel.travel * 100).toFixed(1)} cm`;
-    $(prefix + 'spring').textContent = `${Math.round(wheel.springForce)} N`;
-    $(prefix + 'damper').textContent = `${Math.round(wheel.damperForce)} N`;
-    $(prefix + 'contact').textContent = wheel.contact ? 'Styk' : 'Oderwane';
-  });
-}
-function updateUI() {
-  if (mode === 'suspension') updateSuspensionUI();
-  const manualClutch = manualClutchState(sim.clutch, getEngine(sim.engineId).torque, sim.shiftTarget !== null);
-  const manualPresentation = manualClutchPresentation({ state: manualClutch, engineRpm: sim.rpm, inputOmega: sim.inputOmega, transmittedTorque: sim.transmittedTorque });
-  $('#rpm').textContent = fmt.format(Math.round(sim.rpm / 10) * 10);
-  $('#rpm-bar').style.width = `${Math.min(100, sim.rpm / 6500 * 100)}%`;
-  $('#speed').textContent = Math.round(sim.speed * 3.6);
-  $('#torque').textContent = Math.round(sim.torque);
-  $('#boost').textContent = `${sim.boost.toFixed(2).replace('.', ',')} bar`;
-  const status = sim.paused ? 'SYMULACJA WSTRZYMANA' : sim.transmission === 'hybrid' && sim.hybridEnabled && !sim.running ? 'GOTOWY · NAPĘD ELEKTRYCZNY' : sim.running ? 'SILNIK PRACUJE' : sim.stalled ? 'SILNIK ZGASŁ' : 'SILNIK WYŁĄCZONY';
-  $('#engine-status').textContent = mode === 'suspension' ? sim.paused ? 'POKAZ ZATRZYMANY' : 'PRZEJAZD PO NAWIERZCHNI' : status;
-  $('#engine-status').classList.toggle('inactive', sim.paused || mode !== 'suspension' && !sim.running);
-  $('#ignition span').textContent = sim.transmission === 'hybrid' ? sim.hybridEnabled ? 'Wyłącz hybrydę' : 'Włącz hybrydę' : sim.running ? 'Wyłącz silnik' : 'Uruchom silnik';
-  $('#quick-gear').value = sim.transmission === 'hybrid' ? sim.hybrid.range : sim.shiftTarget ?? sim.gear;
-  $('#ratio-label').textContent = sim.gear ? `${sim.ratios[sim.gear].toFixed(2).replace('.', ',')} : 1` : 'Luz';
-  $$('[data-gear]').forEach(button => {
-    const active = Number(button.dataset.gear) === (sim.shiftTarget ?? sim.gear);
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active);
-  });
-  $('#drive-status').textContent = sim.transmission === 'automatic' ? sim.shiftTarget !== null ? 'Zmiana automatu: hydraulika przełącza pakiety, konwerter pracuje z poślizgiem.' : sim.gear ? `Bieg ${sim.gear} · ${sim.automatic.lockup > 0.8 ? 'lock-up połączony' : 'napęd przez olej konwertera'}. Bez gazu możliwe pełzanie; użyj hamulca.` : 'N: konwerter obraca się, przekładnia nie napędza kół.' : sim.transmission === 'dct' ? sim.shiftTarget !== null ? 'Zmiana DCT: sterownik reguluje docisk i poślizg K1 / K2.' : sim.gear ? `Bieg ${sim.gear} aktywny; ${sim.dct.prepared} przygotowany na odłączonej gałęzi.` : 'N: oba sprzęgła nie przenoszą napędu.' : sim.shiftTarget !== null ? 'Zmiana biegu trwa. Obserwuj pierścień i przesuwkę; trzymaj pedał wciśnięty.' : sim.stalled ? 'Silnik zgasł. Wciśnij sprzęgło i uruchom go ponownie.' : sim.gear === 0 ? 'Luz: silnik nie napędza kół.' : manualPresentation.kind === 'open' ? 'Sprzęgło rozłączone: silnik nie napędza kół.' : manualPresentation.kind === 'slip' ? 'Poślizg sprzęgła: tarcza i koło zamachowe obracają się z różną prędkością.' : manualPresentation.kind === 'contact' ? 'Sprzęgło w kontakcie · brak przenoszonego momentu.' : 'Sprzęgło zaciśnięte · obroty wyrównane.';
-  $$('[data-cylinder]').forEach(button => {
-    const i = Number(button.dataset.cylinder);
-    const phase = strokeIndex(sim.angle, i, sim.engineId);
-    button.style.setProperty('--cylinder-color', STROKES[phase].color);
-    button.classList.toggle('selected', i === selectedCylinder);
-    button.setAttribute('aria-pressed', i === selectedCylinder);
-    button.title = `Cylinder ${i + 1}: ${STROKES[phase].name}`;
-  });
-  $('#turbo-state').textContent = !sim.turbo ? 'Turbo wyłączone' : !sim.running ? 'Silnik zatrzymany' : sim.boost > 0.05 ? 'Sprężarka zwiększa ciśnienie dolotu' : 'Turbo włączone · dodaj gazu';
-  $('#turbo-pressure').textContent = `${sim.boost.toFixed(2).replace('.', ',')} bar`;
-  $('#wastegate-value').textContent = `${Math.round((scene?.turbo.wastegateOpening || 0) * 100)}%`;
-  $('#turbo-explanation').textContent = !sim.turbo ? 'Włącz turbo, aby zobaczyć obrót i przepływ. Potem zwiększ gaz.' : 'Spaliny i powietrze płyną osobno. Wirniki łączy jeden wałek; wastegate to obejście spalin.';
-  $('#turbo-activate').textContent = sim.turbo ? 'Wyłącz turbo' : 'Włącz turbo';
-  $('#mechanism-engine-rpm').textContent = `${Math.round(sim.rpm)} obr./min`;
-  $('#mechanism-input-rpm').textContent = `${Math.round(sim.inputOmega * 30 / Math.PI)} obr./min`;
-  $('#mechanism-output-rpm').textContent = `${Math.round(sim.outputOmega * 30 / Math.PI)} obr./min`;
-  $('#mechanism-state').textContent = manualPresentation.kind === 'open' ? 'Sprzęgło rozłączone · brak docisku' : manualPresentation.kind === 'slip' ? 'Powierzchnie w kontakcie · poślizg' : manualPresentation.kind === 'contact' ? 'Powierzchnie w kontakcie · brak przenoszonego momentu' : sim.clutch > 0.02 ? 'Mniejszy docisk · obroty wyrównane' : 'Pedał zwolniony · pełny docisk';
-  $('#mechanism-detail').textContent = sim.shiftTarget !== null ? 'Trwa zmiana biegu: śledź etapy w pasku nad modelem.' : mode === 'clutch' ? `Poślizg: ${Math.round(manualPresentation.slipRpm)} obr./min. Wciśnij pedał i obserwuj łożysko, sprężynę oraz docisk.` : sim.gear ? `Bieg ${sim.gear}: wejście obraca się ${sim.ratios[sim.gear].toFixed(2).replace('.', ',')} raza na obrót wyjścia. Strzałki pokazują drogę momentu.` : 'Luz: koła zębate obracają się swobodnie. Żadna para nie jest połączona z wałem wyjściowym.';
-  if (sim.transmission === 'dct') {
-    $('#mechanism-state').textContent = sim.shiftTarget !== null ? `DCT · ${sim.shiftStage === 'preselect' ? 'wybór biegu' : sim.shiftStage === 'handover' ? 'przejmowanie napędu' : 'ustalenie docisku'}` : sim.gear ? `K${sim.dct.active + 1} napędza bieg ${sim.gear}` : 'DCT · N · oba pakiety odłączone';
-    const dctExplanation = sim.shiftTarget === null
-      ? sim.gear ? `Przygotowany bieg ${sim.dct.prepared} ma otwarte sprzęgło.` : 'Oba pakiety są otwarte.'
-      : sim.shiftTarget === 0 ? 'Sterownik otwiera pakiety, odłączając napęd na luzie.'
-      : sim.shiftStage === 'preselect' ? 'Wybierak ustawia nowy bieg; sterownik reguluje docisk pakietów.'
-      : sim.shiftStage === 'lock' ? 'Sterownik ustala docisk sprzęgła nowego biegu.'
-      : !sim.shiftFrom ? 'Sprzęgło nowego biegu przejmuje napęd z poślizgiem.'
-      : sim.shiftFrom % 2 === sim.shiftTarget % 2 ? 'Sterownik otwiera i ponownie dociska sprzęgło tej samej gałęzi.'
-      : 'Oba pakiety przejmują napęd z poślizgiem.';
-    $('#mechanism-detail').textContent = `K1: ${Math.round(sim.dct.torques[0])} Nm · K2: ${Math.round(sim.dct.torques[1])} Nm. ${dctExplanation}`;
-  }
-  if (sim.transmission === 'automatic') {
-    $('#mechanism-state').textContent = sim.shiftTarget !== null ? '8AT · zmiana przełożenia planetarnego' : sim.gear ? `8AT · bieg ${sim.gear} · ${sim.automatic.lockup > 0.8 ? 'lock-up' : 'konwerter z poślizgiem'}` : '8AT · N · wyjście odłączone';
-    $('#mechanism-detail').textContent = `Poślizg: ${Math.round(sim.automatic.slipRpm)} obr./min · mnożnik momentu ${sim.automatic.torqueRatio.toFixed(2)} · straty ${(sim.automatic.lossPower / 1000).toFixed(1)} kW. Kierownica: ${sim.automatic.statorLocked ? 'podparta' : 'swobodna'}.`;
-  }
-  const phase = strokeIndex(sim.angle, selectedCylinder, sim.engineId);
-  const visual = cycleVisuals(cycleDegrees(sim.angle, selectedCylinder, sim.engineId));
-  $('#intake-status').textContent = `Dolot: ${visual.intake > 0.02 ? 'otwarty' : 'zamknięty'}`;
-  $('#exhaust-status').textContent = `Wydech: ${visual.exhaust > 0.02 ? 'otwarty' : 'zamknięty'}`;
-  $('#combustion-status').textContent = !sim.running ? 'Brak spalania' : visual.spark > 0.1 ? 'Iskra → zapłon' : visual.flame > 0.02 ? 'Front płomienia → spalanie' : phase === 2 ? 'Gorące gazy → rozprężanie' : phase === 3 ? 'Usuwanie spalin' : phase === 1 ? 'Ładunek → mniejsza objętość' : 'Napełnianie cylindra';
-  if (phase !== lastStroke) {
-    lastStroke = phase;
-    $$('[data-stroke]').forEach(button => {
-      const active = Number(button.dataset.stroke) === phase;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active);
-    });
-    $('#stroke-description').textContent = phase === 1 && sim.injection !== 'gdi' ? 'Tłok zbliża się do głowicy, a zawory dolotowe i wydechowe są zamknięte. Mieszanka powietrza z paliwem zostaje sprężona. Pod koniec tego suwu świeca inicjuje spalanie.' : STROKES[phase].description;
-    $('#stroke-badge').textContent = `0${phase + 1}`;
-    $('#stroke-badge').style.color = STROKES[phase].color;
-  }
-  updateLessonState();
-  updatePowertrainMetrics();
-  $('#phase-overlay').hidden = !['engine','cylinder','timing'].includes(mode);
-  $('#phase-overlay').textContent = `${String(selectedCylinder + 1).padStart(2,'0')} · ${STROKES[phase].name.toUpperCase()} ${phase % 2 ? '↑' : '↓'}`;
-  $('#phase-overlay').style.color = STROKES[phase].color;
-  const degrees = Math.round(cycleDegrees(sim.angle, selectedCylinder, sim.engineId));
-  if (document.activeElement !== $('#cycle-angle')) $('#cycle-angle').value = Math.min(719, degrees);
-  $('#angle-readout').textContent = `${degrees}°`;
-}
+const telemetry = createTelemetry({ sim, player, $, $$, icon, fmt, lessonView, inspectedDifferential,
+  get mode() { return mode; }, get scene() { return scene; }, get selectedCylinder() { return selectedCylinder; }
+});
+function updateUI(visibleOnly = false) { telemetry.updateUI(visibleOnly); if (!visibleOnly) frameLoop?.invalidate(); }
+function updateSuspensionUI() { telemetry.updateSuspensionUI(); }
+function updateLessonState() { telemetry.updateLessonState(); }
 
 updateEngineUI();
 updatePowertrainConfiguration();
@@ -1160,13 +774,12 @@ setPedal('throttle', 0);
 setPedal('clutch', 0);
 updateUI();
 changeView('drive-detail');
-let previousTime = performance.now();
-let uiTime = 0;
-function animate(time) {
-  if (disposed) return;
-  const dt = Math.max(0, Math.min((time - previousTime) / 1000, 0.1));
-  previousTime = time;
-  if (!document.hidden) {
+frameLoop = createFrameLoop({
+  isActive: () => !!cycleTransition || !sim.paused && (sim.suspensionActive || !!player.id || sim.running ||
+    sim.transmission === 'hybrid' && sim.hybridEnabled || sim.rpm > .1 || sim.speed > .001 || Math.abs(sim.inputOmega) > .01 || !!inspectedDifferential()?.demo),
+  maxFps: () => scene?.quality.settings().maxFps || 60,
+  advance(dt) {
+    if (!sim.paused) scene?.quality.observe(Math.max(dt * 1000, scene.lastRenderCost || 0), dt);
     const wasRunning = sim.running;
     sim.update(dt);
     if (player.update(dt)) { updatePowertrainConfiguration(); scene?.setView(mode); configureInspection(mode); }
@@ -1178,11 +791,18 @@ function animate(time) {
       if (t === 1) cycleTransition = null;
     }
     if (wasRunning && sim.stalled) toast('Silnik zgasł pod obciążeniem. Wciśnij sprzęgło, uruchom silnik i zwalniaj pedał powoli.');
-    scene?.render(sim, dt);
-    uiTime += dt;
-    if (uiTime >= 0.08) { updateUI(); uiTime = 0; }
-  }
-  requestAnimationFrame(animate);
-}
-requestAnimationFrame(animate);
-if (import.meta.hot) import.meta.hot.dispose(() => { disposed = true; scene?.dispose(); });
+  },
+  render: dt => scene?.render(sim, dt),
+  updateUI: () => updateUI(true)
+});
+const wake = () => frameLoop.invalidate();
+const wakeEvents = ['input', 'change', 'click', 'keydown', 'keyup', 'pointerdown', 'pointerup', 'wheel', 'visibilitychange', 'fullscreenchange'];
+for (const event of wakeEvents) document.addEventListener(event, wake, { passive: true });
+if (scene) scene.onInvalidate = wake;
+frameLoop.invalidate();
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  frameLoop.dispose();
+  for (const event of wakeEvents) document.removeEventListener(event, wake);
+  clearTimeout(toastTimer);
+  scene?.dispose();
+});

@@ -282,22 +282,25 @@ export class VehicleModel extends ModelGeometry {
     const threshold = level === 'overview' ? 0.16 : level === 'mechanics' ? 0.07 : 0;
     if (this.lodLevel !== level) {
       this.lodLevel = level;
+      this.lodHiddenMeshes = [];
       this.assembly.traverse(object => {
         if (!object.isMesh || object.isInstancedMesh || object.userData.lodHidden === undefined && object.visible === false) return;
-        object.geometry.computeBoundingBox();
+        if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
         const size = object.geometry.boundingBox.getSize(vec());
         const s = object.getWorldScale(vec()).x;
         const hide = !object.userData.lodEssential && threshold > 0 && Math.max(size.x, size.y, size.z) * s < threshold;
         if (object.userData.lodHidden && !hide) object.visible = true;
         object.userData.lodHidden = hide;
+        if (hide) this.lodHiddenMeshes.push(object);
       });
     }
-    this.assembly.traverse(object => { if (object.userData.lodHidden) object.visible = false; });
+    this.lodHiddenMeshes.forEach(object => { object.visible = false; });
   }
 
   restoreDetail() {
     this.assembly.traverse(object => { if (object.userData.lodHidden) object.visible = true; delete object.userData.lodHidden; });
     this.lodLevel = null;
+    this.lodHiddenMeshes = [];
   }
 
   dispose() { this.axleSpur?.removeFromParent(); this.front.dispose(); this.rear.dispose(); this.routing.dispose(); super.dispose(); }

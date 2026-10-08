@@ -62,8 +62,6 @@
   .manual-clutch-mode .scene-legend span{font-size:9px}
   .manual-clutch-mode .scene[data-view="clutch"][data-transmission="manual"] .scene-legend{bottom:12px;gap:4px 10px}
   .manual-clutch-mode .scene[data-view="clutch"][data-transmission="manual"] .camera-tools{bottom:49px}
-  .manual-clutch-mode .scene[data-view="clutch"][data-transmission="manual"] .camera-device{font-size:0;gap:0;padding:3px}
-  .manual-clutch-mode .scene[data-view="clutch"][data-transmission="manual"] .camera-device select{width:60px;font-size:10px}
   .manual-clutch-mode .show-readout{left:12px;bottom:52px;font-size:10px;padding:5px 7px}
   .manual-clutch-mode #mechanism-readout{top:205px}
   .manual-clutch-mode #mechanism-readout small{display:block;font-size:11px}

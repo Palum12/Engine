@@ -230,15 +230,17 @@ export class SuspensionModel extends ModelGeometry {
     this.axleBeam.visible = state.type === 'leaf';
     this.between(this.driveShaft, this.bodyPoint(0.4, -0.68, 0, state), this.axle.position);
     this.corners.forEach(corner => this.updateCorner(corner, state));
-    this.roads.forEach(({ mesh }, side) => {
+    const roadKey = `${state.distance}:${state.road}:${state.amplitude}`;
+    if (roadKey !== this.roadKey) this.roads.forEach(({ mesh }, side) => {
       const position = mesh.geometry.attributes.position, sign = side ? 1 : -1;
       for (let i = 0; i <= ROAD_STEPS; i++) {
         const x = -8 + 16 * i / ROAD_STEPS, height = state.roadAt(state.distance - x / SCALE, side).height * SCALE;
         position.setXYZ(i * 2, x, height - 0.03, sign * WIDTH * SCALE - 0.76);
         position.setXYZ(i * 2 + 1, x, height - 0.03, sign * WIDTH * SCALE + 0.76);
       }
-      position.needsUpdate = true; mesh.geometry.computeVertexNormals(); mesh.geometry.computeBoundingBox();
+      position.needsUpdate = true; mesh.geometry.computeVertexNormals(); mesh.geometry.computeBoundingBox(); mesh.geometry.computeBoundingSphere();
     });
+    this.roadKey = roadKey;
     this.setSection(this.section, this.isolate);
   }
 

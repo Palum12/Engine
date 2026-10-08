@@ -10,6 +10,7 @@ export class ModelGeometry {
     this.group = new THREE.Group();
     this.geometries = new Set();
     this.ownedMaterials = new Set();
+    this.instances = new Set();
     this.cache = new Map();
     this.anchors = [];
     this.matrix = new THREE.Matrix4();
@@ -128,7 +129,7 @@ export class ModelGeometry {
   particles(count, color, radius, parent) {
     const geometry = this.geometry(`p:${radius}`, () => new THREE.SphereGeometry(radius, 7, 5));
     const material = this.material({ color, toneMapped: false }, true);
-    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    const mesh = this.instance(geometry, material, count);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
     mesh.userData.ignorePick = true;
@@ -143,7 +144,7 @@ export class ModelGeometry {
 
   arrows(count, color, parent, size = 0.16) {
     const geometry = this.geometry(`arrow:${size}`, () => new THREE.ConeGeometry(size * 0.36, size, 8));
-    const mesh = new THREE.InstancedMesh(geometry, this.material({ color, toneMapped: false }, true), count);
+    const mesh = this.instance(geometry, this.material({ color, toneMapped: false }, true), count);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
     mesh.userData.ignorePick = true;
@@ -165,9 +166,18 @@ export class ModelGeometry {
     return anchor;
   }
 
+  instance(geometry, material, count) {
+    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    this.instances.add(mesh);
+    return mesh;
+  }
+
   dispose() {
     this.group.removeFromParent();
+    // Track ownership, not the current tree: assemblies are reparented and borrowed.
+    this.instances.forEach(mesh => mesh.dispose());
     this.geometries.forEach(g => g.dispose());
     this.ownedMaterials.forEach(m => m.dispose());
+    this.instances.clear(); this.geometries.clear(); this.ownedMaterials.clear(); this.cache.clear();
   }
 }
