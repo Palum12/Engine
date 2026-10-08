@@ -27,6 +27,11 @@
   restored/reparented transforms, instanced meshes and stable label measurements.
   Compare actual updateMatrix compositions when matrix APIs change; counts of
   updateMatrixWorld calls alone cannot be compared to an updateWorldMatrix pass.
+- `clutch-clarity.test.js` checks actual spring triangles against solid support
+  boxes and cylinders, tooth OBBs and the rigid piston/head/fluid chamber.
+  Browser clutch checks compare the same WebGL frame with contact cues shown
+  and hidden: text changes alone do not prove the two contact edges are visible.
+  Include half pedal with equal shaft speeds so pedal position cannot fake slip.
 - A selected gear inspection may show a free gear while another gear is active.
   Check its own free-wheel RPM and explanation; do not label it as connected.
 - Keep the timing belt visible under vehicle LOD and verify isolated heads restore

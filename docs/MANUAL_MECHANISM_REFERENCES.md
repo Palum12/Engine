@@ -60,7 +60,9 @@ nie odtwarza konkretnej skrzyni ani wysprzęglika Seata.
   się osiowo, a jego wirujący pierścień styka się ze sprężyną.
 - Zewnętrzna część sprężyny talerzowej jest ciągłą stożkową powierzchnią,
   której obrzeże opiera się o tylną powierzchnię docisku. Wewnętrzne palce
-  łączą ją z łożyskiem. Obie strony podparcia mają żebra dochodzące do pokrywy.
+  łączą ją z łożyskiem. Podparcie od tyłu łączą żebra pokrywy; przedni
+  pierścień utrzymują krótkie kołki przechodzące przez przerwy między palcami.
+  Przednie żebro nie może przecinać ciągłego stożka sprężyny.
   Sprężyny tłumiące tarczy mieszczą się w otwartych oknach z gniazdami końców;
   żebra łączą gniazda z piastą i pierścieniem nośnym okładzin. Krótki
   wielowypust zazębia się z wewnętrznymi zębami piasty i kończy przed
@@ -77,8 +79,8 @@ nie odtwarza konkretnej skrzyni ani wysprzęglika Seata.
   według wygładzonej krzywej do zera przy `0,72`. Dopiero dalszy ruch otwiera
   widoczną szczelinę. Próg `0,85` jest osobną blokadą rozruchu i zmiany biegu;
   nie określa, czy sprzęgło jeszcze przenosi moment.
-- Maksymalny ruch docisku `plateGap = 0,28` i odsunięcie tarczy
-  `discFloat = 0,08` to powiększone odległości w jednostkach modelu.
+- Maksymalny ruch docisku `plateGap = 0,10` i odsunięcie tarczy
+  `discFloat = 0,035` to powiększone odległości w jednostkach modelu.
   Nie są wymiarami w metrach ani milimetrami konkretnego sprzęgła.
 - Zdolność przenoszenia momentu wynosi `260 N·m × (moment silnika / 170 N·m)
   × względny zacisk`, a umowna siła `5200 N × (moment silnika / 170 N·m)

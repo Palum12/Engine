@@ -40,8 +40,80 @@ async function settleVisibleScene(page) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function trackClutchScene(page) {
+  await page.evaluate(async () => {
+    const { EngineScene } = await import('/src/scene.js');
+    const render = EngineScene.prototype.render;
+    EngineScene.prototype.render = function(...args) {
+      window.__clutchTestScene = this;
+      return render.apply(this, args);
+    };
+  });
+  await page.waitForFunction(() => Boolean(window.__clutchTestScene));
+}
+
+async function setClutchSpeeds(page, inputRpm, torque = 60) {
+  // Freeze physics so that the UI and real WebGL model consume an identical,
+  // deterministic load. Pedal movement still goes through the actual controls.
+  await page.evaluate(({ inputRpm, torque }) => {
+    Object.assign(window.__clutchTestScene.sim, { paused: true, running: true, rpm: 1800,
+      inputOmega: inputRpm * Math.PI / 30, transmittedTorque: torque,
+      clutchSlip: Math.abs(1800 - inputRpm), angle: 27, inputAngle: 0.19 });
+  }, { inputRpm, torque });
+  await settleVisibleScene(page);
+}
+
+async function visibleFrictionPixels(page) {
+  return page.evaluate(() => {
+    const s = window.__clutchTestScene;
+    // Control-driven DOM updates can precede the next animation frame. Prepare
+    // the model before saving visibility, so cleanup restores its current pose.
+    s.render(s.sim, 0);
+    const flatten = value => Array.isArray(value) ? value.flatMap(flatten) : value?.isObject3D ? [value] : [];
+    const cues = [...new Set([...flatten(s.drive.contacts), ...flatten(s.drive.contactEdges)])];
+    const saved = cues.map(cue => [cue, cue.visible]);
+    const gl = s.renderer.getContext(), width = gl.drawingBufferWidth, height = gl.drawingBufferHeight;
+    const withCues = new Uint8Array(width * height * 4), withoutCues = new Uint8Array(withCues.length);
+    try {
+      s.renderer.render(s.scene, s.camera);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, withCues);
+      cues.forEach(cue => { cue.visible = false; });
+      s.renderer.render(s.scene, s.camera);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, withoutCues);
+    } finally {
+      saved.forEach(([cue, visible]) => { cue.visible = visible; });
+      s.renderer.render(s.scene, s.camera);
+    }
+    let green = 0, orange = 0, changed = 0;
+    for (let pixel = 0; pixel < withCues.length; pixel += 4) {
+      const r = withCues[pixel], g = withCues[pixel + 1], b = withCues[pixel + 2];
+      const delta = Math.abs(r - withoutCues[pixel]) + Math.abs(g - withoutCues[pixel + 1]) + Math.abs(b - withoutCues[pixel + 2]);
+      if (delta < 20) continue;
+      changed++;
+      if (g > r + 20 && g > b + 12 && g > 110) green++;
+      if (r > g + 25 && g > b + 20 && r > 150) orange++;
+    }
+    return { green, orange, changed, enabledCues: saved.filter(([, visible]) => visible).length };
+  });
+}
+
+async function clutchProjectedHeight(page) {
+  return page.evaluate(() => {
+    const s = window.__clutchTestScene, face = s.drive.flywheel.userData.face;
+    const positions = face.geometry.attributes.position;
+    const point = s.controls.target.clone();
+    let minimum = Infinity, maximum = -Infinity;
+    for (let index = 0; index < positions.count; index++) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(face.matrixWorld).project(s.camera);
+      minimum = Math.min(minimum, point.y); maximum = Math.max(maximum, point.y);
+    }
+    return (maximum - minimum) / 2;
+  });
+}
+
 test('manual clutch explains spring force, contact and release even while paused', async ({ page }, info) => {
   const errors = await openApp(page);
+  await trackClutchScene(page);
   await page.locator('#transmission-type').selectOption('manual');
   await page.locator('.view-tab[data-view="clutch"]').click();
   await expect(page.locator('#clutch-lesson')).toBeVisible();
@@ -53,6 +125,10 @@ test('manual clutch explains spring force, contact and release even while paused
   await expect(page.locator('#labels')).toBeChecked();
   await page.locator('#pause').click();
   await expect(page.locator('#pause')).toHaveAttribute('aria-label', 'Wznów symulację');
+  await setClutchSpeeds(page, 1800);
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'grip');
+  await expect(page.locator('#clutch-engine-rpm')).toContainText('1800');
+  await expect(page.locator('#clutch-input-rpm')).toContainText('1800');
   if (await page.locator('#mechanism-readout').isVisible()) {
     await page.locator('#mechanism-readout .close-readout').click();
   }
@@ -61,19 +137,40 @@ test('manual clutch explains spring force, contact and release even while paused
   await page.waitForTimeout(250);
   const engaged = await clutchDiagram(page);
   expect(engaged.pressure).toBeCloseTo(engaged.discRight, 4);
-  await expect(page.locator('#contact-state')).toContainText(/połącz|styk|kontakt|zaciśnię/i);
+  await expect(page.locator('#contact-state')).toContainText(/połącz|styk|kontakt|zaciśnię|zacisk/i);
   await settleVisibleScene(page);
+  const heightFraction = await clutchProjectedHeight(page);
+  expect(heightFraction, 'the default desktop camera must leave the clutch large enough to inspect').toBeGreaterThan(0.4);
+  await info.attach('clutch-camera-scale', { body: JSON.stringify({ heightFraction }, null, 2), contentType: 'application/json' });
   await page.screenshot({ path: info.outputPath('clutch-engaged.png') });
   const engagedCanvas = await page.locator('#scene canvas').screenshot({ path: info.outputPath('clutch-engaged-canvas.png') });
 
   await page.locator('[data-clutch-pedal="0.5"]').click();
+  await setClutchSpeeds(page, 1800);
   await expect(page.locator('#clutch')).toHaveValue('50');
   await expect.poll(async () => Number((await page.locator('#clutch-clamp-value').innerText()).replace('%', ''))).toBeGreaterThan(0);
   await expect.poll(async () => Number((await page.locator('#clutch-clamp-value').innerText()).replace('%', ''))).toBeLessThan(100);
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'grip');
+  await expect(page.locator('#contact-state')).not.toContainText(/z poślizgiem/i);
+  const gripPixels = await visibleFrictionPixels(page);
+  expect(gripPixels.green, 'the actual contact cue must contribute visible green pixels at the default camera').toBeGreaterThanOrEqual(8);
+  await setClutchSpeeds(page, 650);
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'slip');
+  await expect(page.locator('#contact-state')).toContainText(/poślizg/i);
+  await expect(page.locator('#clutch-input-rpm')).toContainText('650');
+  await expect(page.locator('#clutch-engine-rpm')).toContainText('1800');
+  const slipPixels = await visibleFrictionPixels(page);
+  expect(slipPixels.orange, 'the actual contact cue must contribute visible orange pixels during loaded slip').toBeGreaterThanOrEqual(8);
+  await settleVisibleScene(page);
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('clutch-friction-slip.png') });
 
   await page.locator('[data-clutch-pedal="1"]').click();
   await expect(page.locator('#clutch')).toHaveValue('100');
   await expect(page.locator('#clutch-clamp-value')).toHaveText('0%');
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'open');
+  const openPixels = await visibleFrictionPixels(page);
+  expect(openPixels.enabledCues).toBe(0);
+  expect(openPixels.changed).toBe(0);
   await expect(page.locator('#clutch-gap-state')).toContainText(/szczelin|rozłącz|odsunięt/i);
   await expect(page.locator('#contact-state')).toContainText(/rozłącz|rozdziel|oddziel|brak styku/i);
   const released = await clutchDiagram(page);
@@ -90,6 +187,12 @@ test('manual clutch explains spring force, contact and release even while paused
   await setRange(page, '#explode', 80);
   await expect(page.locator('#explode-value')).toHaveText('80%');
   await expect(page.locator('#clutch-display')).toHaveAttribute('data-state', 'exploded');
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'exploded');
+  await expect(page.locator('#contact-state')).toContainText(/montaż|rozstrzel|warstw|rozsuni/i);
+  const explodedPixels = await visibleFrictionPixels(page);
+  expect(explodedPixels.enabledCues).toBe(0);
+  expect(explodedPixels.changed).toBe(0);
+  await info.attach('actual-friction-visibility', { body: JSON.stringify({ gripPixels, slipPixels, openPixels, explodedPixels }, null, 2), contentType: 'application/json' });
   await page.locator('#inspect-section').dispatchEvent('change');
   await page.waitForTimeout(250);
   await page.screenshot({ path: info.outputPath('clutch-exploded.png') });
@@ -99,6 +202,8 @@ test('manual clutch explains spring force, contact and release even while paused
   await page.locator('[data-clutch-pedal="0"]').click();
   await expect(page.locator('#clutch')).toHaveValue('0');
   await expect(page.locator('#clutch-clamp-value')).toHaveText('100%');
+  await setClutchSpeeds(page, 1800);
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'grip');
   const reengaged = await clutchDiagram(page);
   expect(reengaged.pressure).toBeCloseTo(reengaged.discRight, 4);
   expect(reengaged.bearing).toBeCloseTo(engaged.bearing, 4);
@@ -117,6 +222,7 @@ test('manual clutch explains spring force, contact and release even while paused
 test('phone clutch lesson keeps pedal presets, explanation and model within the viewport', async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await openApp(page);
+  await trackClutchScene(page);
   await page.locator('#transmission-type').selectOption('manual');
   await page.locator('.view-tab[data-view="clutch"]').click();
   await expect(page.locator('#clutch-lesson')).toBeVisible();
@@ -128,14 +234,25 @@ test('phone clutch lesson keeps pedal presets, explanation and model within the 
   await expect(page.locator('#clutch-mechanism-detail')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   expect(overflow).toBe(false);
-  for (const selector of ['#clutch-lesson', '#clutch-mechanism-detail', '#scene canvas']) {
+  for (const selector of ['#clutch-lesson', '#clutch-status', '#clutch-mechanism-detail', '#clutch-engine-rpm', '#clutch-input-rpm', '#scene canvas']) {
     const bounds = await page.locator(selector).boundingBox();
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(391);
   }
   await page.locator('#inspect-section').dispatchEvent('change');
   await page.waitForTimeout(250);
+  await settleVisibleScene(page);
+  expect(await clutchProjectedHeight(page), 'the phone camera must not shrink the clutch into an illegible thumbnail').toBeGreaterThan(0.3);
   await page.locator('.visual-panel').screenshot({ path: info.outputPath('phone-clutch.png') });
+  await page.locator('#fullscreen').click();
+  await page.locator('#inspect-section').dispatchEvent('change');
+  await settleVisibleScene(page);
+  expect(await clutchProjectedHeight(page), 'fullscreen must keep usable space for the mechanism below its explanation').toBeGreaterThan(0.3);
+  const playback = await page.locator('.playback').boundingBox();
+  expect(playback.y + playback.height).toBeLessThanOrEqual(845);
+  await page.locator('[data-clutch-pedal="1"]').click();
+  await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'open');
+  await page.locator('.visual-panel').screenshot({ path: info.outputPath('phone-clutch-fullscreen.png') });
   expect(errors).toEqual([]);
 });
 
@@ -460,6 +577,7 @@ test('clutch, selector, DCT branches and all five suspension layouts are inspect
   await page.locator('#car-preset').selectOption('ibiza-mpi-2016');
   await page.locator('.view-tab[data-view="clutch"]').click();
   await page.locator('#pause').click();
+  if (!await page.locator('#clutch-schematic').evaluate(details => details.open)) await page.locator('#clutch-schematic summary').click();
   await page.locator('#spread-clutch').click();
   await snapshot('clutch-layers');
   await page.locator('#assemble-clutch').click();
@@ -685,6 +803,7 @@ for (const id of ['ibiza-mpi-2016', 'a4-quattro-2011', '911-carrera-s-2025', '50
         await expect(page.locator('#explode')).toHaveValue('0');
         await expect(page.locator('#mechanism-readout')).toBeHidden();
         await screenshot(`${id}-clutch-layers`);
+        if (!await page.locator('#clutch-schematic').evaluate(details => details.open)) await page.locator('#clutch-schematic summary').click();
         await page.locator('#spread-clutch').click();
         await expect(page.locator('#explode')).toHaveValue('70');
         await screenshot(`${id}-clutch-wide`);

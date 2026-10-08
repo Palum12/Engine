@@ -32,6 +32,8 @@ triggers GitHub Pages deployment through `.github/workflows/pages.yml`.
   is retained internally for the Subaru WRX preset, not as a header button.
 - `src/manual-clutch.js`: shared progressive clamp/capacity/release state for
   manual physics, geometry and UI. Force falls before a visible plate gap opens.
+  Its presentation helper uses actual shaft speeds and torque for grip/slip/open
+  explanations and contact colors. `src/clutch.css` styles the lesson at the canvas.
 - `src/suspension.js`: separate axle experiment owned by `Simulation.suspension`.
   `suspensionActive` switches stepping to this experiment, with its own tempo.
   `src/suspension-ui.js` supplies controls/descriptions; the procedural model is

@@ -1,8 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
-import { Scene, Group, Object3D, InstancedMesh, BoxGeometry, MeshBasicMaterial, Matrix4, PerspectiveCamera, Vector3 } from 'three';
+import { Scene, Group, Object3D, InstancedMesh, BoxGeometry, MeshBasicMaterial, Matrix4, PerspectiveCamera, Vector3, Box3 } from 'three';
 import { EngineScene } from '../src/scene.js';
+
+test('clutch camera keeps the physical mechanism clear of the status card and bottom controls', () => {
+  for (const [width, height] of [[1000, 460], [390, 500], [1440, 720]]) {
+    const scene = Object.create(EngineScene.prototype);
+    const camera = new PerspectiveCamera(40, width / height, 0.06, 160);
+    const target = new Vector3();
+    Object.assign(scene, {
+      camera, mode: 'clutch', inspection: 'all', sim: { transmission: 'manual' },
+      container: { clientWidth: width, clientHeight: height },
+      controls: { target, update() { camera.lookAt(target); camera.updateMatrixWorld(); } }
+    });
+    for (const extent of [1.8, 4.4]) {
+      const bounds = new Box3(new Vector3(-0.2, -1.3, -1.3), new Vector3(extent, 1.3, 0.05));
+      scene.fitBounds(bounds, new Vector3(0.025, 0.04, 1.9), true);
+      for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
+        const projected = new Vector3(x, y, z).project(camera);
+        const screenX = (projected.x + 1) * width / 2;
+        const screenY = (1 - projected.y) * height / 2;
+        assert.ok(screenX > 0 && screenX < width, `horizontal camera clipping at ${width} × ${height}`);
+        assert.ok(screenY > Math.min(width < 600 ? 225 : 150, height * 0.45), `mechanism behind the status card at ${width} × ${height}`);
+        assert.ok(screenY < height - Math.min(width < 600 ? 95 : 65, height * 0.20), `mechanism behind bottom controls at ${width} × ${height}`);
+      }
+    }
+  }
+});
 
 test('the render matrix pass skips hidden descendants and refreshes them when shown or reparented', () => {
   const scene = Object.create(EngineScene.prototype);

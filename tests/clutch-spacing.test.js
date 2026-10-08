@@ -56,7 +56,16 @@ test('expanded shafts, splines and camera bounds cover the assembly under vehicl
         if (mode === 'drive-detail') near(shaft.max.x, bounds(model.topShaft).min.x);
         const cameraBounds = model.bounds(mode);
         const visibleGroups = mode === 'clutch' ? [model.clutch] : [model.clutch, model.gearbox];
-        visibleGroups.forEach(part => assert.ok(cameraBounds.containsBox(bounds(part)), `${mode} camera clips expanded assembly`));
+        visibleGroups.forEach(part => part.traverseVisible(mesh => {
+          if (!mesh.geometry) return;
+          for (let ancestor = mesh; ancestor && ancestor !== part; ancestor = ancestor.parent) if (ancestor.userData.clutchCue) return;
+          const positions = mesh.geometry.attributes.position, indices = mesh.geometry.index;
+          const start = mesh.geometry.drawRange.start, end = Math.min(indices?.count ?? positions.count, start + mesh.geometry.drawRange.count);
+          for (let n = start; n < end; n++) {
+            const point = mesh.localToWorld(new THREE.Vector3().fromBufferAttribute(positions, indices ? indices.getX(n) : n));
+            assert.ok(cameraBounds.containsPoint(point), `${mode} camera clips a visible assembly vertex`);
+          }
+        }));
       }
     }
   }
@@ -79,7 +88,7 @@ test('continuous spring web and flexible straps keep their assembled attachments
       const { finger } = model.fingers[0];
       const springPivot = model.diaphragm.worldToLocal(endpoint(finger, -0.5));
       near(springPivot.x, 0); near(Math.hypot(springPivot.y, springPivot.z), 0.78);
-      if (explosion === 0) near(model.diaphragmWeb.scale.x, model.diaphragm.position.x - model.pressure.position.x - 0.06);
+      if (explosion === 0) near(model.diaphragmStroke, model.diaphragm.position.x - model.pressure.position.x - 0.066);
       const segments = model.straps[0].segments;
       const pressureAttachment = model.pressure.worldToLocal(endpoint(segments[0], -0.5));
       const coverAttachment = model.cover.worldToLocal(endpoint(segments.at(-1), 0.5));
@@ -93,9 +102,9 @@ test('exploded inspections replace the long metal cage with unobtrusive assembly
   model.setView('clutch'); model.exploded = 0.55; model.update(sim, true);
   assert.equal(model.pressureStraps.visible, false);
   assert.ok(model.fingers.every(({ finger }) => finger.visible));
-  const explodedConeLength = model.diaphragmWeb.scale.x;
+  const explodedConeLength = model.diaphragmStroke;
   model.exploded = 1; model.update(sim, true);
-  near(model.diaphragmWeb.scale.x, explodedConeLength, 1e-6);
+  near(model.diaphragmStroke, explodedConeLength, 1e-6);
   model.exploded = 0.55; model.update(sim, true);
   assert.ok(model.assemblyGuides.visible);
   assert.equal(model.guideLines.length, 2);

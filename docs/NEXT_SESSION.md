@@ -1,5 +1,13 @@
 # Uwagi i realizacja — 4 października 2026
 
+**Najnowsza poprawka sprzęgła (8 października):** po ponownych uwagach
+o nieczytelnym tarciu i przenikaniu przebudowano zwarty półprzekrój,
+podparcie sprężyny i sztywny tłok z komorą płynu. Objaśnienia przy modelu
+pokazują rzeczywiste obroty, zacisk i przyczynę ruchu. Poprawiono także
+kadrowanie koła podczas obrotu. Aktualne dowody i ograniczenia zapisuje
+[CLUTCH_CLARITY_QA.md](CLUTCH_CLARITY_QA.md); wcześniejsze odhaczone pozycje
+poniżej nie dowodzą czytelności aktualnego widoku.
+
 Zapis uwag użytkownika z 3 października, ponowionych w zleceniu 4 października.
 Poniższy zakres zaimplementowano i sprawdzono lokalnie. Wyniki, obrazy oraz
 granice odwzorowania opisuje [raport odbioru](MECHANISM_AND_SUSPENSION_QA.md).

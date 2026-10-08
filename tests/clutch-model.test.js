@@ -25,7 +25,7 @@ test('cover bolts join the flywheel flange and cover cup while the pressure plat
       assert.ok(flange.intersectsBox(attachment), 'cover fixing passes through the cover flange');
     });
     assert.ok(cup.intersectsBox(flange), 'continuous cover cup meets its flywheel flange');
-    assert.ok(bounds(model.pressure).max.x < model.cover.position.x - 0.2, 'released plate stays ahead of the diaphragm fulcrum');
+    assert.ok(bounds(model.pressure).max.x < model.diaphragm.position.x, 'released plate stays ahead of the diaphragm fulcrum');
     near(model.cover.rotation.x, model.flywheel.rotation.x);
     near(model.diaphragm.rotation.x, model.flywheel.rotation.x);
   }
@@ -83,18 +83,45 @@ test('both fulcrum faces have actual cover supports and the continuous spring we
   model.setView('clutch');
   for (const pedal of [0, 0.3, 0.72, 0.9, 1]) for (const phase of [0, 27, 89, 173, 281]) {
     sim.clutch = pedal; sim.angle = phase; model.update(sim, false);
-    model.coverSupports.forEach((rib, index) => {
-      const inner = model.fulcrumRings[index % 2].worldToLocal(endpoint(rib, -0.5));
-      near(inner.x, 0); assert.ok(Math.hypot(inner.y, inner.z) > 0.771 && Math.hypot(inner.y, inner.z) < 0.809);
+    const springRoot = bounds(model.diaphragmRing);
+    near(springRoot.min.x, bounds(model.fulcrumRings[0]).max.x);
+    near(springRoot.max.x, bounds(model.fulcrumRings[1]).min.x);
+    model.coverSupports.forEach(rib => {
+      const inner = model.fulcrumRings[1].worldToLocal(endpoint(rib, -0.5));
+      near(inner.x, 0.007); assert.ok(Math.hypot(inner.y, inner.z) > 0.74 && Math.hypot(inner.y, inner.z) < 0.798);
       const outer = model.coverRing.worldToLocal(endpoint(rib, 0.5));
       near(outer.x, 0); assert.ok(Math.hypot(outer.y, outer.z) > 1.11 && Math.hypot(outer.y, outer.z) < 1.24);
+    });
+    model.fulcrumRetainers.filter(mesh => mesh.geometry.type === 'CylinderGeometry').forEach(pin => {
+      const halfLength = pin.geometry.parameters.height / 2;
+      const front = model.fulcrumRings[0].worldToLocal(endpoint(pin, halfLength));
+      near(front.x, 0);
+      assert.ok(Math.hypot(front.y, front.z) + pin.geometry.parameters.radiusTop > 0.74, 'axial pin actually reaches the inner edge of the front ring');
+      const rear = model.coverRing.worldToLocal(endpoint(pin, -halfLength));
+      near(rear.x, 0);
     });
     const web = vertices(model.diaphragmWeb).map(point => model.pressure.worldToLocal(point));
     const edge = web.filter(point => Math.hypot(point.y, point.z) > 0.985);
     assert.ok(edge.length > 0);
-    assert.ok(Math.min(...edge.map(point => point.x)) < 0.06 && Math.max(...edge.map(point => point.x)) > 0.06, 'continuous outer spring rim contacts the back face, rather than ending in air');
+    near(Math.min(...edge.map(point => point.x)), 0.06);
+    assert.ok(Math.max(...edge.map(point => point.x)) > 0.06, 'continuous spring rim touches the back face and stays outside the plate');
     web.forEach(point => assert.ok(Math.hypot(point.y, point.z) < 1.11, 'spring remains inside the cover bore'));
   }
+}));
+
+test('clutch framing uses actual circular vertices and remains stable across crank phases', () => fixture((model, sim) => {
+  model.setView('clutch');
+  let previous;
+  for (const phase of [0, 13, 45, 90, 173, 281]) {
+    sim.angle = phase; sim.inputAngle = phase * Math.PI / 360; model.update(sim, true);
+    const box = model.bounds('clutch'), size = box.getSize(new THREE.Vector3());
+    assert.ok(size.y < 2.85 && size.z < 2.85, 'rotating a circular flywheel must not rotate an enclosing square into an inflated camera envelope');
+    if (previous) near(size.y, previous.y, 0.01);
+    previous = size;
+  }
+  assert.equal(model.flow.material.color.getHex(), 0xf1f6fa, 'white torque arrows must not be confused with orange slipping contacts');
+  model.setView('gearbox'); model.update(sim, true);
+  assert.equal(model.flow.material.color.getHex(), 0xffc35a, 'other drivetrain views retain their existing torque color');
 }));
 
 test('damper coils sit between real end seats joined to the hub and lining carrier, clear of both friction faces', () => fixture((model, sim) => {
@@ -147,8 +174,9 @@ test('fixed cutaway clips real strip and coil corners at its planes over indepen
       if (!mesh.visible) return;
       vertices(mesh).forEach(point => {
         model.clutch.worldToLocal(point);
-        const first = -Math.sin(2) * point.y + Math.cos(2) * point.z;
-        const second = Math.sin(Math.PI * 2 - 0.35) * point.y - Math.cos(Math.PI * 2 - 0.35) * point.z;
+        const { start, end } = model.clutchSectionAngles;
+        const first = -Math.sin(start) * point.y + Math.cos(start) * point.z;
+        const second = Math.sin(end) * point.y - Math.cos(end) * point.z;
         assert.ok(first >= -1e-6 || second >= -1e-6, `${mesh.userData.part} protrudes beyond the actual section plane`);
       });
     });
@@ -170,13 +198,14 @@ test('cutaway pose cache follows paused pedal and ancestor changes, reuses ident
   assert.equal(finger.geometry, clip, 'same phase restores the cached section after closing the cover');
   assert.equal(clip.attributes.position.version, originalVersion);
   sim.clutch = 1; model.update(sim, true);
-  assert.ok(endpoint(finger, 0.5).x < initialTip - 0.3, 'paused pedal still moves the spring tip');
+  near(initialTip - endpoint(finger, 0.5).x, model.clutchState.fingerTravel);
   assert.ok(clip.attributes.position.version > originalVersion, 'pedal deformation invalidates the local pose cache');
   const before = model.damperWindows[0].coil.userData.clutchSection.relative.clone();
   model.damperWindows[0].window.rotation.x += 0.2;
   model.update(sim, true);
   assert.ok(!model.damperWindows[0].coil.userData.clutchSection.relative.equals(before), 'nested support pose invalidates its relative transform');
-  const planes = [point => -Math.sin(2) * point.y + Math.cos(2) * point.z, point => Math.sin(Math.PI * 2 - 0.35) * point.y - Math.cos(Math.PI * 2 - 0.35) * point.z];
+  const { start, end } = model.clutchSectionAngles;
+  const planes = [point => -Math.sin(start) * point.y + Math.cos(start) * point.z, point => Math.sin(end) * point.y - Math.cos(end) * point.z];
   let cutFaces = 0;
   model.clutchRotatingDetails.forEach(({ object }) => {
     if (!object.visible) return;

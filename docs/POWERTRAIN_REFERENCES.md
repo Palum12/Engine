@@ -25,7 +25,7 @@ Otwarty dyferencjał ogranicza dostępny moment osi do dwukrotności limitu sła
 
 ## Sprzęgło ręczne i synchronizatory
 
-`manualClutchState` jest wspólne dla fizyki, geometrii i objaśnień. Pedał 0% oznacza pełny docisk. Siła zacisku i limit momentu maleją płynnie przy wciskaniu pedału; w tym modelu osiągają zero przy 72% skoku. Dopiero dalej powstaje widoczna szczelina. Łożysko, palce sprężyny i sprężyste taśmy poruszają się w całym zakresie. Podział skoku, siły i powiększone odległości są dydaktyczne, nie są pomiarami sprzęgła konkretnego auta. Próg 85% pozostaje interlockiem zmiany biegu i rozruchu.
+`manualClutchState` jest wspólne dla fizyki, geometrii i objaśnień. Pedał 0% oznacza pełny docisk. Siła zacisku i limit momentu maleją płynnie przy wciskaniu pedału; w tym modelu osiągają zero przy 72% skoku. Dopiero dalej powstaje widoczna szczelina. Łożysko i palce sprężyny przesuwają się podczas odciążania; sprężyste taśmy zmieniają kształt wraz z rzeczywistym odsunięciem docisku. Podział skoku, siły i powiększone odległości są dydaktyczne, nie są pomiarami sprzęgła konkretnego auta. Próg 85% pozostaje interlockiem zmiany biegu i rozruchu.
 
 Różnica prędkości silnika i wejścia skrzyni wyznacza poślizg. Przenoszony moment jest ograniczony dociskiem, a moc tarcia wynosi moment razy różnica prędkości kątowej. Odczyt w kW opisuje chwilowe ciepło; model nie liczy temperatury, zużycia okładzin ani ich zależności od nagrzania. Ruszanie przyciskiem przygotowuje półsprzęgło, po czym użytkownik może zmieniać pedał i porównywać obroty.
 

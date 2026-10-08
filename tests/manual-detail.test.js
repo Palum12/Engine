@@ -63,7 +63,7 @@ test('reset and engine/transmission changes clear clutch heat and refresh availa
   assert.ok(sim.clutchCapacity > 0);
 });
 
-test('bearing, spring fingers and pressure straps visibly change throughout pedal travel while faces remain clamped', () => fixture((model, sim) => {
+test('bearing and spring fingers reduce clamp before the pressure plate and its straps move', () => fixture((model, sim) => {
   model.setView('clutch');
   const samples = [0, 0.2, 0.4, 0.6].map(pedal => {
     sim.clutch = pedal; model.update(sim, true);
@@ -72,15 +72,16 @@ test('bearing, spring fingers and pressure straps visibly change throughout peda
     return { bearing: model.bearing.position.x, finger: model.fingers[0].finger.quaternion.toArray(), strap: model.straps[0].segments[0].quaternion.toArray(), opacity: model.contacts[0].material.opacity };
   });
   for (let n = 1; n < samples.length; n++) {
-    assert.ok(samples[n].bearing < samples[n - 1].bearing - 0.06);
+    assert.ok(samples[n].bearing < samples[n - 1].bearing - 0.025);
     assert.notDeepEqual(samples[n].finger, samples[n - 1].finger);
-    assert.notDeepEqual(samples[n].strap, samples[n - 1].strap);
+    assert.deepEqual(samples[n].strap, samples[n - 1].strap, 'fixed attachment points do not make the strap flap during unloading');
     assert.ok(samples[n].opacity < samples[n - 1].opacity);
   }
   sim.clutch = 0.85; model.update(sim, true);
   assert.ok(model.disc.position.x - 0.0475 > 0.1525);
   assert.ok(model.pressure.position.x - 0.06 > model.disc.position.x + 0.0475);
   assert.ok(model.contacts.every(contact => !contact.visible));
+  assert.notDeepEqual(model.straps[0].segments[0].quaternion.toArray(), samples[0].strap, 'the strap follows actual pressure-plate movement');
   const finger = model.fingers[0].finger;
   const tip = finger.localToWorld(new THREE.Vector3(0, 0.5, 0));
   const localTip = model.bearing.worldToLocal(tip.clone());

@@ -81,13 +81,20 @@ the exact internals or scale of every real vehicle preset.
   bearing face is separate from its fixed cylinder. Keep the released pressure
   plate clear of the spring support/cover over the full pedal and exploded range.
   Do not add unexplained phase-marker boxes to physical friction surfaces.
-- Keep the diaphragm's continuous outer web on the pressure back face and both
-  fulcrum rings supported by cover ribs. Disc damper coils need actual end seats
+- Keep the diaphragm's continuous outer web on the pressure back face. Rear
+  cover ribs support its fulcrum; front retainers pass between finger slots,
+  never through the continuous spring cone. The hydraulic piston is rigid and
+  translates with its head; only the fluid chamber changes length.
+  Disc damper coils need actual end seats
   and webs joining the hub to the lining carrier; their envelope must clear the
   flywheel and pressure bore. Input splines end before the stationary guide.
   Section planes must clip real strip corners and coil triangles, not only hide
   a mesh by its center angle. Check independent shaft phases and full pedal travel.
   Reuse clipped geometry buffers; do not rebuild geometries during animation.
+  The default clutch half section hides damper details; the friction inspection
+  restores them. Contact edges and force arrows are explanatory overlays, not
+  extra metal parts. Use manualClutchPresentation for both UI and model colors;
+  half pedal alone does not imply slip. Exploded drawings suppress operating cues.
   DrivetrainModel.update defaults to updating matrices for standalone callers;
   EngineScene supplies false and prepares only visible world matrices itself.
 - Selector rails move forks and sleeves, not the free gears. `synchronizer`

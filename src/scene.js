@@ -16,6 +16,13 @@ import { SuspensionModel } from './models/suspension-model.js';
 import { Simulation } from './simulation.js';
 import { CameraInput } from './camera-input.js';
 
+const CLUTCH_OVERVIEW_LABELS = {
+  friction: ['Dwa styki tarcia', -1, -12],
+  pressurePlate: ['Docisk ściska tarczę', 1, -42],
+  diaphragm: ['Sprężyna wytwarza zacisk', 0, 44],
+  releaseActuator: ['Płyn → tłok → łożysko', 1, 60]
+};
+
 export class EngineScene {
   constructor(container, onSelect, sim = new Simulation()) {
     this.sim = sim;
@@ -377,7 +384,7 @@ export class EngineScene {
     const dctGearbox = mode === 'gearbox' && this.sim.transmission === 'dct';
     // Look along the rocker shaft so the wheel cannot hide the inboard linkage.
     const suspensionActuation = mode === 'suspension' && ['pushrod', 'pullrod'].includes(this.sim.suspension.type) && ['suspensionRocker', 'suspensionSpring', 'suspensionDamper'].includes(section);
-    const direction = suspensionActuation ? vec(-1.7, 0.35, 0.7) : radialClutch ? vec(1.2, 0.35, 1.3) : lateralClutch || synchroDetail ? vec(0.08, 0.12, 1.9) : dctGearbox ? vec(0.18, 0.22, 1.9) : mode === 'differential' && section === 'core' ? vec(1.6,0.6,0.9) : directions[view] || directions[mode];
+    const direction = suspensionActuation ? vec(-1.7, 0.35, 0.7) : radialClutch ? vec(1.2, 0.35, 1.3) : lateralClutch ? vec(0.025, 0.04, 1.9) : synchroDetail ? vec(0.08, 0.12, 1.9) : dctGearbox ? vec(0.18, 0.22, 1.9) : mode === 'differential' && section === 'core' ? vec(1.6,0.6,0.9) : directions[view] || directions[mode];
     this.fitBounds(bounds, direction, instant);
   }
 
@@ -388,6 +395,16 @@ export class EngineScene {
     const up = new THREE.Vector3().crossVectors(direction, right).normalize();
     const tanY = Math.tan(this.camera.fov / 2 * Math.PI / 180) * 0.82;
     const tanX = Math.tan(this.camera.fov / 2 * Math.PI / 180) * this.camera.aspect * 0.9;
+    // Keep the two friction interfaces below the lesson card and above the
+    // camera controls. Fit the actual usable viewport, including on a phone.
+    const clutchLesson = this.mode === 'clutch' && this.sim.transmission === 'manual';
+    const height = this.container.clientHeight || 500;
+    const phoneFullscreen = this.camera.aspect * height < 600 && this.container.closest?.('.visual-panel')?.matches(':fullscreen');
+    const topInset = clutchLesson ? Math.min(this.camera.aspect * height < 600 && !phoneFullscreen ? 225 : 150, height * 0.45) : 0;
+    const bottomInset = clutchLesson ? Math.min(this.camera.aspect * height < 600 ? 95 : 65, height * 0.20) : 0;
+    const verticalFraction = 1 - (topInset + bottomInset) / height;
+    const verticalShift = (topInset - bottomInset) / height;
+    const fullTanY = Math.tan(this.camera.fov / 2 * Math.PI / 180);
     let distance = 0;
     const corners = [];
     const addCorners = (box, matrix) => {
@@ -409,14 +426,37 @@ export class EngineScene {
         if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
         addCorners(object.geometry.boundingBox, object.matrixWorld);
       });
+    } else if (clutchLesson && this.inspection === 'all' && this.drive?.clutch) {
+      // Project the actual half section. Rotating a circular flywheel's square
+      // bounding box invents large empty corners and makes the model shrink.
+      this.drive.clutch.traverseVisible(object => {
+        if (!object.isMesh || object.isInstancedMesh) return;
+        for (let parent = object; parent; parent = parent.parent) if (parent.userData.clutchCue) return;
+        const { geometry } = object;
+        const positions = geometry.getAttribute('position');
+        const index = geometry.index;
+        const start = geometry.drawRange.start;
+        const end = Math.min(index ? index.count : positions.count, start + geometry.drawRange.count);
+        for (let i = start; i < end; i++) {
+          const vertex = index ? index.getX(i) : i;
+          corners.push(vec(positions.getX(vertex), positions.getY(vertex), positions.getZ(vertex)).applyMatrix4(object.matrixWorld));
+        }
+      });
+      if (!corners.length) addCorners(bounds);
     } else addCorners(bounds);
     for (const point of corners) {
       const corner = point.sub(center);
       const depth = corner.dot(direction);
-      distance = Math.max(distance, Math.abs(corner.dot(right)) / tanX + depth, Math.abs(corner.dot(up)) / tanY + depth);
+      const vertical = corner.dot(up);
+      distance = clutchLesson
+        ? Math.max(distance, Math.abs(corner.dot(right)) / tanX + depth,
+          (vertical + depth * fullTanY * (1 - 2 * topInset / height)) / (fullTanY * verticalFraction),
+          (-vertical + depth * fullTanY * (1 - 2 * bottomInset / height)) / (fullTanY * verticalFraction))
+        : Math.max(distance, Math.abs(corner.dot(right)) / tanX + depth, Math.abs(vertical) / tanY + depth);
     }
+    const margin = clutchLesson ? 1.06 : this.inspection === 'cylinderHead' && this.isolate ? 1.12 : this.camera.aspect > 1.5 && ['engine', 'clutch', 'gearbox'].includes(this.mode) ? 0.92 : 1;
+    if (clutchLesson) center.addScaledVector(up, distance * margin * fullTanY * verticalShift);
     this.targetGoal = center;
-    const margin = this.inspection === 'cylinderHead' && this.isolate ? 1.12 : this.camera.aspect > 1.5 && ['engine', 'clutch', 'gearbox'].includes(this.mode) ? 0.92 : 1;
     this.cameraGoal = center.clone().addScaledVector(direction, distance * margin);
     if (instant) {
       this.camera.position.copy(this.cameraGoal);
@@ -498,7 +538,8 @@ export class EngineScene {
     const revision = this.labelSizeRevision || 0;
     const parentVisible = object => !object || object.visible && parentVisible(object.parent);
     const whole = ['drive', 'drive-detail'].includes(this.mode);
-    const labelLimit = this.mode === 'suspension' ? width < 600 ? 4 : 5 : whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
+    const clutchOverview = this.mode === 'clutch' && this.sim.transmission === 'manual' && this.drive.exploded === 0 && this.inspection === 'all';
+    const labelLimit = clutchOverview ? 4 : this.mode === 'suspension' ? width < 600 ? 4 : 5 : whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
     const focusedGear = this.inspection === 'synchronizer' ? this.drive.synchronizerGear : this.inspection.startsWith('gear') ? Number(this.inspection.slice(4)) : 0;
     const hide = ({ element, line }) => {
       if (!element.hidden) element.hidden = true;
@@ -519,10 +560,16 @@ export class EngineScene {
       const headLabel = !this.isolate || this.inspection !== 'cylinderHead' || ['cylinderHead', 'camshaft', 'valves'].includes(data.part);
       const automaticLabel = this.sim.transmission !== 'automatic' || !this.isolate || !['planetary', 'automaticClutches', 'valveBody'].includes(this.inspection) || data.part === this.inspection;
       const selectorLabel = this.mode !== 'gearbox' || this.inspection !== 'selector' || !['synchronizerHub', 'synchronizerSleeve', 'synchronizer', 'synchroCone', 'dogTeeth'].includes(data.part);
-      const assembledClutchLabel = this.mode !== 'clutch' || this.sim.transmission !== 'manual' || this.drive.exploded > 0 || this.inspection !== 'all' || ['friction', 'pressurePlate', 'diaphragm', 'releaseBearing'].includes(data.part);
+      const assembledClutchLabel = !clutchOverview || Boolean(CLUTCH_OVERVIEW_LABELS[data.part]) && !data.text.startsWith('Stała') && !data.text.startsWith('Od pompy');
       const show = selectorLabel && assembledClutchLabel && !data.anchor.userData.labelHidden && timingLabel && headLabel && automaticLabel && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
       if (!show) { hide(record); return; }
-      const text = data.anchor.userData.label || data.text;
+      const lessonLabel = clutchOverview && CLUTCH_OVERVIEW_LABELS[data.part];
+      const text = lessonLabel
+        ? data.part === 'friction' && this.drive.clutchState?.contact === false ? this.drive.clutchState.release > 0 ? 'Dwie szczeliny · brak styku' : 'Tarcza bez zacisku'
+          : data.part === 'pressurePlate' && this.drive.clutchState?.contact === false ? this.drive.clutchState.release > 0 ? 'Docisk odsunięty od tarczy' : 'Docisk bez zacisku'
+            : data.part === 'diaphragm' && this.drive.clutchState?.contact === false ? 'Sprężyna odciążona przez łożysko'
+            : lessonLabel[0]
+        : data.anchor.userData.label || data.text;
       if (element.textContent !== text) { element.textContent = text; record.size = null; }
       // The render pass has already updated visible ancestors, including anchors.
       position.setFromMatrixPosition(data.anchor.matrixWorld).project(this.camera);
@@ -535,7 +582,7 @@ export class EngineScene {
       // Reveal all labels needing measurement first, then batch the reads. This
       // avoids alternating layout writes and forced measurements for each label.
       if ((!record.size || record.size.revision !== revision) && element.hidden) element.hidden = false;
-      candidates.push({ record, x, y });
+      candidates.push({ record, x, y, lessonLabel });
     });
     for (const { record } of candidates) {
       if (!record.size || record.size.revision !== revision) record.size = { width: record.element.offsetWidth || 70, height: record.element.offsetHeight || 26, revision };
@@ -548,10 +595,16 @@ export class EngineScene {
       const start = { x, y };
       const w = Math.min(width - 30, size.width);
       const h = size.height;
+      if (candidate.lessonLabel) {
+        x += candidate.lessonLabel[1] * Math.min(145, width * 0.18);
+        y += candidate.lessonLabel[2];
+      }
       x = Math.max(w / 2 + 8, Math.min(width - w / 2 - 8, x));
-      y = Math.max(82, Math.min(height - 68, y));
+      const labelBottom = clutchOverview ? height - (width < 600 ? 105 : 78) : height - 45;
+      const phoneFullscreen = width < 600 && this.container.closest?.('.visual-panel')?.matches(':fullscreen');
+      y = Math.max(clutchOverview ? Math.min(width < 600 && !phoneFullscreen ? 235 : 160, height * 0.47) : 82, Math.min(clutchOverview ? labelBottom : height - 68, y));
       for (let tries = 0; tries < 8 && occupied.some(r => Math.abs(r.x - x) < (r.w + w) / 2 + 5 && Math.abs(r.y - y) < (r.h + h) / 2 + 4); tries++) y += h + 5;
-      if (y > height - 45) { hide(record); continue; }
+      if (y > labelBottom) { hide(record); continue; }
       occupied.push({ x, y, w, h });
       if (element.hidden) element.hidden = false;
       if (record.drawX !== x) { element.style.left = `${x}px`; record.drawX = x; }
