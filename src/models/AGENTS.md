@@ -42,6 +42,12 @@ the exact internals or scale of every real vehicle preset.
   size. Scale the central mechanism, bearings and inner joints independently of
   wheel reach. Use `inputEndpoint()` for longitudinal routing; the transverse
   spur cancels its carrier parent's scale to retain meshing pitch circles.
+- A longitudinal transfer sits beyond the current transmission output, with
+  its near-axle return shaft routed below the transmission through straight
+  jointed sections. Flow paths must follow those physical sections. AWD/quattro
+  feed the carrier through a separate 1:1 input gear pair; use
+  `TransferModel.inputEndpoint(side)` rather than an axle output as the input.
+  This is shared educational packaging, not an OEM Veyron transfer case.
 - Camshaft `shaftEndpoints` describe the actual shaft geometry. Timing-wheel
   connectors must use them, not the longer crankshaft's `shaftEnd`.
 

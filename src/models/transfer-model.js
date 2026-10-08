@@ -57,6 +57,18 @@ export class TransferModel extends ModelGeometry {
       for (let n = 0; n < 7; n++) this.annulus(0.6, 0.25, 0.025, n % 2 ? 'steel' : 'brass', pack, [(n - 3) * 0.035, 0, 0], 'quattro');
       this.lockPacks.push(pack);
     }
+    // An offset pinion drives the carrier independently of either axle output.
+    // Equal gears preserve the simulated 1:1 transfer ratio. This shared
+    // educational pair is not an OEM transfer-case layout.
+    for (const [carrier, sleeveLength, sleeveX] of [[this.carrier, 0.65, 0.92], [this.quattroCarrier, 0.95, 0.77]]) {
+      // Extend the cage past the quattro lock pack without touching its discs.
+      this.annulus(0.72, 0.65, sleeveLength, 'steel', carrier, [sleeveX, 0, 0], 'centerDifferential');
+      this.gear(24, 0.8, 0.12, 'brass', carrier, [1.22, 0, 0], 'centerDifferential', 0.29);
+    }
+    this.inputDrive = this.subgroup(this.group, [0, 0, 1.6], 'transfer');
+    this.inputPinion = this.gear(24, 0.8, 0.12, 'steel', this.inputDrive, [1.22, 0, 0], 'transfer', 0.11);
+    this.inputPinion.rotation.x = Math.PI / 24;
+    this.inputShaft = this.cylinder(0.105, 3.24, 'steel', this.inputDrive, [0, 0, 0], 'x', 'propShaft');
     this.partTime = this.subgroup(this.group, [0, 0, 0], 'transfer');
     this.mainShaft = this.cylinder(0.11, 3.1, 'brass', this.partTime, [0, 0, 0], 'x', 'transfer');
     this.frontShaft = this.cylinder(0.11, 2.8, 'intake', this.partTime, [-0.1, 0, -1.45], 'x', 'transfer');
@@ -77,7 +89,7 @@ export class TransferModel extends ModelGeometry {
     }
     this.annulus(0.67, 0.14, 0.05, 'steel', this.lowCarrier, [0.24, 0, 0], 'transfer');
     this.lowSelector = this.annulus(0.26, 0.12, 0.2, 'fuel', this.partTime, [-1.1, 0, 0], 'transfer');
-    this.cover = this.box(3.5, 2.8, 4, this.material({ color: 0x6d8998, transparent: true, opacity: 0.22, depthWrite: false }), this.group, [0, 0, -0.45], 'transfer');
+    this.cover = this.box(3.5, 2.8, 5, this.material({ color: 0x6d8998, transparent: true, opacity: 0.22, depthWrite: false }), this.group, [0, 0, 0.05], 'transfer');
     this.anchor('Centralny mechanizm · przód / tył', this.open, [0, 1.25, 0], 'centerDifferential', ['transfer', 'drive', 'drive-detail']);
     this.anchor('quattro · 40% przód / 60% tył', this.quattro, [0, 1.65, 0], 'quattro', ['transfer', 'drive', 'drive-detail']);
     this.anchor('Zęby skośne → docisk pakietów', this.quattro, [0.8, -1, 0.8], 'quattro', ['transfer']);
@@ -102,9 +114,16 @@ export class TransferModel extends ModelGeometry {
     this.open.visible = layout === 'awd';
     this.quattro.visible = layout === 'quattro';
     this.partTime.visible = layout === 'partTime';
+    this.inputDrive.visible = ['awd', 'quattro'].includes(layout);
   }
 
-  bounds() { this.group.updateMatrixWorld(true); return new THREE.Box3(vec(-1.9, -1.5, -2), vec(1.9, 1.8, 1.4)).applyMatrix4(this.group.matrixWorld); }
+  inputEndpoint(side) {
+    this.group.updateWorldMatrix(true, true);
+    const shaft = this.inputDrive.visible ? this.inputShaft : this.mainShaft;
+    return shaft.localToWorld(vec(0, -side * shaft.geometry.parameters.height / 2, 0));
+  }
+
+  bounds() { this.group.updateMatrixWorld(true); return new THREE.Box3(vec(-1.9, -1.5, -2.5), vec(1.9, 1.8, 2.6)).applyMatrix4(this.group.matrixWorld); }
 
   update(sim, cutaway) {
     if (!this.group.visible) return;
@@ -119,6 +138,8 @@ export class TransferModel extends ModelGeometry {
     this.lockSleeve.position.x = sim.centerLock ? -0.65 : -0.95;
     this.lockSleeve.rotation.x = front;
     const carrier = front * 0.4 + rear * 0.6;
+    this.inputShaft.rotation.x = -(sim.driveLayout === 'quattro' ? carrier : mean);
+    this.inputPinion.rotation.x = this.inputShaft.rotation.x + Math.PI / 24;
     this.quattroCarrier.rotation.x = carrier;
     this.sun.rotation.x = front;
     this.ringGear.rotation.x = rear;

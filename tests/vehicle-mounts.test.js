@@ -189,8 +189,8 @@ test('transverse mid and rear placements occupy different sides of the rear axle
   });
 });
 
-test('front shaft meets the central output for AWD, quattro and the offset part-time transfer', () => {
-  fixture(({ vehicle, sim }) => {
+test('front shaft meets the central output and transverse AWD uses the separate carrier input', () => {
+  fixture(({ vehicle, models, sim }) => {
     for (const layout of ['awd', 'quattro', 'partTime']) {
       sim.setDriveLayout(layout); vehicle.configure(sim);
       const path = vehicle.paths.find(entry => entry.key === 'front').path;
@@ -198,7 +198,7 @@ test('front shaft meets the central output for AWD, quattro and the offset part-
     }
     sim.setDriveLayout('awd'); sim.setEngineOrientation('transverse'); vehicle.configure(sim);
     const path = vehicle.paths.find(entry => entry.key === 'input').path;
-    assert.ok(Math.abs(path.curve.getPoint(1).z) < 1e-8);
+    assert.ok(path.curve.getPoint(1).distanceTo(models.transfer.inputEndpoint(-1)) < 1e-8);
   });
 });
 

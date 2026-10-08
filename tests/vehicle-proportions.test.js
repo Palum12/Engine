@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Simulation } from '../src/simulation.js';
+import { applyCarPreset } from '../src/car-configuration.js';
 import { FinalDriveModel } from '../src/models/final-drive-model.js';
 import { EngineModel } from '../src/models/engine-model.js';
 import { DrivetrainModel } from '../src/models/drivetrain-model.js';
@@ -43,23 +44,125 @@ test('compact differential preserves wheel reach, common bevel apex and the enla
   } finally { model.dispose(); Object.values(materials).forEach(material => material.dispose()); }
 });
 
-function vehicleFixture(run) {
+function vehicleFixture(run, engineId = 'r3') {
   const materials = palette();
   const models = {
-    engine: new EngineModel(materials, 'r3'), drive: new DrivetrainModel(materials),
+    engine: new EngineModel(materials, engineId), drive: new DrivetrainModel(materials),
     dct: new DctModel(materials), automatic: new AutomaticModel(materials),
     hybrid: new HybridModel(materials), transfer: new TransferModel(materials),
     turbo: new TurboModel(materials), connections: new ModelGeometry(materials),
   };
   models.systems = new SystemsModel(materials, models.engine);
   const vehicle = new VehicleModel(materials, models), sim = new Simulation();
-  sim.setEngine('r3'); vehicle.attach();
+  sim.setEngine(engineId); vehicle.attach();
   try { run({ vehicle, models, sim }); }
   finally {
     vehicle.dispose(); Object.values(models).forEach(model => model.dispose());
     Object.values(materials).forEach(material => material.dispose());
   }
 }
+
+// Test the rendered shaft cylinders against real mechanical triangles, rather
+// than treating a gearbox's empty spaces as solid because its bounds overlap.
+function shaftIntersections(vehicle, model) {
+  const solids = [];
+  model.group.traverseVisible(object => {
+    if (object.isMesh && !object.isInstancedMesh && !object.userData.ignorePick
+      && !object.material.transparent) solids.push(object);
+  });
+  const hits = [];
+  for (const shaft of vehicle.routing.group.children) {
+    if (shaft.geometry?.type !== 'CylinderGeometry') continue;
+    const start = shaft.localToWorld(vec(0, -0.5, 0));
+    const end = shaft.localToWorld(vec(0, 0.5, 0));
+    const length = start.distanceTo(end), direction = end.clone().sub(start).normalize();
+    const right = vec(1, 0, 0).applyQuaternion(shaft.getWorldQuaternion(new THREE.Quaternion()));
+    const forward = vec(0, 0, 1).applyQuaternion(shaft.getWorldQuaternion(new THREE.Quaternion()));
+    // Include the shaft surface: an empty bore at its center is not clearance
+    // for the entire cylinder. Ignore only the intended joints at either end.
+    const origins = [start];
+    for (let n = 0; n < 8; n++) {
+      const a = n * Math.PI / 4;
+      origins.push(start.clone().addScaledVector(right, Math.cos(a) * 0.095).addScaledVector(forward, Math.sin(a) * 0.095));
+    }
+    if (origins.some(origin => new THREE.Raycaster(origin, direction, 0.16, length - 0.16).intersectObjects(solids, false).length)) {
+      hits.push([start.toArray(), end.toArray()]);
+    }
+  }
+  return hits;
+}
+
+test('Bugatti AWD shafts clear the DCT instead of cutting through its gears', () => {
+  vehicleFixture(({ vehicle, models, sim }) => {
+    applyCarPreset(sim, 'veyron-2005');
+    vehicle.configure(sim);
+    for (const phase of [0, 0.47, 1.19]) {
+      sim.angle = phase * 180 / Math.PI; sim.outputAngle = phase * 0.7;
+      sim.dct.angles = [phase, phase * 1.3];
+      models.dct.update(sim, true, 0); vehicle.group.updateMatrixWorld(true);
+      assert.deepEqual(shaftIntersections(vehicle, models.dct), [], 'external drive shafts must stay outside DCT solids throughout rotation');
+      assert.deepEqual(shaftIntersections(vehicle, models.transfer), [], 'external shafts attach at ports rather than passing through the central gears');
+    }
+    const output = models.dct.outputStub.localToWorld(vec(0, -0.75, 0));
+    const joints = vehicle.routing.group.children.filter(object => object.geometry?.type === 'SphereGeometry');
+    assert.ok(joints.some(joint => joint.getWorldPosition(vec()).distanceTo(output) < 1e-6), 'the input route must still attach to the actual DCT output');
+    const entry = vehicle.paths.find(({ key }) => key === 'input').path.curve.points.at(-1);
+    const rearExit = vehicle.paths.find(({ key }) => key === 'rear').path.curve.points[0];
+    assert.ok(entry.distanceTo(rearExit) > 0.3, 'the carrier input must not join the rear output shaft directly');
+  }, 'w16');
+});
+
+test('AWD and quattro drive their carriers through a distinct, rotating input pinion', () => {
+  const materials = palette(), model = new TransferModel(materials), sim = new Simulation();
+  try {
+    model.group.position.set(2, 0.65, 0); model.group.scale.setScalar(0.62);
+    for (const layout of ['awd', 'quattro']) {
+      sim.setDriveLayout(layout); sim.axleAngles = [0.37, 1.21];
+      model.update(sim, true);
+      const carrier = layout === 'awd' ? model.carrier : model.quattroCarrier;
+      // Equal gears reverse direction without inventing a new transfer ratio.
+      near(model.inputPinion.rotation.x - Math.PI / 24, -carrier.rotation.x);
+      if (layout === 'quattro') {
+        const carrierDrive = carrier.children.find(object => object.userData.face && object.position.x > 0);
+        assert.ok(box(carrierDrive).min.x > box(model.lockPacks[1]).max.x, 'the carrier gear must clear the independently rotating lock pack');
+      }
+      for (const side of [-1, 1]) {
+        const port = model.inputEndpoint(side);
+        const shaftTip = model.inputShaft.localToWorld(vec(0, -side * model.inputShaft.geometry.parameters.height / 2, 0));
+        near(port.distanceTo(shaftTip), 0);
+        assert.ok(port.distanceTo(model.group.localToWorld(vec(side * 1.62, 0, 0))) > 0.6, 'the carrier drive stays separate from each axle output');
+        assert.ok(model.bounds().containsPoint(port), 'inspection framing includes the actual input');
+      }
+    }
+    model.configure('partTime'); assert.equal(model.inputDrive.visible, false);
+    model.configure('awd'); assert.equal(model.inputDrive.visible, true);
+  } finally { model.dispose(); Object.values(materials).forEach(material => material.dispose()); }
+});
+
+test('longitudinal AWD return routes remain connected after mounting and transmission changes', () => {
+  vehicleFixture(({ vehicle, models, sim }) => {
+    for (const transmission of ['manual', 'dct', 'automatic']) for (const placement of ['front', 'mid', 'rear']) for (const layout of ['awd', 'quattro', 'partTime']) {
+      sim.setTransmission(transmission); sim.setEnginePlacement(placement);
+      sim.setDriveLayout(layout); sim.setEngineOrientation('longitudinal');
+      vehicle.configure(sim); vehicle.group.updateMatrixWorld(true);
+      const mechanism = models[transmission === 'manual' ? 'drive' : transmission];
+      assert.deepEqual(shaftIntersections(vehicle, mechanism), [], `${transmission}/${placement}/${layout}: external shafts clear the transmission`);
+      const transferPosition = models.transfer.group.position.clone();
+      const routing = vehicle.routing;
+      vehicle.configure(sim, 'transfer', true); vehicle.configure(sim);
+      assert.equal(vehicle.routing, routing, 'inspection changes reuse routing');
+      near(models.transfer.group.position.distanceTo(transferPosition), 0);
+      for (const { path } of vehicle.paths) {
+        // Halfshaft overlays sit above the wheel axis for readability; this
+        // checks the longitudinal routes that were moved around the gearbox.
+        if (path.curve.points.length !== 2 || Math.abs(path.curve.points[0].x - path.curve.points[1].x) < 1e-6) continue;
+        const midpoint = path.curve.getPoint(0.5);
+        assert.ok(vehicle.routing.group.children.some(object => object.geometry?.type === 'CylinderGeometry'
+          && object.getWorldPosition(vec()).distanceTo(midpoint) < 1e-6), 'external flow follows its physical shaft');
+      }
+    }
+  });
+});
 
 test('stable vehicle LOD reuses its hidden mesh list and restores details before rebuilding', () => {
   vehicleFixture(({ vehicle, models, sim }) => {

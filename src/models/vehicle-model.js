@@ -97,7 +97,12 @@ export class VehicleModel extends ModelGeometry {
     pose(hybrid, drivetrainPosition, 0.28);
     hybrid.setLayout(true, 0.28, ...drivetrainPosition);
     hybrid.setSection('all');
-    pose(transfer, [0.8, 0.65, 0], 0.62, 0);
+    const localOutput = sim.transmission === 'automatic' ? automatic?.outputPosition || vec(8.3, 0, 0) : sim.transmission === 'hybrid' ? vec(6.25, 0, 0) : sim.transmission === 'dct' ? vec(12.85, 0, 0) : vec(12.1, -1.8, 0);
+    const output = (Array.isArray(localOutput) ? vec(...localOutput) : localOutput.clone()).multiplyScalar(gearboxScale).applyAxisAngle(vec(0, 1, 0), rotation).add(vec(...drivetrainPosition));
+    // A fixed transfer position can land inside a long DCT, sending its input
+    // backwards through the gears (especially with a mid-mounted W16).
+    const center = transverse ? vec(0.8, 0.65, 0) : vec(output.x + Math.cos(rotation) * 2.65, 0.65, 0);
+    pose(transfer, center.toArray(), 0.62, 0);
     transfer.configure(sim.driveLayout);
     turbo.group.position.copy(engine.group.position).add(vec(0, 2 * engineScale, -7.2 * engineScale).applyAxisAngle(vec(0, 1, 0), rotation));
     turbo.group.rotation.copy(engine.group.rotation);
@@ -106,7 +111,7 @@ export class VehicleModel extends ModelGeometry {
     const key = `${sim.transmission}:${sim.driveLayout}:${engine.id}:${placement}:${sim.engineOrientation}`;
     if (key !== this.key) {
       this.key = key;
-      this.buildRouting(sim, drivetrainPosition, gearboxScale, rotation);
+      this.buildRouting(sim, drivetrainPosition, output, center);
     }
     this.front.group.rotation.z = Math.PI;
     this.rear.group.rotation.z = 0;
@@ -127,7 +132,7 @@ export class VehicleModel extends ModelGeometry {
     this.applyVisibility(sim);
   }
 
-  buildRouting(sim, position, scale, rotation) {
+  buildRouting(sim, position, output, center) {
     this.axleSpur?.removeFromParent();
     this.routing.dispose();
     this.routing = new ModelGeometry(this.materials);
@@ -135,11 +140,9 @@ export class VehicleModel extends ModelGeometry {
     const g = this.routing;
     const transverse = sim.engineOrientation === 'transverse';
     const axle = (sim.enginePlacement || 'front') === 'front' ? 0 : 1;
-    const localOutput = sim.transmission === 'automatic' ? this.models.automatic?.outputPosition || vec(8.3, 0, 0) : sim.transmission === 'hybrid' ? vec(6.25, 0, 0) : sim.transmission === 'dct' ? vec(12.85, 0, 0) : vec(12.1, -1.8, 0);
-    const output = (Array.isArray(localOutput) ? vec(...localOutput) : localOutput.clone()).multiplyScalar(scale).applyAxisAngle(vec(0, 1, 0), rotation).add(vec(...position));
     const both = ['awd', 'quattro', 'partTime'].includes(sim.driveLayout);
     const drivenAxles = [sim.driveLayout !== 'rwd', sim.driveLayout !== 'fwd'];
-    const center = vec(0.8, 0.65, 0);
+    const direction = axle ? -1 : 1;
     const input = [this.front.inputEndpoint(), this.rear.inputEndpoint()];
     this.paths = [];
     // Flow cones only describe the shafts between assemblies. Each transmission
@@ -164,22 +167,30 @@ export class VehicleModel extends ModelGeometry {
       if (both) {
         const branch = vec(axleX, 0.3, 1.35);
         const other = axle ? 0 : 1;
-        const entry = center.clone().add(vec(axle ? 1.05 : -1.05, 0, 0));
+        const entry = this.models.transfer.inputEndpoint(axle ? 1 : -1);
         const exit = center.clone().add(vec(other ? 1.05 : -1.05, 0, 0));
         this.shaft(g, branch, entry);
-        path([branch.toArray(), [axle ? 3.2 : -3.2, 0.45, 1.15], entry.toArray()], 'input', 0x68c9ed);
+        path([branch.toArray(), entry.toArray()], 'input', 0x68c9ed);
         this.shaft(g, exit, input[other]);
         path([exit.toArray(), input[other].toArray(), [other ? 6.2 : -6.2, 0.25, input[other].z]], other ? 'rear' : 'front');
       }
     } else {
       if (both) {
-        const source = center.clone().add(vec((sim.enginePlacement || 'front') === 'front' ? -1.05 : 1.05, 0, 0));
+        const source = this.models.transfer.inputEndpoint(-direction);
         this.shaft(g, output, source);
         path([output.toArray(), source.toArray()], 'input', 0xffc35a, 2);
+        const transmission = this.models[sim.transmission === 'manual' ? 'drive' : sim.transmission];
+        const returnY = Math.min(0, transmission.bounds('gearbox').min.y - 0.25);
         for (let i = 0; i < 2; i++) {
           const from = center.clone().add(vec(i ? 1.05 : -1.05, 0, !i && sim.driveLayout === 'partTime' ? -0.9 : 0));
-          this.shaft(g, from, input[i]);
-          path([from.toArray(), input[i].toArray(), [i ? 6.2 : -6.2, 0.25, input[i].z]], i ? 'rear' : 'front', i ? 0xffc35a : 0x68c9ed);
+          // The near-axle branch returns alongside the transmission. Jointed
+          // straight sections keep it below the mechanical assembly; matching
+          // two-point flows cannot curve back through a gear at the bends.
+          const points = i === axle ? [from, vec(output.x + direction * 0.35, returnY, from.z), vec(position[0], returnY, input[i].z), input[i]] : [from, input[i]];
+          for (let n = 1; n < points.length; n++) {
+            this.shaft(g, points[n - 1], points[n]);
+            path([points[n - 1].toArray(), points[n].toArray()], i ? 'rear' : 'front', i ? 0xffc35a : 0x68c9ed, 2);
+          }
         }
       } else {
         const i = drivenAxles[0] ? 0 : 1;
