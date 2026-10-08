@@ -9,6 +9,15 @@ const DOG_TOOTH_PITCH = Math.PI * 2 / 36;
 // These offsets separate the layers for inspection, independently of pedal travel.
 const CLUTCH_EXPLOSION = Object.freeze({ disc: 1.6, pressure: 3.2, diaphragm: 4.8, cover: 6.4, bearing: 8, actuator: 9.6 });
 const CLUTCH_LAYOUT = Object.freeze({ disc: 0.2, pressure: 0.3075, diaphragm: 0.92, cover: 1.08, actuator: 1.62 });
+const CLUTCH_SECTION = Object.freeze({ start: 2, end: Math.PI * 2 - 0.35 });
+const samePose = (object, values, i) => values[i] === object.position.x && values[i + 1] === object.position.y && values[i + 2] === object.position.z
+  && values[i + 3] === object.quaternion.x && values[i + 4] === object.quaternion.y && values[i + 5] === object.quaternion.z && values[i + 6] === object.quaternion.w
+  && values[i + 7] === object.scale.x && values[i + 8] === object.scale.y && values[i + 9] === object.scale.z;
+const rememberPose = (object, values, i) => {
+  values[i] = object.position.x; values[i + 1] = object.position.y; values[i + 2] = object.position.z;
+  values[i + 3] = object.quaternion.x; values[i + 4] = object.quaternion.y; values[i + 5] = object.quaternion.z; values[i + 6] = object.quaternion.w;
+  values[i + 7] = object.scale.x; values[i + 8] = object.scale.y; values[i + 9] = object.scale.z;
+};
 const smooth = value => { const t = Math.max(0, Math.min(1, value)); return t * t * (3 - 2 * t); };
 const visibleBounds = (...parts) => {
   const result = new THREE.Box3();
@@ -43,7 +52,9 @@ export class DrivetrainModel extends ModelGeometry {
   buildClutch() {
     this.clutchSections = [];
     this.clutchRotatingDetails = [];
-    this.flywheel = this.gear(84, 1.27, 0.23, 'dark', this.clutch, [0, 0, 0], 'flywheel');
+    this.clutchRotorPlanes = new WeakMap();
+    this.flywheel = this.gear(84, 1.27, 0.23, 'dark', this.clutch, [0, 0, 0], 'flywheel', 0.32);
+    this.clutchRing(0.4, 0.14, 0.11, 'steel', this.flywheel, [-0.14, 0, 0], 'flywheel');
     this.clutchRing(1.02, 0.38, 0.025, 'steel', this.flywheel, [0.14, 0, 0], 'flywheel');
     const friction = this.material({ color: 0x69534a, roughness: 0.9, metalness: 0.05, emissive: 0xe7561c, emissiveIntensity: 0 });
     this.frictionMaterial = friction;
@@ -53,8 +64,17 @@ export class DrivetrainModel extends ModelGeometry {
     this.clutchRing(1.02, 0.69, 0.035, friction, this.disc, [-0.03, 0, 0], 'friction');
     this.clutchRing(1.02, 0.69, 0.035, friction, this.disc, [0.03, 0, 0], 'friction');
     this.clutchRing(1.00, 0.64, 0.025, 'dark', this.disc, [0, 0, 0], 'friction');
-    this.clutchRing(0.77, 0.24, 0.055, 'steel', this.disc, [0, 0, 0], 'discHub');
-    this.gear(20, 0.29, 0.23, 'brass', this.disc, [0, 0, 0], 'discHub', 0.173);
+    this.discCarrier = this.clutchRing(0.77, 0.64, 0.055, 'steel', this.disc, [0, 0, 0], 'discHub');
+    this.hubFlange = this.clutchRing(0.34, 0.24, 0.07, 'steel', this.disc, [0.02, 0, 0], 'discHub');
+    this.discHub = this.clutchRing(0.29, 0.173, 0.23, 'brass', this.disc, [0, 0, 0], 'discHub');
+    this.hubTeeth = [];
+    for (let i = 0; i < 20; i++) {
+      const a = (i + 0.5) / 20 * Math.PI * 2;
+      const tooth = this.box(0.23, 0.047, 0.023, 'brass', this.disc, [0, Math.cos(a) * 0.171, Math.sin(a) * 0.171], 'discHub');
+      tooth.rotation.x = a;
+      this.hubTeeth.push(tooth);
+      this.clutchRotatingDetails.push({ object: tooth, a, rotor: this.disc });
+    }
     for (let i = 0; i < 24; i++) {
       const a = i / 24 * Math.PI * 2;
       const rivet = this.cylinder(0.021, 0.084, 'brass', this.disc, [0, Math.cos(a) * 0.83, Math.sin(a) * 0.83], 'x', 'friction', 8);
@@ -62,12 +82,30 @@ export class DrivetrainModel extends ModelGeometry {
       groove.rotation.x = a;
       this.clutchRotatingDetails.push({ object: rivet, a, rotor: this.disc }, { object: groove, a, rotor: this.disc });
     }
+    this.damperWindows = [];
     for (let i = 0; i < 4; i++) {
       const a = i / 4 * Math.PI * 2;
-      const spring = this.subgroup(this.disc, [0.08, Math.cos(a) * 0.48, Math.sin(a) * 0.48], 'torsionSprings');
-      spring.quaternion.setFromUnitVectors(vec(0, 1, 0), vec(0, -Math.sin(a), Math.cos(a)));
-      const points = Array.from({ length: 81 }, (_, n) => vec(Math.sin(n / 80 * Math.PI * 16) * 0.067, (n / 80 - 0.5) * 0.34, Math.cos(n / 80 * Math.PI * 16) * 0.067));
-      this.pipe(this.curve(points), 0.016, 'intake', spring, 'torsionSprings');
+      const window = this.subgroup(this.disc, [0, 0, 0], 'torsionSprings');
+      window.rotation.x = a;
+      // Open damper windows: radial webs connect both end seats to the hub and
+      // lining carrier. The coil is retained at its ends, rather than laid over
+      // a solid plate or left visible after that plate has been sectioned away.
+      const seats = [-1, 1].map(side => this.box(0.15, 0.18, 0.04, 'steel', window, [0.03, 0.48, side * 0.19], 'torsionSprings'));
+      const webs = [-1, 1].map(side => {
+        const angle = side * 0.38;
+        const web = this.box(0.055, 1, 0.075, 'steel', window, [0, 0, 0], 'discHub');
+        this.betweenRadial(web, vec(0.02, Math.cos(angle) * 0.30, Math.sin(angle) * 0.30), vec(0.02, Math.cos(angle) * 0.74, Math.sin(angle) * 0.74), angle);
+        return web;
+      });
+      const spring = this.subgroup(window, [0.04, 0.48, 0], 'torsionSprings');
+      spring.rotation.x = Math.PI / 2;
+      const coilGeometry = this.geometry('clutch-damper-coil', () => {
+        const points = Array.from({ length: 61 }, (_, n) => vec(Math.sin(n / 60 * Math.PI * 10) * 0.055, (n / 60 - 0.5) * 0.34, Math.cos(n / 60 * Math.PI * 10) * 0.055));
+        return new THREE.TubeGeometry(this.curve(points), 60, 0.012, 6, false);
+      });
+      const coil = this.mesh(coilGeometry, 'intake', spring, [0, 0, 0], 'torsionSprings');
+      this.damperWindows.push({ window, coil, seats, webs });
+      [...seats, ...webs, coil].forEach(object => this.clutchRotatingDetails.push({ object, a, rotor: this.disc }));
     }
     this.pressure = this.subgroup(this.clutch, [0.48, 0, 0], 'pressurePlate');
     this.pressureFace = this.clutchRing(1.05, 0.62, 0.12, 'steel', this.pressure, [0, 0, 0], 'pressurePlate');
@@ -81,14 +119,17 @@ export class DrivetrainModel extends ModelGeometry {
     this.coverSupports = [];
     for (let i = 0; i < 6; i++) {
       const a = i / 6 * Math.PI * 2;
-      const rib = this.box(0.025, 1, 0.085, 'intake', this.cover, [0, 0, 0], 'clutchCover');
-      this.between(rib, vec(-0.16, Math.cos(a) * 0.82, Math.sin(a) * 0.82), vec(0, Math.cos(a) * 1.17, Math.sin(a) * 1.17));
-      this.coverSupports.push(rib);
+      for (const supportX of [-0.195, -0.125]) {
+        const rib = this.box(0.025, 1, 0.085, 'intake', this.cover, [0, 0, 0], 'clutchCover');
+        this.betweenRadial(rib, vec(supportX, Math.cos(a) * 0.79, Math.sin(a) * 0.79), vec(0, Math.cos(a) * 1.17, Math.sin(a) * 1.17), a);
+        this.coverSupports.push(rib);
+        this.clutchRotatingDetails.push({ object: rib, a, rotor: this.cover });
+      }
       const bolt = this.cylinder(0.046, 0.13, 'steel', this.cover, [-0.95, Math.cos(a) * 1.17, Math.sin(a) * 1.17], 'x', 'clutchCover', 6);
       this.coverBolts.push(bolt);
-      this.clutchRotatingDetails.push({ object: rib, a, rotor: this.cover }, { object: bolt, a, rotor: this.cover });
+      this.clutchRotatingDetails.push({ object: bolt, a, rotor: this.cover });
     }
-    this.fulcrumRings = [-0.2, -0.12].map(x => this.clutchRing(0.809, 0.771, 0.038, 'steel', this.cover, [x, 0, 0], 'clutchCover'));
+    this.fulcrumRings = [-0.195, -0.125].map(x => this.clutchRing(0.809, 0.771, 0.038, 'steel', this.cover, [x, 0, 0], 'clutchCover'));
     this.pressureStraps = this.subgroup(this.clutch, [0, 0, 0], 'pressurePlate');
     this.straps = [];
     for (let n = 0; n < 6; n++) {
@@ -98,13 +139,13 @@ export class DrivetrainModel extends ModelGeometry {
     }
     this.diaphragm = this.subgroup(this.clutch, [CLUTCH_LAYOUT.diaphragm, 0, 0], 'diaphragm');
     this.diaphragmRing = this.clutchRing(0.80, 0.76, 0.035, 'brass', this.diaphragm, [0, 0, 0], 'diaphragm');
+    this.diaphragmWeb = this.conicalDiaphragm(this.diaphragm);
     this.fingers = [];
     for (let i = 0; i < 20; i++) {
       const a = i / 20 * Math.PI * 2;
       const finger = this.box(0.035, 1, 0.075, 'brass', this.diaphragm, [0, 0, 0], 'diaphragm');
-      const outer = this.box(0.022, 1, 0.1, 'brass', this.diaphragm, [0, 0, 0], 'diaphragm');
-      this.fingers.push({ finger, outer, a });
-      this.clutchRotatingDetails.push({ object: finger, a, rotor: this.diaphragm }, { object: outer, a, rotor: this.diaphragm });
+      this.fingers.push({ finger, a });
+      this.clutchRotatingDetails.push({ object: finger, a, rotor: this.diaphragm });
     }
     this.bearing = this.subgroup(this.clutch, [1.13, 0, 0], 'releaseBearing');
     this.bearingRace = this.subgroup(this.bearing, [0, 0, 0], 'releaseBearing');
@@ -145,8 +186,9 @@ export class DrivetrainModel extends ModelGeometry {
     this.inputSplines = this.subgroup(this.clutch, [0, 0, 0], 'discHub');
     for (let i = 0; i < 20; i++) {
       const a = i / 20 * Math.PI * 2;
-      const spline = this.box(1.25, 0.027, 0.023, 'steel', this.inputSplines, [0.6, Math.cos(a) * 0.148, Math.sin(a) * 0.148], 'discHub');
+      const spline = this.box(0.48, 0.027, 0.023, 'steel', this.inputSplines, [0.265, Math.cos(a) * 0.148, Math.sin(a) * 0.148], 'discHub');
       spline.rotation.x = a;
+      this.clutchRotatingDetails.push({ object: spline, a, rotor: this.inputSplines });
     }
     this.assemblyGuides = this.subgroup(this.clutch);
     this.assemblyGuides.userData.ignorePick = true;
@@ -204,6 +246,206 @@ export class DrivetrainModel extends ModelGeometry {
     });
     this.clutchSections.push({ mesh, fullGeometry: mesh.geometry, sectionGeometry, rotor: parent });
     return mesh;
+  }
+
+  conicalDiaphragm(parent) {
+    const make = (start, end) => {
+      const positions = [], indices = [], count = 48;
+      for (let n = 0; n <= count; n++) {
+        const a = start + (end - start) * n / count;
+        for (const [x, radius] of [[-0.018, 0.80], [0.018, 0.80], [-1.018, 0.99], [-0.982, 0.99]]) positions.push(x, Math.cos(a) * radius, Math.sin(a) * radius);
+        if (n < count) {
+          const i = n * 4, j = i + 4;
+          indices.push(i, j, i + 2, i + 2, j, j + 2, i + 1, i + 3, j + 1, i + 3, j + 3, j + 1);
+          indices.push(i, i + 1, j, i + 1, j + 1, j, i + 2, j + 2, i + 3, i + 3, j + 2, j + 3);
+        }
+      }
+      indices.push(0, 2, 1, 1, 2, 3);
+      const i = count * 4;
+      indices.push(i, i + 1, i + 2, i + 1, i + 3, i + 2);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      const flat = geometry.toNonIndexed(); geometry.dispose(); flat.computeVertexNormals();
+      return flat;
+    };
+    const fullGeometry = this.geometry('diaphragm-cone:full', () => make(0, Math.PI * 2));
+    const sectionGeometry = this.geometry('diaphragm-cone:section', () => make(CLUTCH_SECTION.start, CLUTCH_SECTION.end));
+    const mesh = this.mesh(fullGeometry, 'brass', parent, [0, 0, 0], 'diaphragm');
+    this.clutchSections.push({ mesh, fullGeometry, sectionGeometry, rotor: parent });
+    return mesh;
+  }
+
+  // A rectangular strip needs a stable radial/tangential frame. A shortest-arc
+  // UP quaternion twists its wide corners differently around the shaft.
+  betweenRadial(mesh, from, to, angle, widthIsRadial = false) {
+    const y = to.clone().sub(from).normalize();
+    const z = widthIsRadial ? vec(0, Math.cos(angle), Math.sin(angle)) : vec(0, -Math.sin(angle), Math.cos(angle));
+    const x = y.clone().cross(z).normalize();
+    z.copy(x).cross(y).normalize();
+    mesh.position.copy(from).add(to).multiplyScalar(0.5);
+    mesh.scale.y = from.distanceTo(to);
+    mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+  }
+
+  sectionClutchDetail(mesh, rotor, cutaway) {
+    let data = mesh.userData.clutchSection;
+    if (!data && !cutaway) { mesh.visible = true; mesh.userData.sectionVisible = true; return; }
+    if (!data) {
+      const full = mesh.geometry;
+      const capacity = (full.index?.count ?? full.attributes.position.count) * 5;
+      const clipped = new THREE.BufferGeometry();
+      clipped.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      clipped.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(capacity * 3), 3).setUsage(THREE.DynamicDrawUsage));
+      this.geometries.add(clipped);
+      const chain = [];
+      for (let object = mesh; object !== rotor; object = object.parent) chain.push(object);
+      data = mesh.userData.clutchSection = {
+        full, clipped, phase: NaN, visible: true, chain,
+        poses: new Float64Array(chain.length * 10).fill(NaN), relative: new THREE.Matrix4(),
+        planes: [new Float64Array(4), new Float64Array(4)], ranges: [new Float64Array(2), new Float64Array(2)],
+        classes: new Uint8Array(full.attributes.position.count)
+      };
+      // A changing boundary mesh uses its original envelope for culling.
+      full.computeBoundingSphere(); full.computeBoundingBox(); clipped.boundingSphere = full.boundingSphere.clone();
+      data.center = full.boundingBox.getCenter(vec(0, 0, 0));
+      data.half = full.boundingBox.getSize(vec(0, 0, 0)).multiplyScalar(0.5);
+    }
+    if (!cutaway) { mesh.geometry = data.full; mesh.visible = true; mesh.userData.sectionVisible = true; return; }
+    let poseChanged = false;
+    for (let n = 0; n < data.chain.length; n++) {
+      const object = data.chain[n];
+      if (!samePose(object, data.poses, n * 10)) {
+        rememberPose(object, data.poses, n * 10); object.updateMatrix(); poseChanged = true;
+      }
+    }
+    const phase = rotor.rotation.x;
+    if (data.phase === phase && !poseChanged) {
+      mesh.geometry = data.selected ?? data.full; mesh.visible = data.visible; mesh.userData.sectionVisible = data.visible;
+      return;
+    }
+    data.phase = phase;
+    if (poseChanged) {
+      data.relative.copy(mesh.matrix);
+      for (let n = 1; n < data.chain.length; n++) data.relative.premultiply(data.chain[n].matrix);
+    }
+    let rotorPlanes = this.clutchRotorPlanes.get(rotor);
+    if (!rotorPlanes) { rotorPlanes = { phase: NaN, normals: new Float64Array(4) }; this.clutchRotorPlanes.set(rotor, rotorPlanes); }
+    if (rotorPlanes.phase !== phase) {
+      rotorPlanes.phase = phase;
+      const c = Math.cos(phase), s = Math.sin(phase);
+      for (let n = 0; n < 2; n++) {
+        const angle = n ? CLUTCH_SECTION.end : CLUTCH_SECTION.start;
+        const ny = (n ? 1 : -1) * Math.sin(angle), nz = (n ? -1 : 1) * Math.cos(angle);
+        rotorPlanes.normals[n * 2] = ny * c + nz * s;
+        rotorPlanes.normals[n * 2 + 1] = -ny * s + nz * c;
+      }
+    }
+    const elements = data.relative.elements, planes = data.planes;
+    for (let n = 0; n < 2; n++) {
+      const ny = rotorPlanes.normals[n * 2], nz = rotorPlanes.normals[n * 2 + 1], plane = planes[n];
+      plane[0] = ny * elements[1] + nz * elements[2]; plane[1] = ny * elements[5] + nz * elements[6];
+      plane[2] = ny * elements[9] + nz * elements[10]; plane[3] = ny * elements[13] + nz * elements[14];
+    }
+    const distance = (point, plane) => point[0] * plane[0] + point[1] * plane[1] + point[2] * plane[2] + plane[3];
+    const source = data.full.attributes.position, normals = data.full.attributes.normal, indices = data.full.index;
+    const center = data.center, half = data.half, ranges = data.ranges;
+    for (let n = 0; n < 2; n++) {
+      const plane = planes[n];
+      const middle = center.x * plane[0] + center.y * plane[1] + center.z * plane[2] + plane[3];
+      const radius = Math.abs(plane[0]) * half.x + Math.abs(plane[1]) * half.y + Math.abs(plane[2]) * half.z;
+      ranges[n][0] = middle - radius; ranges[n][1] = middle + radius;
+    }
+    if (ranges[0][0] >= -1e-8 || ranges[1][0] >= -1e-8) { data.selected = mesh.geometry = data.full; data.visible = mesh.visible = true; mesh.userData.sectionVisible = true; return; }
+    if (ranges[0][1] < 0 && ranges[1][1] < 0) { data.visible = mesh.visible = false; mesh.userData.sectionVisible = false; return; }
+    let inside = 0, outside = 0;
+    for (let n = 0; n < source.count; n++) {
+      const x = source.getX(n), y = source.getY(n), z = source.getZ(n);
+      const first = x * planes[0][0] + y * planes[0][1] + z * planes[0][2] + planes[0][3];
+      const second = x * planes[1][0] + y * planes[1][1] + z * planes[1][2] + planes[1][3];
+      const bits = data.classes[n] = (first >= 0 ? 1 : 0) | (second >= 0 ? 2 : 0);
+      if (bits) inside++;
+      else outside++;
+    }
+    if (!outside) { data.selected = mesh.geometry = data.full; data.visible = mesh.visible = true; mesh.userData.sectionVisible = true; return; }
+    if (!inside) { data.visible = mesh.visible = false; mesh.userData.sectionVisible = false; return; }
+    const clip = (polygon, plane, sign = 1) => {
+      const result = [];
+      polygon.forEach((point, n) => {
+        const next = polygon[(n + 1) % polygon.length];
+        const a = distance(point, plane) * sign, b = distance(next, plane) * sign;
+        if (a >= 0) result.push(point);
+        if ((a >= 0) !== (b >= 0)) {
+          const t = a / (a - b);
+          result.push(point.map((value, i) => value + (next[i] - value) * t));
+        }
+      });
+      return result;
+    };
+    const positions = data.clipped.attributes.position.array, outNormals = data.clipped.attributes.normal.array;
+    let count = 0;
+    const write = point => {
+      const i = count++ * 3;
+      positions[i] = point[0]; positions[i + 1] = point[1]; positions[i + 2] = point[2];
+      outNormals[i] = point[3]; outNormals[i + 1] = point[4]; outNormals[i + 2] = point[5];
+    };
+    const emit = polygon => {
+      for (let n = 1; n + 1 < polygon.length; n++) { write(polygon[0]); write(polygon[n]); write(polygon[n + 1]); }
+    };
+    const length = indices?.count ?? source.count;
+    const pointAt = i => [source.getX(i), source.getY(i), source.getZ(i), normals.getX(i), normals.getY(i), normals.getZ(i)];
+    if (data.full.type === 'BoxGeometry') {
+      const faces = Array.from({ length: 6 }, (_, n) => [0, 2, 3, 1].map(offset => pointAt(n * 4 + offset)));
+      const clipSolid = (input, plane, sign = 1) => {
+        const faces = [], intersections = [];
+        input.forEach(face => {
+          const clipped = clip(face, plane, sign);
+          if (clipped.length >= 3) faces.push(clipped);
+          clipped.forEach(point => {
+            if (Math.abs(distance(point, plane)) < 1e-7 && !intersections.some(other => point.slice(0, 3).every((value, i) => Math.abs(value - other[i]) < 1e-7))) intersections.push(point);
+          });
+        });
+        if (intersections.length >= 3) {
+          const normal = vec(...plane.slice(0, 3)).normalize().multiplyScalar(-sign);
+          const u = normal.clone().cross(Math.abs(normal.x) < 0.9 ? vec(1, 0, 0) : vec(0, 1, 0)).normalize(), v = normal.clone().cross(u);
+          const center = intersections.reduce((sum, point) => sum.add(vec(...point.slice(0, 3))), vec(0, 0, 0)).multiplyScalar(1 / intersections.length);
+          intersections.sort((a, b) => {
+            const pa = vec(...a.slice(0, 3)).sub(center), pb = vec(...b.slice(0, 3)).sub(center);
+            return Math.atan2(pa.dot(v), pa.dot(u)) - Math.atan2(pb.dot(v), pb.dot(u));
+          });
+          faces.push(intersections.map(point => [...point.slice(0, 3), ...normal.toArray()]));
+        }
+        return faces;
+      };
+      if (ranges[0][1] < 0) clipSolid(faces, planes[1]).forEach(emit);
+      else if (ranges[1][1] < 0) clipSolid(faces, planes[0]).forEach(emit);
+      else {
+        clipSolid(faces, planes[0]).forEach(emit);
+        clipSolid(clipSolid(faces, planes[0], -1), planes[1]).forEach(emit);
+      }
+    } else for (let n = 0; n < length; n += 3) {
+      const first = indices ? indices.getX(n) : n, second = indices ? indices.getX(n + 1) : n + 1, third = indices ? indices.getX(n + 2) : n + 2;
+      if (data.classes[first] & data.classes[second] & data.classes[third]) {
+        for (let corner = 0; corner < 3; corner++) {
+          const i = corner === 0 ? first : corner === 1 ? second : third, out = count++ * 3;
+          positions[out] = source.getX(i); positions[out + 1] = source.getY(i); positions[out + 2] = source.getZ(i);
+          outNormals[out] = normals.getX(i); outNormals[out + 1] = normals.getY(i); outNormals[out + 2] = normals.getZ(i);
+        }
+        continue;
+      }
+      if (!(data.classes[first] | data.classes[second] | data.classes[third])) continue;
+      const triangle = [0, 1, 2].map(offset => {
+        const i = indices ? indices.getX(n + offset) : n + offset;
+        return [source.getX(i), source.getY(i), source.getZ(i), normals.getX(i), normals.getY(i), normals.getZ(i)];
+      });
+      // The retained sector is wider than pi: split its union into disjoint
+      // half-plane pieces, so no triangle crosses the removed wedge.
+      emit(clip(triangle, planes[0]));
+      emit(clip(clip(triangle, planes[0], -1), planes[1]));
+    }
+    data.clipped.setDrawRange(0, count);
+    data.clipped.attributes.position.needsUpdate = data.clipped.attributes.normal.needsUpdate = true;
+    data.selected = mesh.geometry = data.clipped; data.visible = mesh.visible = count > 0; mesh.userData.sectionVisible = mesh.visible;
   }
 
   buildGearbox() {
@@ -403,9 +645,8 @@ export class DrivetrainModel extends ModelGeometry {
     });
     // Metal attachments remain physical when assembled. In an exploded drawing
     // they would stretch into a cage; dashed guides indicate the assembly axis.
-    const separated = ['clutch', 'drive-detail'].includes(this.mode) && this.exploded > 0.15;
+    const separated = ['clutch', 'drive-detail'].includes(this.mode) && this.exploded > 0.001;
     this.pressureStraps.visible &&= !separated;
-    this.fingers.forEach(({ outer }) => { outer.visible = !separated && outer.userData.sectionVisible !== false; });
     this.assemblyGuides.visible = separated && !(this.isolate && selected);
     const match = /^gear([1-5])$/.exec(this.section);
     const detail = this.mode === 'gearbox' && this.section === 'synchronizer';
@@ -484,10 +725,10 @@ export class DrivetrainModel extends ModelGeometry {
     return result.expandByScalar(0.05);
   }
 
-  update(sim, cutaway) {
+  update(sim, cutaway, updateMatrices = true) {
     if (!this.group.visible) return;
     const e = ['clutch', 'drive-detail'].includes(this.mode) ? Math.max(0, Math.min(1, this.exploded)) : 0;
-    const clutchCutaway = cutaway && e <= 0.15;
+    const clutchCutaway = this.clutch.visible && cutaway && e < 0.001;
     // Disassembly is a static inspection drawing. Once assembled, crank and
     // input phases again come directly from Simulation.
     const a = e > 0.001 ? 0 : sim.angle * Math.PI / 180;
@@ -506,6 +747,7 @@ export class DrivetrainModel extends ModelGeometry {
     });
     this.frictionMaterial.emissiveIntensity = Math.min(0.65, displayPower / 12000);
     this.disc.rotation.x = inputAngle;
+    this.inputSplines.rotation.x = inputAngle;
     this.pressure.position.x = CLUTCH_LAYOUT.pressure + e * CLUTCH_EXPLOSION.pressure + state.plateGap;
     this.pressure.rotation.x = a;
     this.cover.position.x = CLUTCH_LAYOUT.cover + e * CLUTCH_EXPLOSION.cover;
@@ -527,10 +769,11 @@ export class DrivetrainModel extends ModelGeometry {
     const pistonBack = this.releaseActuator.position.x + 0.28;
     this.actuatorPiston.position.x = (pistonFront + pistonBack) / 2 - this.releaseActuator.position.x;
     this.actuatorPiston.scale.x = Math.max(0.025, pistonBack - pistonFront);
-    this.fingers.forEach(({ finger, outer, a }) => {
+    const webStroke = e > 0.001 ? CLUTCH_LAYOUT.diaphragm - CLUTCH_LAYOUT.pressure - 0.06 : this.diaphragm.position.x - this.pressure.position.x - 0.06;
+    this.diaphragmWeb.scale.x = webStroke;
+    this.fingers.forEach(({ finger, a }) => {
       const pivot = vec(0, Math.cos(a) * 0.78, Math.sin(a) * 0.78);
-      this.between(finger, pivot, vec(fingerTip, Math.cos(a) * 0.22, Math.sin(a) * 0.22));
-      this.between(outer, pivot, vec(this.pressure.position.x + 0.06 - this.diaphragm.position.x, Math.cos(a) * 0.97, Math.sin(a) * 0.97));
+      this.betweenRadial(finger, pivot, vec(fingerTip, Math.cos(a) * 0.22, Math.sin(a) * 0.22), a);
     });
     this.pressureStraps.rotation.x = a;
     this.straps.forEach(({ angle, segments }) => {
@@ -538,20 +781,16 @@ export class DrivetrainModel extends ModelGeometry {
       const to = vec(this.cover.position.x - 0.05, Math.cos(angle + 0.3) * 1.17, Math.sin(angle + 0.3) * 1.17);
       const bend = vec(0, -Math.sin(angle) * state.pedal * 0.12, Math.cos(angle) * state.pedal * 0.12);
       const points = [from, from.clone().lerp(to, 1 / 3).add(bend), from.clone().lerp(to, 2 / 3).add(bend), to];
-      segments.forEach((segment, n) => this.between(segment, points[n], points[n + 1]));
-      const phase = ((angle + a) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-      segments.forEach(segment => { segment.visible = !clutchCutaway || phase >= 2.0 && phase <= Math.PI * 2 - 0.35; });
+      segments.forEach((segment, n) => {
+        this.betweenRadial(segment, points[n], points[n + 1], angle, true);
+        this.sectionClutchDetail(segment, this.pressureStraps, clutchCutaway);
+      });
     });
     this.clutchSections.forEach(({ mesh, fullGeometry, sectionGeometry, rotor }) => {
       mesh.geometry = clutchCutaway ? sectionGeometry : fullGeometry;
       mesh.rotation.x = clutchCutaway ? -rotor.rotation.x : 0;
     });
-    this.clutchRotatingDetails.forEach(({ object, a: angle, rotor }) => {
-      const phase = ((angle + rotor.rotation.x) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-      const visible = !clutchCutaway || phase >= 2.0 && phase <= Math.PI * 2 - 0.35;
-      object.visible = visible;
-      object.userData.sectionVisible = visible;
-    });
+    this.clutchRotatingDetails.forEach(({ object, rotor }) => this.sectionClutchDetail(object, rotor, clutchCutaway));
     this.cover.visible = this.mode !== 'engine' && (!cutaway || ['clutch', 'drive-detail'].includes(this.mode));
     // In the clutch bench the gearbox is hidden; stop beyond the release bearing.
     // In a complete detailed drive the same shaft reaches the gearbox input.
@@ -565,6 +804,7 @@ export class DrivetrainModel extends ModelGeometry {
     this.guideMaterial.dashSize = 0.12 / guideLength;
     this.guideMaterial.gapSize = 0.08 / guideLength;
     this.caseFront.visible = !cutaway;
+    if (this.gearbox.visible) {
     this.gears.forEach((gear, i) => {
       const active = sim.gear === i + 1;
       gear.top.rotation.x = sim.inputAngle;
@@ -635,11 +875,11 @@ export class DrivetrainModel extends ModelGeometry {
     this.selectorPin.position.set(-selectorTravel, -pivotHeight, 0);
     this.selector.userData.gear = selectorGear;
     this.gears.forEach(gear => { gear.rail.material = gear === selectedRail ? this.materials.brass : this.materials.steel; });
-    this.stub.rotation.x = inputAngle;
-    this.inputSplines.rotation.x = inputAngle;
     this.topShaft.rotation.x = sim.inputAngle;
     this.bottomShaft.rotation.x = -sim.outputAngle;
     this.wheel.rotation.x = -sim.outputAngle / 3.9;
+    }
+    this.stub.rotation.x = inputAngle;
     this.flow.visible = this.showFlow && e < 0.001 && ['drive', 'drive-detail', 'clutch', 'gearbox'].includes(this.mode) && Math.abs(sim.transmittedTorque) > 0.2 && state.contact && sim.shiftTarget === null && (this.mode !== 'gearbox' || sim.gear !== 0);
     if (this.flow.visible) {
       const selected = sim.gear ? this.gears[sim.gear - 1] : null;
@@ -663,6 +903,6 @@ export class DrivetrainModel extends ModelGeometry {
     }
     this.anchors.forEach(({ anchor }) => { if (anchor.userData.followX) anchor.position.x = anchor.userData.followX.position.x; });
     this.applySection();
-    this.group.updateMatrixWorld(true);
+    if (updateMatrices) this.group.updateMatrixWorld(true);
   }
 }

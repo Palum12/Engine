@@ -74,3 +74,16 @@ docisku. Rozstrzelenie jest osobnym nieruchomym układem do nauki budowy.
 Aktualne wyniki i ograniczenia zapisuje [CLUTCH_CONTACT_QA.md](CLUTCH_CONTACT_QA.md).
 W tym zleceniu użytkownik upoważnił też do publikacji na głównej gałęzi
 i sprawdzenia wdrożenia GitHub Pages.
+
+## Kolejne uwagi do sprzęgła — 8 października 2026
+
+Użytkownik wskazał wystające, niepodparte części oraz duże spadki wydajności
+w zakładce sprzęgła. Poprawiono ciągłość sprężyny talerzowej, podparcia
+pokrywy, gniazda sprężyn tłumiących, wielowypust i przycinanie obracających
+się detali na granicy przekroju. Ograniczono aktualizację ukrytych zespołów
+oraz pracę etykiet nad animowaną sceną.
+
+Rzeczywiste pomiary, obrazy i granice weryfikacji zapisuje
+[CLUTCH_GEOMETRY_PERFORMANCE_QA.md](CLUTCH_GEOMETRY_PERFORMANCE_QA.md).
+Wcześniejszy raport z 7 października pozostaje zapisem tamtego odbioru;
+nie stanowi dowodu, że później zgłoszone przypadki były poprawne.

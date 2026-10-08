@@ -1,5 +1,10 @@
 # Sprzęgło: styk, podparcia i wysprzęglanie — 07.10.2026
 
+To zapis odbioru z 7 października. Kolejna uwaga użytkownika ujawniła
+niepołączone detale oraz wystające narożniki przy obrocie, których ten odbiór
+nie wychwycił. Poprawki geometrii i pomiary wydajności z 8 października
+opisuje [osobny raport](CLUTCH_GEOMETRY_PERFORMANCE_QA.md).
+
 ## Powód i zachowanie
 
 Użytkownik zgłosił, że rozstawione części nie składają się przy zaciskaniu,

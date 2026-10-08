@@ -91,6 +91,9 @@ export class EngineScene {
     this.leaders.classList.add('model-leaders');
     container.append(this.leaders);
     this.refreshLabels();
+    this.labelSizeRevision = 0;
+    this.labelFontListener = () => { this.labelSizeRevision++; };
+    document.fonts?.addEventListener('loadingdone', this.labelFontListener);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
@@ -441,6 +444,7 @@ export class EngineScene {
   resize() {
     const { clientWidth: width, clientHeight: height } = this.container;
     if (!width || !height) return;
+    this.labelSizeRevision = (this.labelSizeRevision || 0) + 1;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
@@ -450,7 +454,7 @@ export class EngineScene {
   render(sim, dt) {
     this.camera.userData.target = this.controls.target;
     this.engine.update(sim, this.cutaway);
-    this.drive.update(sim, this.cutaway);
+    this.drive.update(sim, this.cutaway, false);
     this.turbo.update(sim, dt, this.cutaway);
     this.dct.update(sim, this.cutaway, dt);
     this.automatic.update(sim, this.cutaway, dt);
@@ -471,67 +475,100 @@ export class EngineScene {
       if (this.camera.position.distanceTo(this.cameraGoal) < 0.02) this.cameraGoal = null;
     }
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.updateVisibleMatrices();
+    // Three's default scene pass also visits every hidden model and gearbox.
+    // Visible world matrices are current; keep explicit bounds/picking updates
+    // independent by restoring the normal scene flag after drawing.
+    const autoUpdate = this.scene.matrixWorldAutoUpdate;
+    this.scene.matrixWorldAutoUpdate = false;
+    try { this.renderer.render(this.scene, this.camera); }
+    finally { this.scene.matrixWorldAutoUpdate = autoUpdate; }
     this.renderLabels();
+  }
+
+  updateVisibleMatrices() {
+    this.scene.traverseVisible(object => object.updateWorldMatrix(false, false, true));
   }
 
   renderLabels() {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     const occupied = [];
+    const candidates = [];
+    const revision = this.labelSizeRevision || 0;
+    const parentVisible = object => !object || object.visible && parentVisible(object.parent);
+    const whole = ['drive', 'drive-detail'].includes(this.mode);
+    const labelLimit = this.mode === 'suspension' ? width < 600 ? 4 : 5 : whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
+    const focusedGear = this.inspection === 'synchronizer' ? this.drive.synchronizerGear : this.inspection.startsWith('gear') ? Number(this.inspection.slice(4)) : 0;
+    const hide = ({ element, line }) => {
+      if (!element.hidden) element.hidden = true;
+      if (line.style.display !== 'none') line.style.display = 'none';
+    };
+    const position = this.labelPosition || (this.labelPosition = new THREE.Vector3());
     const suspensionPriority = ['suspensionBody', 'suspensionLinks', 'suspensionRocker', 'suspensionSpring', 'suspensionDamper'];
     const labels = this.mode === 'suspension' ? [...this.labelElements].sort((a, b) => suspensionPriority.indexOf(a.data.part) - suspensionPriority.indexOf(b.data.part)) : this.labelElements;
-    labels.forEach(({ data, element, line }) => {
-      const parentVisible = object => !object || object.visible && parentVisible(object.parent);
-      const whole = ['drive', 'drive-detail'].includes(this.mode);
+    labels.forEach(record => {
+      const { data, element, line } = record;
       const overview = data.anchor.userData.overview || data.assembly === 'vehicle' || ['battery', 'transfer'].includes(data.assembly);
       const detailLabel = !whole || (this.inspection === 'all' ? overview : data.assembly === this.inspection || data.part === this.inspection || this.inspection === 'engine' && data.assembly === 'engine' || ['frontAxle', 'rearAxle', 'finalDrive'].includes(this.inspection) && data.assembly === 'vehicle');
       const turboLabel = this.mode !== 'turbo' || this.inspection === 'all' || data.part === this.inspection || this.inspection === 'turboBearing' && ['turboOil', 'turboShaft'].includes(data.part) || this.inspection === 'turbine' && data.part === 'exhaust' || this.inspection === 'intercooler' && data.part === 'throttleBody';
-      const focusedGear = this.inspection === 'synchronizer' ? this.drive.synchronizerGear : this.inspection.startsWith('gear') ? Number(this.inspection.slice(4)) : 0;
       const gearLabel = this.mode !== 'gearbox' || !focusedGear || data.part !== 'gearPair' || data.anchor.userData.gear === focusedGear;
       const fuelLabel = this.mode !== 'fuel' || !['carburetor','highPressurePump'].includes(this.inspection) || data.part === this.inspection;
       const timingLabel = !data.anchor.userData.timingSummary || this.isolate;
       const diffLabel = this.mode !== 'differential' || this.inspection !== 'core' || ['differential','finalDrive'].includes(data.part);
       const headLabel = !this.isolate || this.inspection !== 'cylinderHead' || ['cylinderHead', 'camshaft', 'valves'].includes(data.part);
       const automaticLabel = this.sim.transmission !== 'automatic' || !this.isolate || !['planetary', 'automaticClutches', 'valveBody'].includes(this.inspection) || data.part === this.inspection;
-      const labelLimit = this.mode === 'suspension' ? width < 600 ? 4 : 5 : whole && this.inspection === 'all' ? width < 600 ? 5 : 8 : width < 600 ? 6 : 14;
       const selectorLabel = this.mode !== 'gearbox' || this.inspection !== 'selector' || !['synchronizerHub', 'synchronizerSleeve', 'synchronizer', 'synchroCone', 'dogTeeth'].includes(data.part);
       const assembledClutchLabel = this.mode !== 'clutch' || this.sim.transmission !== 'manual' || this.drive.exploded > 0 || this.inspection !== 'all' || ['friction', 'pressurePlate', 'diaphragm', 'releaseBearing'].includes(data.part);
-      const show = selectorLabel && assembledClutchLabel && !data.anchor.userData.labelHidden && occupied.length < labelLimit && timingLabel && headLabel && automaticLabel && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
-      element.hidden = !show;
-      line.style.display = show ? '' : 'none';
-      if (!show) return;
+      const show = selectorLabel && assembledClutchLabel && !data.anchor.userData.labelHidden && timingLabel && headLabel && automaticLabel && fuelLabel && gearLabel && diffLabel && detailLabel && turboLabel && this.labels && data.views.includes(this.mode) && parentVisible(data.anchor) && (this.mode !== 'cylinder' || data.cylinder === this.selectedCylinder);
+      if (!show) { hide(record); return; }
       const text = data.anchor.userData.label || data.text;
-      if (element.textContent !== text) element.textContent = text;
-      const position = data.anchor.getWorldPosition(new THREE.Vector3()).project(this.camera);
-      let x = (position.x * 0.5 + 0.5) * width;
-      let y = (-position.y * 0.5 + 0.5) * height;
+      if (element.textContent !== text) { element.textContent = text; record.size = null; }
+      // The render pass has already updated visible ancestors, including anchors.
+      position.setFromMatrixPosition(data.anchor.matrixWorld).project(this.camera);
+      const x = (position.x * 0.5 + 0.5) * width;
+      const y = (-position.y * 0.5 + 0.5) * height;
       if (position.z > 1 || x < 5 || x > width - 5 || y < 5 || y > height - 5) {
-        element.hidden = true;
-        line.style.display = 'none';
+        hide(record);
         return;
       }
+      // Reveal all labels needing measurement first, then batch the reads. This
+      // avoids alternating layout writes and forced measurements for each label.
+      if ((!record.size || record.size.revision !== revision) && element.hidden) element.hidden = false;
+      candidates.push({ record, x, y });
+    });
+    for (const { record } of candidates) {
+      if (!record.size || record.size.revision !== revision) record.size = { width: record.element.offsetWidth || 70, height: record.element.offsetHeight || 26, revision };
+    }
+    for (const candidate of candidates) {
+      const { record } = candidate;
+      const { data, element, line, size } = record;
+      if (occupied.length >= labelLimit) { hide(record); continue; }
+      let { x, y } = candidate;
       const start = { x, y };
-      const w = Math.min(width - 30, element.offsetWidth || 70);
-      const h = element.offsetHeight || 26;
+      const w = Math.min(width - 30, size.width);
+      const h = size.height;
       x = Math.max(w / 2 + 8, Math.min(width - w / 2 - 8, x));
       y = Math.max(82, Math.min(height - 68, y));
       for (let tries = 0; tries < 8 && occupied.some(r => Math.abs(r.x - x) < (r.w + w) / 2 + 5 && Math.abs(r.y - y) < (r.h + h) / 2 + 4); tries++) y += h + 5;
-      if (y > height - 45) { element.hidden = true; line.style.display = 'none'; return; }
+      if (y > height - 45) { hide(record); continue; }
       occupied.push({ x, y, w, h });
-      element.style.left = `${x}px`;
-      element.style.top = `${y}px`;
-      element.classList.toggle('selected', data.cylinder !== undefined && data.cylinder === this.selectedCylinder);
-      line.setAttribute('x1', start.x);
-      line.setAttribute('y1', start.y);
-      line.setAttribute('x2', x);
-      line.setAttribute('y2', y);
-      line.style.display = Math.hypot(start.x - x, start.y - y) > 8 ? '' : 'none';
-    });
+      if (element.hidden) element.hidden = false;
+      if (record.drawX !== x) { element.style.left = `${x}px`; record.drawX = x; }
+      if (record.drawY !== y) { element.style.top = `${y}px`; record.drawY = y; }
+      const selected = data.cylinder !== undefined && data.cylinder === this.selectedCylinder;
+      if (element.classList.contains('selected') !== selected) element.classList.toggle('selected', selected);
+      for (const [key, value] of Object.entries({ x1: start.x, y1: start.y, x2: x, y2: y })) {
+        if (line.getAttribute(key) !== String(value)) line.setAttribute(key, value);
+      }
+      const display = Math.hypot(start.x - x, start.y - y) > 8 ? '' : 'none';
+      if (line.style.display !== display) line.style.display = display;
+    }
   }
 
   dispose() {
     this.resizeObserver.disconnect();
+    document.fonts?.removeEventListener('loadingdone', this.labelFontListener);
     for (const [name, listener] of Object.entries(this.pickListeners)) this.renderer.domElement.removeEventListener(name, listener);
     this.cameraInput.dispose();
     this.controls.dispose();

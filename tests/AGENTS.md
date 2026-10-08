@@ -21,6 +21,12 @@
 - `manual-detail.test.js` checks progressive clamp before a gap opens, friction
   heat, independent disc rotation, bearings, cones and dog/sleeve indexing. Keep
   connection readouts consistent with contact, not the shift interlock threshold.
+- Clutch containment checks need actual transformed vertices at several crank
+  and input phases. An overlapping AABB alone does not prove a mounting or a
+  clear cut edge. `scene-performance.test.js` checks hidden-matrix skipping,
+  restored/reparented transforms, instanced meshes and stable label measurements.
+  Compare actual updateMatrix compositions when matrix APIs change; counts of
+  updateMatrixWorld calls alone cannot be compared to an updateWorldMatrix pass.
 - A selected gear inspection may show a free gear while another gear is active.
   Check its own free-wheel RPM and explanation; do not label it as connected.
 - Keep the timing belt visible under vehicle LOD and verify isolated heads restore

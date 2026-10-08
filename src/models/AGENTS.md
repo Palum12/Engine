@@ -81,6 +81,15 @@ the exact internals or scale of every real vehicle preset.
   bearing face is separate from its fixed cylinder. Keep the released pressure
   plate clear of the spring support/cover over the full pedal and exploded range.
   Do not add unexplained phase-marker boxes to physical friction surfaces.
+- Keep the diaphragm's continuous outer web on the pressure back face and both
+  fulcrum rings supported by cover ribs. Disc damper coils need actual end seats
+  and webs joining the hub to the lining carrier; their envelope must clear the
+  flywheel and pressure bore. Input splines end before the stationary guide.
+  Section planes must clip real strip corners and coil triangles, not only hide
+  a mesh by its center angle. Check independent shaft phases and full pedal travel.
+  Reuse clipped geometry buffers; do not rebuild geometries during animation.
+  DrivetrainModel.update defaults to updating matrices for standalone callers;
+  EngineScene supplies false and prepares only visible world matrices itself.
 - Selector rails move forks and sleeves, not the free gears. `synchronizer`
   crops shafts around one mechanism; returning to `all` must restore all shafts.
 - DCT packs are axially staggered for readability, with connected baskets and

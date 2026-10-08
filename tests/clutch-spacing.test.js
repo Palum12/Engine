@@ -70,15 +70,16 @@ test('expanded shafts, splines and camera bounds cover the assembly under vehicl
   near(endpoint(model.stub, -1.6).distanceTo(endpoint(model.topShaft, 3.6)), 0);
 }));
 
-test('spring fingers and flexible straps keep their attachments while the layers move apart', () => fixture((model, sim) => {
+test('continuous spring web and flexible straps keep their assembled attachments while the pedal moves', () => fixture((model, sim) => {
   model.setView('clutch');
   for (const explosion of [0, 0.55, 1]) {
     model.exploded = explosion;
     for (const pedal of [0, 0.5, 1]) {
       sim.clutch = pedal; model.update(sim, true);
-      const { outer } = model.fingers[0];
-      const pressureEnd = model.pressure.worldToLocal(endpoint(outer, 0.5));
-      near(pressureEnd.x, 0.06); near(Math.hypot(pressureEnd.y, pressureEnd.z), 0.97);
+      const { finger } = model.fingers[0];
+      const springPivot = model.diaphragm.worldToLocal(endpoint(finger, -0.5));
+      near(springPivot.x, 0); near(Math.hypot(springPivot.y, springPivot.z), 0.78);
+      if (explosion === 0) near(model.diaphragmWeb.scale.x, model.diaphragm.position.x - model.pressure.position.x - 0.06);
       const segments = model.straps[0].segments;
       const pressureAttachment = model.pressure.worldToLocal(endpoint(segments[0], -0.5));
       const coverAttachment = model.cover.worldToLocal(endpoint(segments.at(-1), 0.5));
@@ -91,7 +92,11 @@ test('spring fingers and flexible straps keep their attachments while the layers
 test('exploded inspections replace the long metal cage with unobtrusive assembly guides', () => fixture((model, sim) => {
   model.setView('clutch'); model.exploded = 0.55; model.update(sim, true);
   assert.equal(model.pressureStraps.visible, false);
-  assert.ok(model.fingers.every(({ outer, finger }) => !outer.visible && finger.visible));
+  assert.ok(model.fingers.every(({ finger }) => finger.visible));
+  const explodedConeLength = model.diaphragmWeb.scale.x;
+  model.exploded = 1; model.update(sim, true);
+  near(model.diaphragmWeb.scale.x, explodedConeLength, 1e-6);
+  model.exploded = 0.55; model.update(sim, true);
   assert.ok(model.assemblyGuides.visible);
   assert.equal(model.guideLines.length, 2);
   const camera = model.bounds('clutch');
@@ -113,16 +118,15 @@ test('exploded inspections replace the long metal cage with unobtrusive assembly
   assert.ok(model.assemblyGuides.visible);
 
   model.exploded = 0; model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
-  assert.ok(model.fingers.every(({ outer }) => outer.visible === (outer.userData.sectionVisible !== false)), 'physical spring links return outside the fixed cutaway sector');
+  assert.ok(model.pressureStraps.visible && model.diaphragmWeb.visible);
   assert.equal(model.assemblyGuides.visible, false);
   sim.clutch = 0.5; model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
+  assert.ok(model.pressureStraps.visible && model.diaphragmWeb.visible);
   assert.equal(model.assemblyGuides.visible, false);
 
   // A vehicle overview must restore physical links even if the bench remembers
   // its previous exploded setting.
   model.exploded = 0.7; model.setView('drive'); model.update(sim, true);
-  assert.ok(model.pressureStraps.visible && model.fingers.some(({ outer }) => outer.visible));
+  assert.ok(model.pressureStraps.visible && model.diaphragmWeb.visible);
   assert.equal(model.assemblyGuides.visible, false);
 }));

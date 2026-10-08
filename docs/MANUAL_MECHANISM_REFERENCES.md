@@ -1,6 +1,6 @@
 # Sprzęgło i synchronizator — model dydaktyczny
 
-Sprawdzone 7 października 2026. Ten model objaśnia zasadę działania;
+Uzupełnione 8 października 2026. Ten model objaśnia zasadę działania;
 nie odtwarza konkretnej skrzyni ani wysprzęglika Seata.
 
 ## Źródła producentów
@@ -58,10 +58,19 @@ nie odtwarza konkretnej skrzyni ani wysprzęglika Seata.
   wysprzęgleniu. Tarcza, jej piasta i wielowypust wału wejściowego wirują razem.
   Korpus siłownika i prowadnica pozostają nieruchome; oprawa łożyska przesuwa
   się osiowo, a jego wirujący pierścień styka się ze sprężyną.
+- Zewnętrzna część sprężyny talerzowej jest ciągłą stożkową powierzchnią,
+  której obrzeże opiera się o tylną powierzchnię docisku. Wewnętrzne palce
+  łączą ją z łożyskiem. Obie strony podparcia mają żebra dochodzące do pokrywy.
+  Sprężyny tłumiące tarczy mieszczą się w otwartych oknach z gniazdami końców;
+  żebra łączą gniazda z piastą i pierścieniem nośnym okładzin. Krótki
+  wielowypust zazębia się z wewnętrznymi zębami piasty i kończy przed
+  nieruchomą prowadnicą. Nie symulujemy osobnego ugięcia tych sprężyn tłumiących.
 - Okno przekroju sprzęgła pozostaje od strony obserwacji, żeby stale odsłaniać
   mechanizm. Jest umownym sposobem prezentacji, a nie otworem w obracającej się
   części. W rozstrzelonym rysunku montażowym obroty są zatrzymane i znikają
   oznaczenia styku; po złożeniu wraca prezentacja pracy mechanizmu.
+  Granice okna przycinają także narożniki żeber, palców, taśm i zwoje sprężyn,
+  aby te części nie wystawały poza przekrój swoich podparć podczas obrotu.
 - Rzeczywiste skoki są znacznie mniejsze. Układ hydrauliczny nie oblicza
   ciśnienia ani objętości płynu; pokazuje kierunek i ciągłość przenoszenia ruchu.
 - Pedał ma umowny zakres `0–1`. W `src/manual-clutch.js` względny zacisk maleje
