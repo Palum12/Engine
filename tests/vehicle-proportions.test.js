@@ -61,6 +61,25 @@ function vehicleFixture(run) {
   }
 }
 
+test('stable vehicle LOD reuses its hidden mesh list and restores details before rebuilding', () => {
+  vehicleFixture(({ vehicle, models, sim }) => {
+    vehicle.configure(sim);
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(25, 18, 25);
+    vehicle.detail = 'overview'; vehicle.update(sim, true, 1 / 60, camera);
+    const hidden = []; vehicle.assembly.traverse(object => { if (object.userData.lodHidden) hidden.push(object); });
+    assert.ok(hidden.length > 0);
+    let traversals = 0;
+    const traverse = vehicle.assembly.traverse;
+    vehicle.assembly.traverse = function(callback) { traversals++; return traverse.call(this, callback); };
+    models.engine.update(sim, true, false); vehicle.update(sim, true, 1 / 60, camera);
+    assert.equal(traversals, 0, 'stable frames must not rescan the complete assembly for LOD');
+    assert.ok(hidden.every(object => !object.visible));
+    vehicle.restoreDetail(); assert.ok(hidden.every(object => object.visible && object.userData.lodHidden === undefined));
+    vehicle.detail = 'service'; vehicle.update(sim, true, 1 / 60, camera);
+    assert.ok(traversals > 0, 'a changed level rebuilds the list');
+  });
+});
+
 test('transverse FWD final-drive gears stay compact and mesh after transmission changes', () => {
   vehicleFixture(({ vehicle, models, sim }) => {
     sim.setDriveLayout('fwd'); sim.setEngineOrientation('transverse');
