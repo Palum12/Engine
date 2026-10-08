@@ -6,7 +6,7 @@ import { Window } from 'happy-dom';
 for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios (${lineEnding})`, async t => {
   const window = new Window({ url: 'http://localhost/Engine/' });
   const saved = new Map();
-  for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame']) {
+  for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
     saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: key === 'requestAnimationFrame' ? () => 0 : key === 'window' ? window : window[key] });
   }
@@ -27,6 +27,24 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
     const input = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('input', { bubbles: true })); };
     const run = seconds => { app.sim.paused = false; for (let time = 0; time < seconds; time += 0.02) app.sim.update(0.02); app.updateUI(); };
+    await t.test('render quality is selectable and help follows the actual transmission', () => {
+      assert.equal($('#render-quality').value, 'auto');
+      for (const quality of ['economy', 'high', 'auto']) select('#render-quality', quality);
+      for (const [transmission, hint] of [['dct', /1–6/], ['automatic', /1–8/], ['hybrid', /D.*N.*P/], ['manual', /1–5/]]) {
+        select('#transmission-type', transmission);
+        assert.match($('#help-shortcuts').textContent, hint);
+        if (transmission !== 'manual') assert.doesNotMatch($('.learning-strip p').textContent, /Wciśnij sprzęgło/);
+      }
+    });
+    await t.test('telemetry refreshes a stroke hidden during suspension when the cycle panel returns', () => {
+      $('.view-tab[data-view="suspension"]').click();
+      app.sim.angle = 460; app.updateUI(true);
+      $('.view-tab[data-view="engine"]').click();
+      assert.match($('#stroke-description').textContent, /rozpręż|tłok/i);
+      assert.equal($('#stroke-badge').textContent, '03');
+      $('#reset').click();
+      $('.view-tab[data-view="drive-detail"]').click();
+    });
     await t.test('default whole vehicle, nine compact engine choices and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
@@ -337,6 +355,40 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal($('.control-panel').hidden, false);
       assert.equal($('#mount-settings').hidden, false);
       assert.equal(app.sim.engineId, 'r3');
+    });
+    await t.test('visible gearbox readout follows clutch physics while the bench status is hidden', () => {
+      select('#transmission-type', 'manual');
+      $('.view-tab[data-view="gearbox"]').click();
+      $('#show-readout').click();
+      Object.assign(app.sim, { paused: true, gear: 1, shiftTarget: null, rpm: 1400, inputOmega: 1400 * Math.PI / 30, transmittedTorque: 22, clutch: 0.5 });
+      app.updateUI();
+      assert.equal($('#clutch-status').hidden, true, 'the separate clutch bench card is hidden in the gearbox view');
+      assert.equal($('#mechanism-readout').hidden, false);
+      assert.match($('#mechanism-state').textContent, /ZACISK.*wyrównane/);
+
+      app.sim.inputOmega = 0;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /STYK Z POŚLIZGIEM/, 'periodic telemetry uses the new shaft speeds rather than hidden card text');
+      app.sim.transmittedTorque = 0;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /STYK.*bez przenoszonego momentu/);
+      app.sim.inputOmega = 1400 * Math.PI / 30;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /ZACISK.*wyrównane/);
+      app.sim.clutch = 1;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /ROZŁĄCZONE.*brak zacisku/);
+    });
+    await t.test('a repeated visible telemetry update makes no DOM mutations', () => {
+      select('#transmission-type', 'manual');
+      $('.view-tab[data-view="gearbox"]').click();
+      $('#show-readout').click();
+      app.sim.paused = true; app.updateUI(true);
+      const observer = new window.MutationObserver(() => {});
+      observer.observe($('#app'), { subtree: true, attributes: true, childList: true, characterData: true });
+      app.updateUI(true);
+      const records = observer.takeRecords(); observer.disconnect();
+      assert.deepEqual(records.map(record => `${record.target.id}:${record.attributeName || record.type}`), []);
     });
     assert.deepEqual(errors, []);
     const ids = [...window.document.querySelectorAll('[id]')].map(node => node.id);

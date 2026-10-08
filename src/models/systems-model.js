@@ -95,7 +95,7 @@ export class SystemsModel extends ModelGeometry {
     const belt = this.mesh(bandGeometry, this.material({ color: 0x424f59, metalness: 0, roughness: 0.95 }), this.timing, [x, 0, 0], 'timing');
     belt.userData.lodEssential = true;
     const count = Math.ceil(curve.getLength() / 0.11);
-    const links = new THREE.InstancedMesh(this.geometry('timingLink', () => new THREE.BoxGeometry(0.21, 0.085, 0.09)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), count);
+    const links = this.instance(this.geometry('timingLink', () => new THREE.BoxGeometry(0.21, 0.085, 0.09)), this.material({ color: 0x758897, metalness: 0.65, roughness: 0.4 }), count);
     links.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     links.frustumCulled = false;
     links.userData.part = 'timing';
@@ -201,8 +201,8 @@ export class SystemsModel extends ModelGeometry {
   update(sim) {
     if (!this.group.visible) return;
     const a = sim.angle * Math.PI / 180;
-    this.timingWheels.forEach(({wheel,speed}) => { wheel.rotation.x = a * speed; });
-    this.timingLoops.forEach(({ curve, belt, links, travel }) => {
+    if (this.timing.visible) this.timingWheels.forEach(({wheel,speed}) => { wheel.rotation.x = a * speed; });
+    if (this.timing.visible) this.timingLoops.forEach(({ curve, belt, links, travel }) => {
       belt.visible = sim.timing === 'belt';
       links.material.color.setHex(sim.timing === 'chain' ? 0xb4c5d1 : 0x43515b);
       links.material.metalness = sim.timing === 'chain' ? 0.65 : 0;
@@ -226,7 +226,7 @@ export class SystemsModel extends ModelGeometry {
     this.paths.forEach(({curve,tube,arrows,enabled}) => {
       tube.visible = enabled(sim);
       arrows.visible = tube.visible && sim.running && this.showFlow;
-      if (!arrows.visible) return;
+      if (!arrows.visible || !this.visibleParents(arrows.parent)) return;
       const length = curve.getLength();
       for (let n = 0; n < arrows.count; n++) {
         const t = ((n / arrows.count + a / (length * 3)) % 1 + 1) % 1;
@@ -235,4 +235,6 @@ export class SystemsModel extends ModelGeometry {
       arrows.instanceMatrix.needsUpdate = true;
     });
   }
+
+  visibleParents(object) { return !object || object.visible && this.visibleParents(object.parent); }
 }

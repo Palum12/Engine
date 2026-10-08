@@ -15,6 +15,7 @@ import { VehicleModel } from './models/vehicle-model.js';
 import { SuspensionModel } from './models/suspension-model.js';
 import { Simulation } from './simulation.js';
 import { CameraInput } from './camera-input.js';
+import { RenderQuality } from './render-quality.js';
 
 const CLUTCH_OVERVIEW_LABELS = {
   friction: ['Dwa styki tarcia', -1, -12],
@@ -38,7 +39,8 @@ export class EngineScene {
     this.scene.background = new THREE.Color(0x12191f);
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.06, 160);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+    this.quality = new RenderQuality();
+    this.renderer.setPixelRatio(this.quality.settings(window.devicePixelRatio).pixelRatio);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.domElement.setAttribute('aria-label', 'Model 3D silnika. Przeciągnij, aby obracać. Prawy przycisk: kliknięcie pokazuje opis części, przeciąganie przesuwa kamerę. Dwa palce na touchpadzie przesuwają kamerę, szczypnięcie przybliża model. Przycisk Przesuwanie zmienia działanie przeciągania.');
@@ -51,6 +53,7 @@ export class EngineScene {
     this.controls.maxDistance = 65;
     this.controls.maxPolarAngle = Math.PI * 0.9;
     this.controls.addEventListener('start', () => { this.cameraGoal = null; });
+    this.controls.addEventListener('change', () => this.onInvalidate?.());
     this.cameraInput = new CameraInput(container, this.controls, () => { this.cameraGoal = null; });
     const environment = new RoomEnvironment();
     const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -99,7 +102,7 @@ export class EngineScene {
     container.append(this.leaders);
     this.refreshLabels();
     this.labelSizeRevision = 0;
-    this.labelFontListener = () => { this.labelSizeRevision++; };
+    this.labelFontListener = () => { this.labelSizeRevision++; this.onInvalidate?.(); };
     document.fonts?.addEventListener('loadingdone', this.labelFontListener);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -141,8 +144,14 @@ export class EngineScene {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     this.raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, -(clientY - rect.top) / rect.height * 2 + 1), this.camera);
-    const selectable = object => !object || object.visible && !object.userData.ignorePick && selectable(object.parent);
-    const hit = this.raycaster.intersectObjects(this.root.children, true).find(candidate => selectable(candidate.object));
+    const candidates = [];
+    const collect = object => {
+      if (!object.visible || object.userData.ignorePick) return;
+      if (object.isMesh) candidates.push(object);
+      object.children.forEach(collect);
+    };
+    collect(this.root);
+    const hit = this.raycaster.intersectObjects(candidates, false)[0];
     if (!hit) return;
     let object = hit.object;
     let part, cylinder;
@@ -489,11 +498,29 @@ export class EngineScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     if (this.engine) this.setView(this.mode, true);
+    this.onInvalidate?.();
+  }
+
+  setQuality(mode) {
+    if (!this.quality.setMode(mode)) return;
+    this.applyQuality();
+    this.onInvalidate?.();
+  }
+
+  applyQuality() {
+    const settings = this.quality.settings(window.devicePixelRatio);
+    this.engine.particleFraction = settings.particleFraction;
+    if (this.renderer.getPixelRatio() !== settings.pixelRatio) {
+      this.renderer.setPixelRatio(settings.pixelRatio);
+      this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    }
   }
 
   render(sim, dt) {
+    const started = performance.now();
+    this.applyQuality();
     this.camera.userData.target = this.controls.target;
-    this.engine.update(sim, this.cutaway);
+    this.engine.update(sim, this.cutaway, false);
     this.drive.update(sim, this.cutaway, false);
     this.turbo.update(sim, dt, this.cutaway);
     this.dct.update(sim, this.cutaway, dt);
@@ -514,7 +541,7 @@ export class EngineScene {
       this.controls.target.lerp(this.targetGoal, lerp);
       if (this.camera.position.distanceTo(this.cameraGoal) < 0.02) this.cameraGoal = null;
     }
-    this.controls.update();
+    const cameraMoving = this.controls.update();
     this.updateVisibleMatrices();
     // Three's default scene pass also visits every hidden model and gearbox.
     // Visible world matrices are current; keep explicit bounds/picking updates
@@ -524,6 +551,8 @@ export class EngineScene {
     try { this.renderer.render(this.scene, this.camera); }
     finally { this.scene.matrixWorldAutoUpdate = autoUpdate; }
     this.renderLabels();
+    this.lastRenderCost = performance.now() - started;
+    return !!this.cameraGoal || cameraMoving;
   }
 
   updateVisibleMatrices() {
@@ -533,7 +562,8 @@ export class EngineScene {
   renderLabels() {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
-    const occupied = [];
+    const occupied = [...this.labelObstacles()];
+    let placed = 0;
     const candidates = [];
     const revision = this.labelSizeRevision || 0;
     const parentVisible = object => !object || object.visible && parentVisible(object.parent);
@@ -590,7 +620,7 @@ export class EngineScene {
     for (const candidate of candidates) {
       const { record } = candidate;
       const { data, element, line, size } = record;
-      if (occupied.length >= labelLimit) { hide(record); continue; }
+      if (placed >= labelLimit) { hide(record); continue; }
       let { x, y } = candidate;
       const start = { x, y };
       const w = Math.min(width - 30, size.width);
@@ -606,6 +636,7 @@ export class EngineScene {
       for (let tries = 0; tries < 8 && occupied.some(r => Math.abs(r.x - x) < (r.w + w) / 2 + 5 && Math.abs(r.y - y) < (r.h + h) / 2 + 4); tries++) y += h + 5;
       if (y > labelBottom) { hide(record); continue; }
       occupied.push({ x, y, w, h });
+      placed++;
       if (element.hidden) element.hidden = false;
       if (record.drawX !== x) { element.style.left = `${x}px`; record.drawX = x; }
       if (record.drawY !== y) { element.style.top = `${y}px`; record.drawY = y; }
@@ -617,6 +648,25 @@ export class EngineScene {
       const display = Math.hypot(start.x - x, start.y - y) > 8 ? '' : 'none';
       if (line.style.display !== display) line.style.display = display;
     }
+  }
+
+  labelObstacles() {
+    const revision = this.labelSizeRevision || 0;
+    const { mode, sim: { transmission } } = this;
+    if (this.obstacleLayout?.revision === revision && this.obstacleLayout.mode === mode && this.obstacleLayout.transmission === transmission) return this.obstacleLayout.rects;
+    const origin = this.container.getBoundingClientRect?.() || { left: 0, top: 0 };
+    const overlays = this.container.querySelectorAll?.('.camera-tools, .scene-options, .scene-legend, .orbit-hint') || [];
+    const rects = [...overlays].filter(element => !element.hidden).map(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left - origin.left + rect.width / 2, y: rect.top - origin.top + rect.height / 2, w: rect.width, h: rect.height };
+    }).filter(rect => rect.w > 0 && rect.h > 0);
+    this.obstacleLayout = { revision, mode, transmission, rects };
+    return rects;
+  }
+
+  invalidateLabelLayout() {
+    this.obstacleLayout = null;
+    this.onInvalidate?.();
   }
 
   dispose() {

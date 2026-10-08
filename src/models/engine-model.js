@@ -9,6 +9,7 @@ export class EngineModel extends ModelGeometry {
   constructor(materials, id = 'r4') {
     super(materials);
     this.id = id;
+    this.particleFraction = 1;
     this.viewMode = 'engine';
     this.config = getEngine(id);
     this.group.userData.part = 'block';
@@ -224,7 +225,7 @@ export class EngineModel extends ModelGeometry {
     return box;
   }
 
-  update(sim, cutaway) {
+  update(sim, cutaway, updateMatrices = true) {
     if (!this.group.visible) return;
     const radians = sim.angle * Math.PI / 180;
     this.crankshaft.rotation.x = radians;
@@ -233,6 +234,7 @@ export class EngineModel extends ModelGeometry {
     this.headCastings.forEach(casting => { casting.front.visible = !cutaway; });
     this.portMaterials.forEach(material => { material.opacity = cutaway ? 0.58 : 1; material.depthWrite = !cutaway; });
     this.cylinders.forEach((c, index) => {
+      if (!c.pivot.visible) return;
       const degrees = cycleDegrees(sim.angle, index, this.id);
       const theta = degrees * Math.PI / 180;
       const visual = cycleVisuals(degrees);
@@ -262,20 +264,23 @@ export class EngineModel extends ModelGeometry {
       c.charge.visible = !this.headOnly && sim.running;
       const matrix = new THREE.Matrix4();
       const color = new THREE.Color();
-      for (let n = 0; n < c.charge.count; n++) {
-        const sample = chargeSample(degrees, n, c.charge.count);
-        const isFuel = n % 5 === 0;
-        const fuelAdded = sim.injection === 'gdi' ? smooth(230, 345, degrees) : 1;
-        const size = sample.visibility * (isFuel ? fuelAdded : 1) * Math.min(1, height / 0.12);
-        const point = vec(sample.x, floor + 0.045 + (height - 0.09) * sample.level, sample.z);
-        matrix.makeScale(size, size, size).setPosition(point);
-        c.charge.setMatrixAt(n, matrix);
-        color.setHex(isFuel ? 0xffd65c : 0x70d9ff).lerp(hot, sample.burned);
-        color.lerp(exhaustColor, sample.burned * (1 - visual.heat));
-        c.charge.setColorAt(n, color);
+      c.charge.count = Math.max(1, Math.round(c.charge.instanceMatrix.count * this.particleFraction));
+      if (c.charge.visible && !c.charge.userData.lodHidden) {
+        for (let n = 0; n < c.charge.count; n++) {
+          const sample = chargeSample(degrees, n, c.charge.count);
+          const isFuel = n % 5 === 0;
+          const fuelAdded = sim.injection === 'gdi' ? smooth(230, 345, degrees) : 1;
+          const size = sample.visibility * (isFuel ? fuelAdded : 1) * Math.min(1, height / 0.12);
+          const point = vec(sample.x, floor + 0.045 + (height - 0.09) * sample.level, sample.z);
+          matrix.makeScale(size, size, size).setPosition(point);
+          c.charge.setMatrixAt(n, matrix);
+          color.setHex(isFuel ? 0xffd65c : 0x70d9ff).lerp(hot, sample.burned);
+          color.lerp(exhaustColor, sample.burned * (1 - visual.heat));
+          c.charge.setColorAt(n, color);
+        }
+        c.charge.instanceMatrix.needsUpdate = true;
+        c.charge.instanceColor.needsUpdate = true;
       }
-      c.charge.instanceMatrix.needsUpdate = true;
-      c.charge.instanceColor.needsUpdate = true;
       c.valves.forEach(valve => { valve.position.y = 4.22 - 0.18 * (valve.userData.kind ? visual.exhaust : visual.intake); });
       c.spark.visible = sim.running && visual.spark > 0;
       c.spark.scale.setScalar(visual.spark);
@@ -288,54 +293,64 @@ export class EngineModel extends ModelGeometry {
       c.fuel.material.opacity = sim.injection === 'gdi' ? visual.injection : visual.intake;
       c.gas.material.opacity = visual.exhaust * 0.85;
       const flowTime = degrees / 90;
-      for (let n = 0; n < c.air.count; n++) {
-        const p = (flowTime + n / c.air.count) % 1;
-        const point = c.intake.getPoint(p);
-        point.z += Math.sin(n * 2.4) * 0.065;
-        point.x += Math.cos(n * 2.4) * 0.025;
-        const size = Math.sin(p * Math.PI) * visual.intake;
-        c.air.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
-      }
-      for (let n = 0; n < c.gas.count; n++) {
-        const p = (flowTime + n * 0.61803398875) % 1;
-        const a = n * 2.399963;
-        let point;
-        if (p < 0.45) {
-          const t = smooth(0, 0.45, p);
-          point = vec(Math.cos(a) * 0.43, floor + 0.05 + (height - 0.1) * ((n * 0.4142) % 1), Math.sin(a) * 0.43);
-          point.lerp(vec(0.27, 4.22, -0.03), t);
-        } else {
-          point = c.exhaust.getPoint((p - 0.45) / 0.55);
-          point.z += Math.sin(a) * 0.045 * Math.sin((p - 0.45) / 0.55 * Math.PI);
+      c.air.count = Math.max(1, Math.round(c.air.instanceMatrix.count * this.particleFraction));
+      if (c.air.visible && !c.air.userData.lodHidden) {
+        for (let n = 0; n < c.air.count; n++) {
+          const p = (flowTime + n / c.air.count) % 1;
+          const point = c.intake.getPoint(p);
+          point.z += Math.sin(n * 2.4) * 0.065;
+          point.x += Math.cos(n * 2.4) * 0.025;
+          const size = Math.sin(p * Math.PI) * visual.intake;
+          c.air.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
         }
-        const size = Math.sin(p * Math.PI) * visual.exhaust;
-        c.gas.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
+        c.air.instanceMatrix.needsUpdate = true;
       }
-      for (let n = 0; n < c.fuel.count; n++) {
-        const p = (flowTime + n / c.fuel.count) % 1;
-        let point;
-        if (sim.injection !== 'gdi') {
-          if (p < 0.63) { const start = sim.injection === 'carb' ? 0 : 0.38; point = c.intake.getPoint(start + p / 0.63 * (1 - start)); }
-          else {
-            const t = (p - 0.63) / 0.37;
-            point = vec(-0.27 + Math.cos(n * 2.4) * 0.2 * t, 4.17 - t * height * 0.8, -0.03 + Math.sin(n * 2.4) * 0.18 * t);
+      c.gas.count = Math.max(1, Math.round(c.gas.instanceMatrix.count * this.particleFraction));
+      if (c.gas.visible && !c.gas.userData.lodHidden) {
+        for (let n = 0; n < c.gas.count; n++) {
+          const p = (flowTime + n * 0.61803398875) % 1;
+          const a = n * 2.399963;
+          let point;
+          if (p < 0.45) {
+            const t = smooth(0, 0.45, p);
+            point = vec(Math.cos(a) * 0.43, floor + 0.05 + (height - 0.1) * ((n * 0.4142) % 1), Math.sin(a) * 0.43);
+            point.lerp(vec(0.27, 4.22, -0.03), t);
+          } else {
+            point = c.exhaust.getPoint((p - 0.45) / 0.55);
+            point.z += Math.sin(a) * 0.045 * Math.sin((p - 0.45) / 0.55 * Math.PI);
           }
-        } else {
-          point = c.gdiTip.clone().add(vec(-0.43 * p + Math.cos(n * 2.4) * 0.12 * p, -p * height * 0.8, -0.15 * p + Math.sin(n * 2.4) * 0.1 * p));
+          const size = Math.sin(p * Math.PI) * visual.exhaust;
+          c.gas.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
         }
-        point.y = Math.max(floor + 0.02, point.y);
-        const size = Math.sin(p * Math.PI);
-        c.fuel.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
+        c.gas.instanceMatrix.needsUpdate = true;
       }
-      c.air.instanceMatrix.needsUpdate = true;
-      c.fuel.instanceMatrix.needsUpdate = true;
-      c.gas.instanceMatrix.needsUpdate = true;
+      c.fuel.count = Math.max(1, Math.round(c.fuel.instanceMatrix.count * this.particleFraction));
+      if (c.fuel.visible && !c.fuel.userData.lodHidden) {
+        for (let n = 0; n < c.fuel.count; n++) {
+          const p = (flowTime + n / c.fuel.count) % 1;
+          let point;
+          if (sim.injection !== 'gdi') {
+            if (p < 0.63) { const start = sim.injection === 'carb' ? 0 : 0.38; point = c.intake.getPoint(start + p / 0.63 * (1 - start)); }
+            else {
+              const t = (p - 0.63) / 0.37;
+              point = vec(-0.27 + Math.cos(n * 2.4) * 0.2 * t, 4.17 - t * height * 0.8, -0.03 + Math.sin(n * 2.4) * 0.18 * t);
+            }
+          } else {
+            point = c.gdiTip.clone().add(vec(-0.43 * p + Math.cos(n * 2.4) * 0.12 * p, -p * height * 0.8, -0.15 * p + Math.sin(n * 2.4) * 0.1 * p));
+          }
+          point.y = Math.max(floor + 0.02, point.y);
+          const size = Math.sin(p * Math.PI);
+          c.fuel.setMatrixAt(n, matrix.makeScale(size, size, size).setPosition(point));
+        }
+        c.fuel.instanceMatrix.needsUpdate = true;
+      }
       const label = this.anchors.find(a => a.anchor === c.injectorAnchor);
       label.text = sim.injection === 'carb' ? 'Mieszanka z gaźnika' : sim.injection === 'mpi' ? 'Wtrysk MPI · przed zaworem' : 'Wtrysk GDI · w cylindrze';
       c.injectorAnchor.position.set(sim.injection === 'mpi' ? -0.65 : 0.65, 5.45, 0.25);
     });
-    this.group.updateMatrixWorld(true);
+    if (updateMatrices) this.group.updateMatrixWorld(true);
     this.rockers.forEach(({ rocker, start, valve }) => {
+      for (let parent = valve; parent; parent = parent.parent) if (!parent.visible) return;
       const end = rocker.parent.worldToLocal(valve.localToWorld(vec(0, 0.72, 0)));
       this.between(rocker, start, end);
     });

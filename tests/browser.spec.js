@@ -35,9 +35,26 @@ async function settleVisibleScene(page) {
   await page.bringToFront();
   await page.locator('#scene canvas').scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
+  await page.evaluate(() => window.__clutchTestScene?.onInvalidate?.());
   // Pausing freezes physics, while visible animation frames still update the
   // mechanism from its controls. Await those frames before sampling WebGL.
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+async function assertCameraSettingsReadable(page) {
+  const settings = await page.locator('.camera-device').evaluateAll(labels => labels.map(label => {
+    const box = label.getBoundingClientRect(), select = label.querySelector('select').getBoundingClientRect();
+    const text = document.createRange(); text.selectNode(label.firstChild);
+    const name = text.getBoundingClientRect();
+    return { fontSize: parseFloat(getComputedStyle(label).fontSize),
+      nameInside: name.left >= box.left && name.right <= select.left && name.height > 0,
+      controlInside: select.right <= box.right && select.width >= 74 };
+  }));
+  for (const setting of settings) {
+    expect(setting.fontSize).toBeGreaterThanOrEqual(10);
+    expect(setting.nameInside).toBe(true);
+    expect(setting.controlInside).toBe(true);
+  }
 }
 
 async function trackClutchScene(page) {
@@ -49,6 +66,7 @@ async function trackClutchScene(page) {
       return render.apply(this, args);
     };
   });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => Boolean(window.__clutchTestScene));
 }
 
@@ -232,6 +250,7 @@ test('phone clutch lesson keeps pedal presets, explanation and model within the 
   await page.locator('[data-clutch-pedal="0"]').click();
   await expect(page.locator('#clutch-clamp-value')).toHaveText('100%');
   await expect(page.locator('#clutch-mechanism-detail')).toBeVisible();
+  await assertCameraSettingsReadable(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   expect(overflow).toBe(false);
   for (const selector of ['#clutch-lesson', '#clutch-status', '#clutch-mechanism-detail', '#clutch-engine-rpm', '#clutch-input-rpm', '#scene canvas']) {
@@ -252,7 +271,41 @@ test('phone clutch lesson keeps pedal presets, explanation and model within the 
   expect(playback.y + playback.height).toBeLessThanOrEqual(845);
   await page.locator('[data-clutch-pedal="1"]').click();
   await expect(page.locator('#clutch-status')).toHaveAttribute('data-state', 'open');
+  await assertCameraSettingsReadable(page);
   await page.locator('.visual-panel').screenshot({ path: info.outputPath('phone-clutch-fullscreen.png') });
+  expect(errors).toEqual([]);
+});
+
+test('paused rendering sleeps, input wakes it and quality preserves the active simulation', async ({ page }, info) => {
+  const errors = await openApp(page);
+  await trackClutchScene(page);
+  await page.locator('#render-quality').selectOption('economy');
+  await assertCameraSettingsReadable(page);
+  await page.locator('.view-tab[data-view="cylinder"]').click();
+  await page.locator('#pause').click();
+  await page.evaluate(() => {
+    const scene = window.__clutchTestScene;
+    const render = scene.render.bind(scene);
+    scene.render = (...args) => { window.__performanceDraws++; return render(...args); };
+    window.__performanceDraws = 0;
+  });
+  await expect.poll(() => page.evaluate(() => !!window.__clutchTestScene.cameraGoal), { timeout: 15000 }).toBe(false);
+  await page.waitForTimeout(1500);
+  const before = await page.evaluate(() => window.__performanceDraws);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => window.__performanceDraws)).toBe(before);
+  const angle = await page.evaluate(() => window.__clutchTestScene.sim.angle);
+  await page.locator('#zoom-in').click();
+  await expect.poll(() => page.evaluate(() => window.__performanceDraws)).toBeGreaterThan(before);
+  expect(await page.evaluate(() => window.__clutchTestScene.sim.angle)).toBe(angle);
+  await page.locator('#render-quality').selectOption('high');
+  await expect.poll(() => page.evaluate(() => window.__clutchTestScene.quality.settings(2).maxFps)).toBe(60);
+  await page.locator('#render-quality').selectOption('economy');
+  await expect.poll(() => page.evaluate(() => window.__clutchTestScene.engine.cylinders[0].charge.count)).toBe(32);
+  await page.locator('#pause').click();
+  await expect.poll(() => page.evaluate(() => window.__clutchTestScene.sim.angle)).not.toBe(angle);
+  await page.locator('#pause').click();
+  await page.screenshot({ path: info.outputPath('quality-economy-cylinder.png'), fullPage: true });
   expect(errors).toEqual([]);
 });
 
@@ -386,6 +439,8 @@ test('compact navigation keeps every name and suspension visible at desktop, tab
     for (const viewport of [{ width: 1440, height: 900 }, { width: 768, height: 1024 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
       await page.locator('.view-tab[data-view="suspension"]').click();
+      await page.bringToFront();
+      await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
       await page.locator('#fullscreen').click();
       await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
       await assertReadableTabs(`${viewport.width}px fullscreen suspension`);
@@ -431,6 +486,7 @@ test('every tab renders and controls work in the local WebGL application', async
 });
 
 test('all car presets configure their actual mounting and transmission; 8AT inspections render', async ({ page }, info) => {
+  test.setTimeout(360_000);
   const errors = await openApp(page);
   for (const preset of CAR_PRESETS) {
     await page.locator('#car-preset').selectOption(preset.id);

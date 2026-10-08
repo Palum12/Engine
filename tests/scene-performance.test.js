@@ -129,11 +129,49 @@ test('stable label frames reuse measured sizes and leave unchanged DOM attribute
     scene.labelSizeRevision++;
     scene.renderLabels();
     assert.equal(measurements, 4, 'resizing/font changes invalidate cached dimensions');
+    let obstacleReads = 0;
+    const x = Number.parseFloat(element.style.left), y = Number.parseFloat(element.style.top);
+    scene.container.getBoundingClientRect = () => ({ left: 0, top: 0 });
+    scene.container.querySelectorAll = () => [{ hidden: false, getBoundingClientRect() { obstacleReads++; return { left: x - 65, top: y - 18, width: 130, height: 36 }; } }];
+    scene.labelSizeRevision++;
+    scene.renderLabels();
+    assert.ok(element.hidden || Math.abs(Number.parseFloat(element.style.top) - y) > 30, 'labels avoid camera and display controls');
+    scene.renderLabels();
+    assert.equal(obstacleReads, 1, 'fixed overlay bounds are cached until resize/font invalidation');
+    scene.mode = 'gearbox';
+    scene.renderLabels();
+    assert.equal(obstacleReads, 2, 'switching views can rearrange controls without resizing the scene');
+    scene.sim.transmission = 'automatic';
+    scene.renderLabels();
+    assert.equal(obstacleReads, 3, 'transmission-specific overlays must be measured again');
     scene.labels = false;
     scene.renderLabels();
     assert.equal(element.hidden, true);
     assert.equal(line.style.display, 'none');
-    assert.equal(measurements, 4);
+    assert.equal(measurements, 6);
     observer.disconnect();
   } finally { await window.happyDOM.close(); }
+});
+
+test('changing overlay content refreshes label clearance without changing the view or scene size', () => {
+  const scene = Object.create(EngineScene.prototype);
+  let reads = 0, legendHeight = 20, hintHeight = 16, invalidations = 0;
+  const overlay = (top, height) => ({ hidden: false, getBoundingClientRect() { reads++; return { left: 10, top, width: 240, height: height() }; } });
+  Object.assign(scene, {
+    mode: 'drive-detail', sim: { transmission: 'manual' }, labelSizeRevision: 0,
+    container: { getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelectorAll: () => [overlay(350, () => legendHeight), overlay(380, () => hintHeight)] },
+    onInvalidate() { invalidations++; }
+  });
+  assert.deepEqual(scene.labelObstacles().map(rect => rect.h), [20, 16]);
+  scene.labelObstacles();
+  assert.equal(reads, 2, 'stable frames should reuse both overlay measurements');
+
+  // A vehicle layer or camera-device change can wrap the legend/help while
+  // the scene dimensions, current tab and transmission all remain unchanged.
+  legendHeight = 40; hintHeight = 32;
+  scene.invalidateLabelLayout();
+  assert.deepEqual(scene.labelObstacles().map(rect => rect.h), [40, 32], 'new text must reserve its current screen area');
+  assert.equal(invalidations, 1, 'a paused view must draw the new label layout');
+  scene.labelObstacles();
+  assert.equal(reads, 4, 'the refreshed overlay measurements should be cached again');
 });

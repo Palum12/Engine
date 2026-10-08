@@ -90,7 +90,9 @@ for(const id of ['r4','v6','v12']) test(`${id}: crank journals clear rod planes;
     engine.cylinders.forEach(c=>{
       assert.equal(c.mpi.visible,false);assert.equal(c.gdi.visible,false);
       const matrix=new THREE.Matrix4();
-      for(let n=0;n<c.fuel.count;n++){
+      // Hidden effects deliberately retain their last uploaded pose. Check the
+      // current geometry whenever the effect is actually rendered.
+      for(let n=0;c.fuel.visible && n<c.fuel.count;n++){
         c.fuel.getMatrixAt(n,matrix);
         assert.ok(new THREE.Vector3().setFromMatrixPosition(matrix).y>c.piston.position.y+0.25);
       }

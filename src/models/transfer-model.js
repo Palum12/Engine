@@ -63,7 +63,7 @@ export class TransferModel extends ModelGeometry {
     this.sprockets = [[0.3, 0, 0], [0.3, 0, -1.45]].map(p => this.gear(18, 0.35, 0.14, 'steel', this.partTime, p, 'transfer'));
     const chain = this.curve([[0.3, 0.35, 0], [0.3, 0.35, -1.45], [0.3, 0.25, -1.7], [0.3, 0, -1.8], [0.3, -0.35, -1.45], [0.3, -0.35, 0], [0.3, 0, 0.35], [0.3, 0.35, 0]]);
     this.chainCurve = chain;
-    this.chain = new THREE.InstancedMesh(this.geometry('chain-link', () => new THREE.BoxGeometry(0.075, 0.05, 0.12)), this.materials.dark, 70);
+    this.chain = this.instance(this.geometry('chain-link', () => new THREE.BoxGeometry(0.075, 0.05, 0.12)), this.materials.dark, 70);
     this.partTime.add(this.chain);
     this.coupler = this.annulus(0.25, 0.115, 0.23, 'fuel', this.partTime, [0.58, 0, -1.45], 'transfer');
     this.lowSun = this.gear(24, 0.48, 0.22, 'brass', this.partTime, [-0.7, 0, 0], 'transfer');

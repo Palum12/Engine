@@ -46,11 +46,14 @@ test('right click selects visible geometry with labels off and suppresses the ca
     const flow = new Group(); flow.userData.ignorePick = true;
     const flowMesh = new Mesh(geometry, material); flowMesh.position.z = 3; flowMesh.userData.part = 'flow'; flow.add(flowMesh);
     root.add(hidden, flow); root.updateMatrixWorld(true);
+    let rejectedRaycasts = 0;
+    hiddenMesh.raycast = flowMesh.raycast = () => { rejectedRaycasts++; };
     pointer('pointerdown');
     const menu = new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
     canvas.dispatchEvent(menu);
     pointer('pointerup');
     assert.deepEqual(selections, [['suspensionDamper', undefined]]);
+    assert.equal(rejectedRaycasts, 0, 'hidden and ignored subtrees are excluded before intersection work');
     assert.equal(scene.labels, false, 'selecting a part does not enable labels');
     assert.equal(menu.defaultPrevented, true);
     const outside = new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
