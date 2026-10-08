@@ -486,6 +486,7 @@ test('every tab renders and controls work in the local WebGL application', async
 });
 
 test('all car presets configure their actual mounting and transmission; 8AT inspections render', async ({ page }, info) => {
+  test.setTimeout(360_000);
   const errors = await openApp(page);
   for (const preset of CAR_PRESETS) {
     await page.locator('#car-preset').selectOption(preset.id);

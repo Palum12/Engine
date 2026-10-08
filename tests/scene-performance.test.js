@@ -138,6 +138,12 @@ test('stable label frames reuse measured sizes and leave unchanged DOM attribute
     assert.ok(element.hidden || Math.abs(Number.parseFloat(element.style.top) - y) > 30, 'labels avoid camera and display controls');
     scene.renderLabels();
     assert.equal(obstacleReads, 1, 'fixed overlay bounds are cached until resize/font invalidation');
+    scene.mode = 'gearbox';
+    scene.renderLabels();
+    assert.equal(obstacleReads, 2, 'switching views can rearrange controls without resizing the scene');
+    scene.sim.transmission = 'automatic';
+    scene.renderLabels();
+    assert.equal(obstacleReads, 3, 'transmission-specific overlays must be measured again');
     scene.labels = false;
     scene.renderLabels();
     assert.equal(element.hidden, true);
