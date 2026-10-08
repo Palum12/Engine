@@ -4,6 +4,9 @@ Audyt lokalnego stanu `7541c72` (`main`). Zakres: organizacja aplikacji, fizyka,
 modele Three.js, renderowanie, zasoby grafiki, interfejs, lekcje, CSS, budowanie
 i weryfikacja. Wynikiem jest plan wdrożenia. Źródła aplikacji pozostały bez zmian.
 
+Powyższe dotyczy stanu z chwili audytu. Wdrożenie optymalizacji i podziału UI
+opisuje osobny [raport weryfikacji](PERFORMANCE_REFACTOR_QA.md).
+
 ## Wnioski
 
 Aplikacja ma dobry fundament: osobny stan `Simulation`, proceduralne modele,

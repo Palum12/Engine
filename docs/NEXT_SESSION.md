@@ -1,5 +1,12 @@
 # Uwagi i realizacja — 4 października 2026
 
+**Przegląd wydajności (8 października):** audyt i kolejność dalszych prac zawiera
+[APPLICATION_REVIEW_AND_PLAN_2026-10-08.md](APPLICATION_REVIEW_AND_PLAN_2026-10-08.md).
+Gałąź poprawia zwalnianie zasobów instancji, usypia renderowanie na pauzie,
+pomija pracę ukrytych modeli i rozdziela interfejs od kontrolera. Dodaje też
+wybór jakości Auto/Oszczędna/Wysoka. Testy, liczniki pracy, kontrolę zasobów
+i ograniczenia pomiarów opisuje [PERFORMANCE_REFACTOR_QA.md](PERFORMANCE_REFACTOR_QA.md).
+
 **Najnowsza poprawka sprzęgła (8 października):** po ponownych uwagach
 o nieczytelnym tarciu i przenikaniu przebudowano zwarty półprzekrój,
 podparcie sprężyny i sztywny tłok z komorą płynu. Objaśnienia przy modelu
