@@ -62,6 +62,24 @@ test('oil and fuel inspections do not animate hidden timing links; returning to 
   } finally { systems.dispose(); engine.dispose(); Object.values(materials).forEach(m => m.dispose()); }
 });
 
+test('scene-managed engine matrices skip hidden cylinder descendants and economy restores full particle count', () => {
+  const materials = palette(), engine = new EngineModel(materials, 'w16'), sim = new Simulation();
+  sim.setEngine('w16'); sim.running = true; sim.angle = 225;
+  try {
+    engine.setView('cylinder', 0);
+    let hiddenCompositions = 0;
+    engine.cylinders[1].pivot.traverse(object => {
+      const original = object.updateMatrix;
+      object.updateMatrix = function() { hiddenCompositions++; return original.call(this); };
+    });
+    engine.particleFraction = .5; engine.update(sim, true, false);
+    assert.equal(hiddenCompositions, 0);
+    assert.equal(engine.cylinders[0].charge.count, 32);
+    engine.particleFraction = 1; engine.update(sim, true, false);
+    assert.equal(engine.cylinders[0].charge.count, 64);
+  } finally { engine.dispose(); Object.values(materials).forEach(m => m.dispose()); }
+});
+
 test('unchanged road geometry is reused while paused and invalidates on distance, amplitude and surface changes', () => {
   const materials = palette(), model = new SuspensionModel(materials), sim = new Simulation();
   try {

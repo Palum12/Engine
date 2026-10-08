@@ -6,7 +6,7 @@ import { Window } from 'happy-dom';
 for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the actual application UI switches transmissions, retains four strokes and operates guided energy scenarios (${lineEnding})`, async t => {
   const window = new Window({ url: 'http://localhost/Engine/' });
   const saved = new Map();
-  for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame']) {
+  for (const key of ['window', 'document', 'CustomEvent', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
     saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: key === 'requestAnimationFrame' ? () => 0 : key === 'window' ? window : window[key] });
   }

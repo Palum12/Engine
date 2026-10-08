@@ -19,9 +19,9 @@ test('DOM synchronization skips unchanged text/markup/attributes and hidden tele
   const w=new Window();try {
     w.document.body.innerHTML='<section hidden><output>old</output></section><button></button>';
     const sync=new DomSync(),button=w.document.querySelector('button'),output=w.document.querySelector('output');
-    sync.html(button,'<svg></svg>');sync.attr(button,'aria-pressed',false);
+    sync.html(button,'<svg><path d="M1 1"/></svg>');sync.attr(button,'aria-pressed',false);
     const observer=new w.MutationObserver(()=>{});observer.observe(w.document.body,{subtree:true,childList:true,attributes:true,characterData:true});
-    sync.html(button,'<svg></svg>');sync.attr(button,'aria-pressed',false);assert.deepEqual(observer.takeRecords(),[]);
+    sync.html(button,'<svg><path d="M1 1"/></svg>');sync.attr(button,'aria-pressed',false);assert.deepEqual(observer.takeRecords(),[]);
     sync.visibleOnly=true;sync.text(output,'new');assert.equal(output.textContent,'old');
     output.parentElement.hidden=false;sync.text(output,'new');assert.equal(output.textContent,'new');
     observer.disconnect();
