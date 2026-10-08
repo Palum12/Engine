@@ -4,6 +4,7 @@ import { PARTS } from './ui/part-descriptions.js';
 import { updateDrivingHelp } from './ui/driving-help.js';
 import { createTelemetry } from './ui/telemetry.js';
 import { createFrameLoop } from './frame-loop.js';
+import { needsSimulationFrames } from './simulation-activity.js';
 import '@fontsource/dm-sans/latin-400.css';
 import '@fontsource/dm-sans/latin-ext-400.css';
 import '@fontsource/dm-sans/latin-500.css';
@@ -456,6 +457,7 @@ function updateCameraInput() {
   $('#scene').dataset.cameraPan = pan;
   $('#camera-pan').title = pan ? 'Wyłącz, aby przeciąganie obracało model' : 'Włącz, aby przeciąganie przesuwało kamerę';
   $('.orbit-hint span').textContent = `Przeciągnij: ${pan ? 'przesuwanie' : 'obrót'} · ${device === 'mouse' ? 'kółko: zoom' : '2 palce: przesuwanie · szczypnięcie: zoom'}`;
+  scene?.invalidateLabelLayout();
 }
 $('#camera-pan').addEventListener('click', () => {
   $('#camera-pan').setAttribute('aria-pressed', $('#camera-pan').getAttribute('aria-pressed') !== 'true');
@@ -726,10 +728,12 @@ $('#vehicle-turn').addEventListener('input', event => { player.stop(); sim.turn 
 function updateVehicleLegend() {
   if (['drive', 'drive-detail'].includes(mode) && ['differential', 'frontAxle', 'rearAxle', 'finalDrive'].includes($('#inspect-section').value)) {
     $('.scene-legend').innerHTML = '<span><i style="--dot:#69d5ff"></i>Lewa półoś i koło boczne</span><span><i style="--dot:#f7ba55"></i>Prawa półoś i koło boczne</span><span><i style="--dot:#e68565"></i>Satelity</span>';
+    scene?.invalidateLabelLayout();
     return;
   }
   const layer = mode === 'hybrid' ? 'electric' : $('#vehicle-layer').value;
   $('.scene-legend').innerHTML = layer === 'electric' ? '<span><i style="--dot:#f5ae58"></i>DC · prąd baterii</span><span><i style="--dot:#68c9ed"></i>AC · energia MG1</span><span><i style="--dot:#85e2b3"></i>AC · energia MG2</span>' : layer === 'oil' ? '<span><i style="--dot:#76d5ac"></i>Smarowanie</span>' : layer === 'fuel' ? '<span><i style="--dot:#f5be4f"></i>Paliwo</span>' : layer === 'gases' ? '<span><i style="--dot:#68c9ed"></i>Powietrze</span><span><i style="--dot:#e68565"></i>Spaliny</span>' : '<span><i style="--dot:#ffc35a"></i>Moment napędowy</span><span><i style="--dot:#68c9ed"></i>Przód / lewa strona</span>';
+  scene?.invalidateLabelLayout();
 }
 $('#vehicle-layer').addEventListener('change', event => {
   if (scene) { scene.vehicle.layer = event.target.value; scene.vehicle.applyVisibility(sim); }
@@ -775,8 +779,8 @@ setPedal('clutch', 0);
 updateUI();
 changeView('drive-detail');
 frameLoop = createFrameLoop({
-  isActive: () => !!cycleTransition || !sim.paused && (sim.suspensionActive || !!player.id || sim.running ||
-    sim.transmission === 'hybrid' && sim.hybridEnabled || sim.rpm > .1 || sim.speed > .001 || Math.abs(sim.inputOmega) > .01 || !!inspectedDifferential()?.demo),
+  isActive: () => !!cycleTransition || needsSimulationFrames(sim) ||
+    !sim.paused && (!!player.id || !!inspectedDifferential()?.demo),
   maxFps: () => scene?.quality.settings().maxFps || 60,
   advance(dt) {
     if (!sim.paused) scene?.quality.observe(Math.max(dt * 1000, scene.lastRenderCost || 0), dt);

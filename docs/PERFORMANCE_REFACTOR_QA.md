@@ -2,6 +2,8 @@
 
 Zmiany wynikają z [audytu aplikacji](APPLICATION_REVIEW_AND_PLAN_2026-10-08.md).
 Dokument audytu opisuje stan bazowy `7541c72`; ten dokument opisuje wdrożenie.
+Późniejszy [przegląd PR i poprawki regresji](PR2_REVIEW_AND_DEPLOY_QA.md)
+uzupełniają poniższe historyczne wyniki o końcowe testy i kontrolę wdrożenia.
 
 ## Zakres
 
@@ -72,7 +74,7 @@ Rozgrzewka: 300 aktualizacji; próbka: 600. Czasy CPU są lokalne, bez GPU.
 
 To liczniki pracy modeli dla identycznej sekwencji faz, nie procent poprawy FPS.
 
-`node scripts/profile-browser.mjs` uruchamia własny lokalny serwer na porcie 5174,
+`node scripts/profile-browser.mjs` uruchamia własny lokalny serwer na wolnym porcie wybranym przez system,
 Chromium ze SwiftShader i 20 zmian presetów (5 × W16/hybryda/8AT/R3).
 Sprawdza jawnie tworzone/usuwane bufory WebGL, geometrię, tekstury i DOM po GC;
 ostatnie trzy powroty do tego samego presetu muszą być stabilne. Wyniki trafiają

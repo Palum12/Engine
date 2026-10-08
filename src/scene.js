@@ -664,6 +664,11 @@ export class EngineScene {
     return rects;
   }
 
+  invalidateLabelLayout() {
+    this.obstacleLayout = null;
+    this.onInvalidate?.();
+  }
+
   dispose() {
     this.resizeObserver.disconnect();
     document.fonts?.removeEventListener('loadingdone', this.labelFontListener);

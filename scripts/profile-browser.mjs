@@ -1,25 +1,18 @@
-import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
+import { startProfilingServer } from './profiling-server.mjs';
 
 const temporaryPath = resolve('.cache/tmp');
 await mkdir(temporaryPath, { recursive: true }); await mkdir('artifacts/performance', { recursive: true });
 Object.assign(process.env, { PLAYWRIGHT_BROWSERS_PATH: resolve('.cache/playwright'), TEMP: temporaryPath, TMP: temporaryPath, TMPDIR: temporaryPath });
 const { chromium } = await import('@playwright/test');
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5174', '--strictPort'], { windowsHide: true, stdio: 'ignore' });
+const server = await startProfilingServer();
 let browser;
 try {
-  let ready = false;
-  for (let attempt = 0; attempt < 100; attempt++) {
-    try { if ((await fetch('http://127.0.0.1:5174')).ok) { ready = true; break; } } catch {}
-    await delay(100);
-  }
-  if (!ready) throw Error('Local profiling server did not start');
   browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto('http://127.0.0.1:5174');
+  await page.goto(server.url);
   await page.evaluate(async () => {
     const { EngineScene } = await import('/src/scene.js'), original = EngineScene.prototype.render;
     EngineScene.prototype.render = function(...args) {
@@ -59,4 +52,7 @@ try {
   if (errors.length) throw Error(errors.join('\n'));
   const warm = rounds.slice(2);
   if (warm.some(round => round.balance !== warm[0].balance || round.geometries !== warm[0].geometries || round.textures !== warm[0].textures || round.domNodes !== warm[0].domNodes)) throw Error('Resources do not stabilize after warmup; inspect artifacts/performance/resources.json');
-} finally { await browser?.close(); server.kill(); }
+} finally {
+  try { await browser?.close(); }
+  finally { await server.close(); }
+}

@@ -21,13 +21,14 @@ export function createTelemetry(context) {
     const exploded = mode === 'clutch' && Number($('#explode').value) > 0;
     const presentation = manualClutchPresentation({ state, engineRpm: sim.rpm, inputOmega: sim.inputOmega, transmittedTorque: sim.transmittedTorque, exploded });
     sync.attr($('#clutch-status'), 'data-state', presentation.kind); sync.attr($('#clutch-lesson'), 'data-state', presentation.kind);
-    sync.text($('#contact-state'), ({
+    const contactLabel = ({
       grip: 'ZACISK · obroty wyrównane',
       slip: 'STYK Z POŚLIZGIEM · tarcie przenosi moment i grzeje',
       contact: 'STYK · bez przenoszonego momentu',
       open: 'ROZŁĄCZONE · brak zacisku i momentu przez tarcie',
       exploded: 'WARSTWY MONTAŻOWE · nie pokazują pracy sprzęgła'
-    })[presentation.kind]);
+    })[presentation.kind];
+    sync.text($('#contact-state'), contactLabel);
     sync.text($('#clutch-engine-rpm'), `${Math.round(sim.rpm)} obr./min`);
     sync.text($('#clutch-input-rpm'), `${Math.round(sim.inputOmega * 30 / Math.PI)} obr./min`);
     sync.text($('#contact-detail'), exploded ? 'Widok rozstrzelony służy rozpoznaniu części. Złóż sprzęgło, aby odczytać tarcie i przepływ momentu.' : `Docisk ${Math.round(state.clampFactor * 100)}% · limit ${Math.round(state.capacity)} Nm · przenoszone ${Math.round(presentation.torque)} Nm · poślizg ${Math.round(presentation.slipRpm)} obr./min · ciepło ${(presentation.heatPower / 1000).toFixed(2)} kW`);
@@ -51,7 +52,7 @@ export function createTelemetry(context) {
         : presentation.synchronous ? 'Koło i docisk obraca silnik; tarcie obraca tarczę i wał skrzyni.'
           : 'Powierzchnie są zaciśnięte. Moment i ciepło odczytasz po wznowieniu ruchu.');
     if (sim.transmission === 'manual') {
-      sync.text($('#mechanism-state'), $('#contact-state').textContent);
+      sync.text($('#mechanism-state'), contactLabel);
       if (lessonView() === 'clutch') sync.text($('#mechanism-detail'), 'Moment przez tarcie zależy od zacisku. Ciepło pojawia się, gdy powierzchnie przenoszą moment przy różnych obrotach. Podane skoki są powiększone, a docisk względny.');
     }
     const release = state.release;

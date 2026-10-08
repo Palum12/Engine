@@ -356,6 +356,29 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
       assert.equal($('#mount-settings').hidden, false);
       assert.equal(app.sim.engineId, 'r3');
     });
+    await t.test('visible gearbox readout follows clutch physics while the bench status is hidden', () => {
+      select('#transmission-type', 'manual');
+      $('.view-tab[data-view="gearbox"]').click();
+      $('#show-readout').click();
+      Object.assign(app.sim, { paused: true, gear: 1, shiftTarget: null, rpm: 1400, inputOmega: 1400 * Math.PI / 30, transmittedTorque: 22, clutch: 0.5 });
+      app.updateUI();
+      assert.equal($('#clutch-status').hidden, true, 'the separate clutch bench card is hidden in the gearbox view');
+      assert.equal($('#mechanism-readout').hidden, false);
+      assert.match($('#mechanism-state').textContent, /ZACISK.*wyrównane/);
+
+      app.sim.inputOmega = 0;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /STYK Z POŚLIZGIEM/, 'periodic telemetry uses the new shaft speeds rather than hidden card text');
+      app.sim.transmittedTorque = 0;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /STYK.*bez przenoszonego momentu/);
+      app.sim.inputOmega = 1400 * Math.PI / 30;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /ZACISK.*wyrównane/);
+      app.sim.clutch = 1;
+      app.updateUI(true);
+      assert.match($('#mechanism-state').textContent, /ROZŁĄCZONE.*brak zacisku/);
+    });
     await t.test('a repeated visible telemetry update makes no DOM mutations', () => {
       select('#transmission-type', 'manual');
       $('.view-tab[data-view="gearbox"]').click();
