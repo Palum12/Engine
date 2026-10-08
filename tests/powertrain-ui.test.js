@@ -27,6 +27,15 @@ for (const [lineEnding, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) test(`the 
     const select = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('change', { bubbles: true })); };
     const input = (selector, value) => { $(selector).value = value; $(selector).dispatchEvent(new window.Event('input', { bubbles: true })); };
     const run = seconds => { app.sim.paused = false; for (let time = 0; time < seconds; time += 0.02) app.sim.update(0.02); app.updateUI(); };
+    await t.test('render quality is selectable and help follows the actual transmission', () => {
+      assert.equal($('#render-quality').value, 'auto');
+      for (const quality of ['economy', 'high', 'auto']) select('#render-quality', quality);
+      for (const [transmission, hint] of [['dct', /1–6/], ['automatic', /1–8/], ['hybrid', /D.*N.*P/], ['manual', /1–5/]]) {
+        select('#transmission-type', transmission);
+        assert.match($('#help-shortcuts').textContent, hint);
+        if (transmission !== 'manual') assert.doesNotMatch($('.learning-strip p').textContent, /Wciśnij sprzęgło/);
+      }
+    });
     await t.test('default whole vehicle, nine compact engine choices and manual clutch toggle remain available', () => {
       assert.ok($('.visual-panel').classList.contains('vehicle-mode'));
       assert.equal($('#cycle-panel').hidden, false);
