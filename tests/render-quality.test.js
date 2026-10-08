@@ -27,3 +27,13 @@ test('DOM synchronization skips unchanged text/markup/attributes and hidden tele
     observer.disconnect();
   } finally {await w.happyDOM.close();}
 });
+
+test('style synchronization accepts browser-normalized colors and detects external changes', () => {
+  let current = '', writes = 0;
+  const element = { style: { get color() { return current; }, set color(value) { writes++; current = value === '#68c9ed' ? 'rgb(104, 201, 237)' : value; } } };
+  const sync = new DomSync();
+  sync.style(element, 'color', '#68c9ed'); sync.style(element, 'color', '#68c9ed');
+  assert.equal(writes, 1);
+  element.style.color = 'red'; sync.style(element, 'color', '#68c9ed');
+  assert.equal(writes, 3); assert.equal(current, 'rgb(104, 201, 237)');
+});
